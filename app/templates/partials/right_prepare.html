@@ -1,0 +1,41 @@
+﻿{% from "partials/_macros.html" import panel %}
+
+{% call panel("문서 에이전트") %}
+  <p class="text-gray-600">질문은 항상 "Qn: " 형식으로 저장됩니다.</p>
+
+  <!-- 질문 목록 -->
+  <ol class="list-decimal list-inside space-y-1 mt-2">
+    {% for question in state.questions %}
+      <li>{{ question }}</li>
+    {% else %}
+      <li class="text-gray-500">질문이 아직 없습니다.</li>
+    {% endfor %}
+  </ol>
+
+  <!-- 수동 질문 추가 -->
+  <form hx-post="/rag/add_question" hx-target="#right" hx-swap="innerHTML" class="flex gap-2 w-full mt-4">
+    <input type="text" name="q_text" placeholder="질문 입력 (예: 최근 프로젝트에서 본인 역할은?)"
+           required class="border rounded px-3 py-2 flex-1" />
+    <button type="submit" class="border px-3 py-2 rounded">질문 추가</button>
+  </form>
+
+  <!-- LLM 질문 생성 -->
+  <form hx-post="/rag/generate_questions" hx-target="#right" hx-swap="innerHTML" class="flex flex-wrap items-center gap-2 mt-3">
+    <input type="text"   name="topic" value="초기 면접 질문" class="border rounded px-3 py-2 flex-1 min-w-[200px]" />
+    <label class="text-sm text-gray-600">개수</label>
+    <input type="number" name="n" value="5" min="1" max="20" class="border rounded w-20 px-2 py-2" />
+    <button type="submit" class="bg-indigo-600 text-white px-3 py-2 rounded">AI 질문 생성</button>
+  </form>
+
+  <!-- 면접 시작 -->
+  <form hx-post="/rag/start_interview" hx-target="#right" hx-swap="innerHTML" class="mt-4">
+    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded"
+            {% if not state.questions %}disabled{% endif %}>면접 시작</button>
+  </form>
+
+  <!-- 더미 리포트 생성 (테스트용) -->
+  <form hx-post="/rag/finish" hx-target="#right" hx-swap="innerHTML" class="mt-4">
+    <input type="hidden" name="use_dummy" value="true" />
+    <button type="submit" class="bg-amber-500 text-white px-4 py-2 rounded hover:bg-amber-600">더미 리포트 보기</button>
+  </form>
+{% endcall %}
