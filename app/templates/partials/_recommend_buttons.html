@@ -1,0 +1,44 @@
+{% set selected = (state.recommendation or '') %}
+<div id="recommend-actions" class="flex gap-2 justify-end">
+  {# 추천 (초록) #}
+  <button type="button"
+          hx-post="/rag/recommendation/set"
+          hx-vals='{"value":"recommend"}'
+          hx-target="#recommend-actions"
+          hx-swap="outerHTML"
+          aria-pressed="{{ 'true' if selected == 'recommend' else 'false' }}"
+          class="inline-flex items-center justify-center min-w-[48px] px-2.5 py-0.5 text-[11px] rounded-md font-medium border transition-colors transition-transform duration-150 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 active:scale-[0.98]
+                 {% if selected == 'recommend' %}
+                   bg-green-600 text-white border-green-700 shadow-md focus-visible:ring-green-500/40 hover:bg-green-700 active:bg-green-800
+                 {% else %}
+                   bg-green-50 text-green-800 border-green-300 hover:bg-green-100 active:bg-green-200 focus-visible:ring-green-400/30
+                 {% endif %}">추천</button>
+
+  {# 보류 (노랑) #}
+  <button type="button"
+          hx-post="/rag/recommendation/set"
+          hx-vals='{"value":"hold"}'
+          hx-target="#recommend-actions"
+          hx-swap="outerHTML"
+          aria-pressed="{{ 'true' if selected == 'hold' else 'false' }}"
+          class="inline-flex items-center justify-center min-w-[48px] px-2.5 py-0.5 text-[11px] rounded-md font-medium border transition-colors transition-transform duration-150 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 active:scale-[0.98]
+                 {% if selected == 'hold' %}
+                   bg-yellow-500 text-gray-900 border-yellow-700 shadow-md focus-visible:ring-yellow-500/40 hover:bg-yellow-600 active:bg-yellow-700
+                 {% else %}
+                   bg-yellow-50 text-yellow-800 border-yellow-300 hover:bg-yellow-100 active:bg-yellow-200 focus-visible:ring-yellow-400/30
+                 {% endif %}">보류</button>
+
+  {# 비추천 (빨강) #}
+  <button type="button"
+          hx-post="/rag/recommendation/set"
+          hx-vals='{"value":"reject"}'
+          hx-target="#recommend-actions"
+          hx-swap="outerHTML"
+          aria-pressed="{{ 'true' if selected == 'reject' else 'false' }}"
+          class="inline-flex items-center justify-center min-w-[48px] px-2.5 py-0.5 text-[11px] rounded-md font-medium border transition-colors transition-transform duration-150 shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 active:scale-[0.98]
+                 {% if selected == 'reject' %}
+                   bg-red-600 text-white border-red-700 shadow-md focus-visible:ring-red-500/40 hover:bg-red-700 active:bg-red-800
+                 {% else %}
+                   bg-red-50 text-red-800 border-red-300 hover:bg-red-100 active:bg-red-200 focus-visible:ring-red-400/30
+                 {% endif %}">비추천</button>
+</div>
