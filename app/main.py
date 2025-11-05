@@ -1,31 +1,36 @@
 ﻿from __future__ import annotations
-
 from pathlib import Path
-import os
-import logging
+from dataclasses import dataclass, field
+import pathlib
+from typing import List, Any, Dict, Optional
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
+from dotenv import load_dotenv
+from flask import Flask, render_template
 
-from app.templating import templates
-from app.routes_rag import rag_router
-from app.state import _state as rag_state
+load_dotenv(Path(__file__).resolve().parent / ".env")
 
-BASE_DIR = Path(__file__).resolve().parent
 
-app = FastAPI()
+#state - 면접 진행 저장 
+@dataclass
+class InterviewState:
+    pass
+_state = InterviewState()
 
-app.mount(
-    "/static",
-    StaticFiles(directory=BASE_DIR.parent / "backup" / "app" / "static"),
-    name="static",
+# app
+BASE_DIR = Path(__file__).parent
+app = Flask(
+    __name__,
+    template_folder = str(BASE_DIR / "templates")
 )
+app.config['TEMPLATES_AUTO_RELOAD'] = True
 
-@app.get("/", response_class=HTMLResponse)
-def load_interview(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse("interview.html", {"request": request, "state": rag_state})
+@app.route("/")
+def load_interview_home():
+    return render_template("interview_home.html")
+
+# 라우트
 
 
-# RAG 라우터는 '/rag' 프리픽스를 사용하도록 등록합니다.
-app.include_router(rag_router, prefix="/rag")
+# 엔트리
+if __name__ == "__main__":
+    app.run(debug=True)
