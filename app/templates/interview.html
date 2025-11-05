@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Interview Assistant</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            height: 100vh;
+            display: flex;
+        }
+        #left-panel {
+            width: 50%;
+            background: #fefefe;
+            border-right: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        #right-panel {
+            width: 50%;
+            padding: 30px;
+            overflow-y: auto;
+        }
+        #pdf-viewer {
+            width: 90%;
+            height: 80%;
+            border: 1px solid #aaa;
+            margin-top: 15px;
+        }
+        .question-box {
+            background: #fff;
+            margin-bottom: 15px;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .upload-label {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .upload-label:hover {
+            background-color: #0056b3;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        nav {
+            position: fixed;
+            top: 10px;
+            right: 10px;
+        }
+        nav button {
+            margin-left: 5px;
+            padding: 6px 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div id="left-panel">
+        <form id="upload-form" enctype="multipart/form-data">
+            <label class="upload-label" for="pdfFile">📎 PDF 업로드</label>
+            <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf">
+        </form>
+        <iframe id="pdf-viewer"></iframe>
+    </div>
+
+    <div id="right-panel">
+        <h2>🧠 오른쪽 패널</h2>
+        <p>Agent별 템플릿이 여기에 로드됩니다.</p>
+    </div>
+
+    <nav>
+        <button onclick="loadPanel('question')">Question Agent</button>
+        <button onclick="loadPanel('stream')">Stream Agent</button>
+        <button onclick="loadPanel('report')">Report Agent</button>
+    </nav>
+
+    <script>
+        const pdfInput = document.getElementById("pdfFile");
+        const pdfViewer = document.getElementById("pdf-viewer");
+        const rightPanel = document.getElementById("right-panel");
+
+        // PDF 업로드 미리보기
+        pdfInput.addEventListener("change", function() {
+            const file = pdfInput.files[0];
+            if (!file) return;
+            const url = URL.createObjectURL(file);
+            pdfViewer.src = url;
+        });
+
+        // 오른쪽 패널 동적 로딩
+        async function loadPanel(agent) {
+            const res = await fetch(`/panel/${agent}`);
+            const html = await res.text();
+            rightPanel.innerHTML = html;
+        }
+    </script>
+
+</body>
+</html>
