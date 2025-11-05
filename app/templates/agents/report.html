@@ -1,2 +1,226 @@
-<h2>📑 Report Agent</h2>
-<p>전체 인터뷰 내용을 분석하여 보고서를 생성합니다.</p>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>면접 리포트</title>
+  <style>{% include 'css/report.css' %}</style>
+  {% if report and report.axes %}
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  {% endif %}
+</head>
+<body>
+  <div class="container">
+
+    <!-- 헤더 -->
+    <div class="header">
+      <div>
+        <h1>면접 리포트</h1>
+        <p>AI 기반 면접 평가 및 분석 결과</p>
+      </div>
+      <div class="header-actions">
+        <span id="genStatus" class="pill" style="display:none;">생성중…</span>
+        {% if not report or not report.axes %}
+          <button id="genBtn" class="btn btn-primary no-print" onclick="generateReport()">리포트 생성</button>
+        {% else %}
+          <button class="btn btn-success no-print" onclick="window.print()">PDF 다운로드</button>
+        {% endif %}
+      </div>
+    </div>
+    <div class="header-line"></div>
+
+    {% if report and report.axes %}
+
+      {% if report.headline %}
+      <div class="headline">
+        {% if report.headline['긍정의견'] %}
+          <span class="headline-item headline-positive">긍정: {{ report.headline['긍정의견'].split('\n\n')[0] }}</span>
+        {% endif %}
+        {% if report.headline['부정의견'] %}
+          <span class="headline-item headline-negative">부정: {{ report.headline['부정의견'].split('\n\n')[0] }}</span>
+        {% endif %}
+        {% if report.headline.tag %}
+          <span class="headline-tag">{{ report.headline.tag }}</span>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      <!-- 차트 + 요약 -->
+      <div class="grid-2">
+        <div class="card card-indigo">
+          <div class="card-header">📊 핵심 평가</div>
+          <div class="chart-container"><canvas id="radarChart"></canvas></div>
+        </div>
+
+        <div class="card card-emerald">
+          <div class="card-header">💬 인터뷰 요약</div>
+          <div style="max-height:400px; overflow-y:auto;">
+            {% set ts = report.talkSummary %}
+            {% if ts and ts['items'] %}
+              {% for item in ts['items'] %}
+                <div class="summary-item">
+                  <h3>{{ item['주제'] }}</h3>
+                  <p>{{ item['발언요약'] }}</p>
+                </div>
+              {% endfor %}
+            {% else %}
+              <div class="empty"><p>인터뷰 요약이 없습니다</p></div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- 긍/부정 의견 카드 -->
+      <div class="grid-2">
+        <div class="card" style="border-color:#22d3ee">
+          <div class="card-header">✅ 긍정 의견</div>
+          <div class="prose">
+            {% if report.headline and report.headline['긍정의견'] %}
+              {% for p in report.headline['긍정의견'].split('\n\n') %}
+                <p>{{ p }}</p>
+              {% endfor %}
+            {% else %}<div class="empty"><p>없음</p></div>{% endif %}
+          </div>
+        </div>
+        <div class="card" style="border-color:#fb7185">
+          <div class="card-header">⚠️ 부정 의견</div>
+          <div class="prose">
+            {% if report.headline and report.headline['부정의견'] %}
+              {% for p in report.headline['부정의견'].split('\n\n') %}
+                <p>{{ p }}</p>
+              {% endfor %}
+            {% else %}<div class="empty"><p>없음</p></div>{% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- JD 커버리지 -->
+      {% if report.jdCoverage %}
+      <div class="card">
+        <div class="card-header" style="color:#7c3aed;">📋 JD 커버리지</div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>ID</th><th>요구사항</th><th>기대치</th><th>충족도</th><th>근거</th></tr></thead>
+            <tbody>
+              {% for row in report.jdCoverage %}
+              <tr>
+                <td><strong>{{ row.jid }}</strong></td>
+                <td>{{ row['요구사항'] }}</td>
+                <td>{{ row['기대치'] }}</td>
+                <td>
+                  {% set c = row['충족도'] %}
+                  {% if c == "충분" %}<span class="badge badge-emerald">충분</span>
+                  {% elif c == "적정" %}<span class="badge badge-blue">적정</span>
+                  {% else %}<span class="badge badge-amber">{{ c }}</span>{% endif %}
+                </td>
+                <td>
+                  {% if row['근거'] %}
+                    {% for e in row['근거'] %}<span class="badge badge-indigo">{{ e }}</span>{% endfor %}
+                  {% else %}<span style="color:#9ca3af;">-</span>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- 증거 맵 -->
+      {% if report.evidence %}
+      <div class="card">
+        <div class="card-header" style="color:#d97706;">🔍 증거 맵</div>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead><tr><th>EID</th><th>출처</th><th>내용</th><th>연결 JD</th></tr></thead>
+            <tbody>
+              {% for ev in report.evidence %}
+              <tr>
+                <td><strong style="color:#4f46e5;">{{ ev.eid }}</strong></td>
+                <td style="color:#6b7280; font-size:0.75rem;">{{ ev['출처'] }}</td>
+                <td>{{ ev['내용'] }}</td>
+                <td><span class="badge badge-purple">{{ ev.jid }}</span></td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      {% endif %}
+
+      <!-- 대화 통계 -->
+      {% if report.convStats %}
+      <div class="card">
+        <div class="card-header" style="color:#0891b2;">📈 대화 통계</div>
+        <div class="stats">
+          {% for kv in report.convStats %}
+          <div class="stats-item"><span class="stats-label">{{ kv.k }}</span><span>:</span><span class="stats-value">{{ kv.v }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+    {% else %}
+      <div class="empty"><p>리포트를 생성하려면 상단의 “리포트 생성” 버튼을 클릭하세요.</p></div>
+    {% endif %}
+  </div>
+
+  <!-- 생성 호출 -->
+  <script>
+  function generateReport() {
+    const btn = document.getElementById('genBtn');
+    const pill = document.getElementById('genStatus');
+    pill.style.display = 'inline-block';
+    if (btn) { btn.disabled = true; btn.textContent = '생성중…'; }
+
+    const resumePath = 'app/data/resume.txt';
+    const jdPath     = 'app/data/jd.txt';
+    const logPath    = 'app/data/log.txt';
+    const axesInput  = 'tech,fit,comm,exec,learn';
+
+    const payload = new URLSearchParams();
+    payload.set('resume_path', resumePath);
+    payload.set('jd_path', jdPath);
+    payload.set('log_path', logPath);
+    payload.set('axes_keys', axesInput);
+
+    fetch('/reports/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded'},
+      body: payload
+    })
+    .then(res => res.ok ? res.text() : res.text().then(t => { throw new Error(t || '리포트 생성 실패'); }))
+    .then(html => { document.open(); document.write(html); document.close(); })
+    .catch(err => alert('리포트 생성 실패:\n' + err.message));
+  }
+  </script>
+
+  {% if report and report.axes and report.scores %}
+  <script>
+  (function () {
+    const ctx = document.getElementById('radarChart'); if (!ctx) return;
+
+    const axes   = {{ report.axes | tojson }};
+    const scores = {{ report.scores | tojson }};
+
+    const labels = axes.map(a => a.label || a.key);
+    const keys   = axes.map(a => a.key);
+    const values = keys.map(k => {
+      const s = scores[k];
+      return typeof s === 'number' ? s : (s && typeof s.value === 'number' ? s.value : 0);
+    });
+
+    new Chart(ctx, {
+      type: 'radar',
+      data: { labels, datasets: [{ label: '점수', data: values, fill: true,
+        backgroundColor:'rgba(99,102,241,0.2)', borderColor:'rgb(79,70,229)', borderWidth:2,
+        pointBackgroundColor:'rgb(79,70,229)', pointBorderColor:'#fff', pointBorderWidth:2, pointRadius:4 }] },
+      options: { responsive:true, maintainAspectRatio:true,
+        scales:{ r:{ beginAtZero:true, min:0, max:100, ticks:{ stepSize:20 } } },
+        plugins:{ legend:{ display:false } } }
+    });
+  })();
+  </script>
+  {% endif %}
+</body>
+</html>

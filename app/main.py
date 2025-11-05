@@ -9,7 +9,7 @@ from flask import Flask, render_template
 
 from app.routes.question_routes import question_bp
 from app.routes.stream_routes import stream_bp
-from app.routes.report_routes import report_bp
+from app.routes.report_routes import report_bp,reports_bp
 
 import os
 
@@ -33,7 +33,7 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.register_blueprint(question_bp)
 app.register_blueprint(stream_bp)
 app.register_blueprint(report_bp)
-
+app.register_blueprint(reports_bp, url_prefix="/reports")
 
 @app.route("/")
 def load_interview_home():

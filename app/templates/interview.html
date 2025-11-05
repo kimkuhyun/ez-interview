@@ -87,7 +87,8 @@
         const pdfInput = document.getElementById("pdfFile");
         const pdfViewer = document.getElementById("pdf-viewer");
         const rightPanel = document.getElementById("right-panel");
-
+        
+    
         // PDF 업로드 미리보기
         pdfInput.addEventListener("change", function() {
             const file = pdfInput.files[0];
@@ -101,6 +102,15 @@
             const res = await fetch(`/panel/${agent}`);
             const html = await res.text();
             rightPanel.innerHTML = html;
+
+            // 삽입된 <script> 실행
+            const scripts = rightPanel.querySelectorAll("script");
+            for (const old of scripts) {
+            const s = document.createElement("script");
+            if (old.src) s.src = old.src; else s.textContent = old.textContent;
+            document.body.appendChild(s);
+            old.remove();
+            }
         }
     </script>
 
