@@ -1,3 +1,7 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, render_template, request, jsonify
 
-interview_bp = Blueprint('interview', __name__)
+stream_bp = Blueprint("stream", __name__)
+
+@stream_bp.route("/panel/stream")
+def stream_panel():
+    return render_template("agents/stream.html")

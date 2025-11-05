@@ -7,8 +7,14 @@ from typing import List, Any, Dict, Optional
 from dotenv import load_dotenv
 from flask import Flask, render_template
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
+from app.routes.question_routes import question_bp
+from app.routes.stream_routes import stream_bp
+from app.routes.report_routes import report_bp
 
+import os
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+print("🔑 Loaded API KEY:", os.getenv("OPENAI_API_KEY"))
 
 #state - 면접 진행 저장 
 @dataclass
@@ -24,12 +30,14 @@ app = Flask(
 )
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
+app.register_blueprint(question_bp)
+app.register_blueprint(stream_bp)
+app.register_blueprint(report_bp)
+
+
 @app.route("/")
 def load_interview_home():
-    return render_template("interview_home.html")
-
-# 라우트
-
+    return render_template("interview.html")
 
 # 엔트리
 if __name__ == "__main__":
