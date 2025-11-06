@@ -1,4 +1,155 @@
-<h2>🧠 Question Agent</h2>
-<div id="questions">
-    <p>PDF 업로드 후 AI가 질문을 생성합니다.</p>
-</div>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        #questionList {
+            margin-top: 15px;
+        }
+        .question-item {
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: #fafafa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .question-text {
+<!--            flex-grow: 1;-->
+            flex: 8;          /* 전체 중 8 */
+            overflow-wrap: break-word;
+            word-break: break-word;
+            line-height: 1.5;
+        }
+        .question-next-to-button{
+            flex: 2;          /* 전체 중 2 */
+            display: flex;
+            justify-content: flex-end; /* 버튼을 오른쪽 정렬 */
+            gap: 5px;         /* 버튼 사이 간격 */
+        }
+        button {
+            margin-left: 5px;
+            cursor: pointer;
+        }
+        #addBtn {
+            margin-top: 10px;
+            padding: 8px 12px;
+            border: none;
+            background: #28a745;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h2>🧠 AI 기반 면접 질문 생성 결과</h2>
+    <p>AI가 생성한 질문을 검토하고 수정하거나 추가할 수 있습니다.</p>
+
+    <div id="questionList">질문을 불러오는 중...</div>
+    <button id="addBtn" onclick="addQuestion()">➕ 질문 추가</button>
+
+    <script>
+        let questions = [];
+
+        async function generateQuestions() {
+            const careerFile = parent.document.getElementById("careerFile").files[0];
+            const jobFile = parent.document.getElementById("jobFile").files[0];
+            const questionList = document.getElementById("questionList");
+
+            if (!careerFile || !jobFile) {
+                questionList.innerHTML = "❗ 두 문서를 모두 업로드해주세요.";
+                return;
+            }
+
+            questionList.innerHTML = "🤖 AI가 문서를 분석 중입니다...";
+
+<!--            const careerText = await readFileAsText(careerFile);-->
+<!--            const jobText = await readFileAsText(jobFile);-->
+
+<!--            const payload = {-->
+<!--                resume: careerText,-->
+<!--                cover_letter: "",-->
+<!--                jd: jobText-->
+<!--            };-->
+
+            // ✅ JSON이 아니라 FormData로 변경
+            const formData = new FormData();
+            formData.append("resume", careerFile);
+            formData.append("jd", jobFile);
+
+            const res = await fetch("/api/interview-prep", {
+                method: "POST",
+                body: formData,  // ✅ Content-Type 자동 설정됨
+            });
+
+            if (!res.ok) {
+                questionList.innerHTML = "❌ AI 요청 중 오류가 발생했습니다.";
+                return;
+            }
+
+            const data = await res.json();
+            questions = data.interview_questions.questions;
+            renderQuestions();
+        }
+
+        function renderQuestions() {
+            const list = document.getElementById("questionList");
+            list.innerHTML = "";
+
+            questions.forEach((q, i) => {
+                const item = document.createElement("div");
+                item.className = "question-item";
+                item.innerHTML = `
+                    <div class="question-text"><b>Q${i+1}.</b> ${q}</div>
+                    <div class="question-next-to-button">
+                        <button onclick="editQuestion(${i})">✏️</button>
+                        <button onclick="deleteQuestion(${i})">❌</button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        function editQuestion(index) {
+            const newQ = prompt("질문을 수정하세요:", questions[index]);
+            if (newQ && newQ.trim()) {
+                questions[index] = newQ.trim();
+                renderQuestions();
+            }
+        }
+
+        function deleteQuestion(index) {
+            if (confirm("이 질문을 삭제할까요?")) {
+                questions.splice(index, 1);
+                renderQuestions();
+            }
+        }
+
+        function addQuestion() {
+            const newQ = prompt("새 질문을 입력하세요:");
+            if (newQ && newQ.trim()) {
+                questions.push(newQ.trim());
+                renderQuestions();
+            }
+        }
+
+        // Stream Agent로 질문 전달할 때 활용 가능
+        function exportQuestions() {
+            return questions;
+        }
+
+        // 파일을 텍스트로 읽기
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsText(file);
+            });
+        }
+    </script>
+</body>
+</html>
