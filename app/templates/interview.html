@@ -12,30 +12,31 @@
         }
         #left-panel {
             width: 50%;
-            background: #fefefe;
+            background: #fafafa;
             border-right: 1px solid #ccc;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
+            padding: 20px;
         }
         #right-panel {
             width: 50%;
             padding: 30px;
             overflow-y: auto;
         }
-        #pdf-viewer {
+        iframe {
             width: 90%;
-            height: 80%;
+            height: 300px;
             border: 1px solid #aaa;
-            margin-top: 15px;
+            margin-top: 10px;
         }
-        .question-box {
+        .upload-block {
+            width: 90%;
             background: #fff;
-            margin-bottom: 15px;
-            padding: 15px;
             border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            padding: 15px;
+            margin-bottom: 15px;
         }
         .upload-label {
             background-color: #007bff;
@@ -43,13 +44,18 @@
             padding: 10px 15px;
             border-radius: 6px;
             cursor: pointer;
-            transition: background-color 0.3s;
+            display: inline-block;
+            margin-top: 5px;
         }
-        .upload-label:hover {
-            background-color: #0056b3;
-        }
-        input[type="file"] {
-            display: none;
+        input[type="file"] { display: none; }
+        #analyzeBtn {
+            background: #28a745;
+            color: white;
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-top: 20px;
         }
         nav {
             position: fixed;
@@ -64,55 +70,82 @@
     </style>
 </head>
 <body>
-    <div id="left-panel">
-        <form id="upload-form" enctype="multipart/form-data">
-            <label class="upload-label" for="pdfFile">📎 PDF 업로드</label>
-            <input type="file" id="pdfFile" name="pdfFile" accept="application/pdf">
-        </form>
-        <iframe id="pdf-viewer"></iframe>
+<div id="left-panel">
+    <div class="upload-block">
+        <h3>📄 본인 커리어 문서</h3>
+        <p>이력서 / 자기소개서 등 본인의 경험을 설명하는 문서를 업로드하세요.</p>
+        <label class="upload-label" for="careerFile">업로드</label>
+        <input type="file" id="careerFile" accept=".pdf,.docx,.txt">
+        <iframe id="careerPreview"></iframe>
     </div>
 
-    <div id="right-panel">
-        <h2>🧠 오른쪽 패널</h2>
-        <p>Agent별 템플릿이 여기에 로드됩니다.</p>
+    <div class="upload-block">
+        <h3>🏢 지원 직무 문서</h3>
+        <p>지원하는 회사 또는 직무(JD 등)에 관한 문서를 업로드하세요.</p>
+        <label class="upload-label" for="jobFile">업로드</label>
+        <input type="file" id="jobFile" accept=".pdf,.docx,.txt">
+        <iframe id="jobPreview"></iframe>
     </div>
 
-    <nav>
-        <button onclick="loadPanel('question')">Question Agent</button>
-        <button onclick="loadPanel('stream')">Stream Agent</button>
-        <button onclick="loadPanel('report')">Report Agent</button>
-    </nav>
+    <button id="analyzeBtn" onclick="startAnalysis()">🚀 AI 기반 분석 시작</button>
+</div>
 
-    <script>
-        const pdfInput = document.getElementById("pdfFile");
-        const pdfViewer = document.getElementById("pdf-viewer");
-        const rightPanel = document.getElementById("right-panel");
-        
-    
-        // PDF 업로드 미리보기
-        pdfInput.addEventListener("change", function() {
-            const file = pdfInput.files[0];
-            if (!file) return;
-            const url = URL.createObjectURL(file);
-            pdfViewer.src = url;
-        });
+<div id="right-panel">
+    <h2>🧠 오른쪽 패널</h2>
+    <p>Agent별 템플릿이 여기에 로드됩니다.</p>
+</div>
 
-        // 오른쪽 패널 동적 로딩
-        async function loadPanel(agent) {
-            const res = await fetch(`/panel/${agent}`);
-            const html = await res.text();
-            rightPanel.innerHTML = html;
+<nav>
+    <button onclick="loadPanel('question')">Question Agent</button>
+    <button onclick="loadPanel('stream')">Stream Agent</button>
+    <button onclick="loadPanel('report')">Report Agent</button>
+</nav>
 
-            // 삽입된 <script> 실행
-            const scripts = rightPanel.querySelectorAll("script");
-            for (const old of scripts) {
-            const s = document.createElement("script");
-            if (old.src) s.src = old.src; else s.textContent = old.textContent;
-            document.body.appendChild(s);
-            old.remove();
+<script>
+    const careerInput = document.getElementById("careerFile");
+    const jobInput = document.getElementById("jobFile");
+    const careerPreview = document.getElementById("careerPreview");
+    const jobPreview = document.getElementById("jobPreview");
+    const rightPanel = document.getElementById("right-panel");
+
+    // 파일 미리보기 (PDF만)
+    function previewFile(input, viewer) {
+        const file = input.files[0];
+        if (!file) return;
+        const url = URL.createObjectURL(file);
+        viewer.src = url;
+    }
+
+    careerInput.addEventListener("change", () => previewFile(careerInput, careerPreview));
+    jobInput.addEventListener("change", () => previewFile(jobInput, jobPreview));
+
+    // 오른쪽 패널 로딩
+    async function loadPanel(agent) {
+        const res = await fetch(`/panel/${agent}`);
+        const html = await res.text();
+        rightPanel.innerHTML = html;
+
+
+		// 삽입된 <script> 실행
+		const scripts = rightPanel.querySelectorAll("script");
+		for (const old of scripts) {
+		const s = document.createElement("script");
+		if (old.src) s.src = old.src; else s.textContent = old.textContent;
+		document.body.appendChild(s);
+		old.remove();
+		}
+    }
+
+    // AI 분석 시작 → Question Agent 패널 로드 + 인터뷰 요청 실행
+    async function startAnalysis() {
+        await loadPanel('question');
+        // 패널 로딩 후 question.html 내부의 generateQuestions()를 자동 실행
+        setTimeout(() => {
+            if (typeof generateQuestions === "function") {
+                generateQuestions();
             }
-        }
-    </script>
-
+        }, 500);
+    }
+</script>
 </body>
 </html>

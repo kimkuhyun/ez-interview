@@ -5,13 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>면접 리포트</title>
   <style>{% include 'css/report.css' %}</style>
-  {% if report and report.axes %}
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  {% endif %}
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <div class="container">
-
     <!-- 헤더 -->
     <div class="header">
       <div>
@@ -20,207 +17,259 @@
       </div>
       <div class="header-actions">
         <span id="genStatus" class="pill" style="display:none;">생성중…</span>
-        {% if not report or not report.axes %}
-          <button id="genBtn" class="btn btn-primary no-print" onclick="generateReport()">리포트 생성</button>
-        {% else %}
-          <button class="btn btn-success no-print" onclick="window.print()">PDF 다운로드</button>
-        {% endif %}
+  <button id="genBtn" class="btn btn-primary no-print" onclick="generateReport()">리포트 생성</button>
+        <button id="dlBtn" class="btn btn-success no-print" style="display:none;">PDF 다운로드</button>
       </div>
     </div>
     <div class="header-line"></div>
 
-    {% if report and report.axes %}
+    <!-- 실패 배너 -->
+    <div id="errBox" class="alert alert-error" style="display:none;"></div>
 
-      {% if report.headline %}
+    <!-- 본문(초기에는 안내만 보임) -->
+    <div id="emptyBox" class="empty"><p>리포트를 생성하려면 “리포트 생성”을 클릭하세요.</p></div>
+
+    <div id="reportRoot" style="display:none;">
+      <!-- 헤드라인 -->
       <div class="headline">
-        {% if report.headline['긍정의견'] %}
-          <span class="headline-item headline-positive">긍정: {{ report.headline['긍정의견'].split('\n\n')[0] }}</span>
-        {% endif %}
-        {% if report.headline['부정의견'] %}
-          <span class="headline-item headline-negative">부정: {{ report.headline['부정의견'].split('\n\n')[0] }}</span>
-        {% endif %}
-        {% if report.headline.tag %}
-          <span class="headline-tag">{{ report.headline.tag }}</span>
-        {% endif %}
+        <div id="headlineSummary" class="headline-summary"></div>
+        <div id="headlineKeywords" class="headline-keywords"></div>
       </div>
-      {% endif %}
 
-      <!-- 차트 + 요약 -->
+      <!-- 차트 + 인터뷰 요약 -->
       <div class="grid-2">
-        <div class="card card-indigo">
+        <div class="card card-indigo card-highlight">
           <div class="card-header">📊 핵심 평가</div>
           <div class="chart-container"><canvas id="radarChart"></canvas></div>
         </div>
-
-        <div class="card card-emerald">
+        <div class="card card-emerald card-highlight">
           <div class="card-header">💬 인터뷰 요약</div>
-          <div style="max-height:400px; overflow-y:auto;">
-            {% set ts = report.talkSummary %}
-            {% if ts and ts['items'] %}
-              {% for item in ts['items'] %}
-                <div class="summary-item">
-                  <h3>{{ item['주제'] }}</h3>
-                  <p>{{ item['발언요약'] }}</p>
-                </div>
-              {% endfor %}
-            {% else %}
-              <div class="empty"><p>인터뷰 요약이 없습니다</p></div>
-            {% endif %}
-          </div>
+          <div id="flowList" class="summary-scroll"></div>
         </div>
       </div>
 
-      <!-- 긍/부정 의견 카드 -->
+      <!-- 긍/부정 의견 -->
       <div class="grid-2">
         <div class="card" style="border-color:#22d3ee">
           <div class="card-header">✅ 긍정 의견</div>
-          <div class="prose">
-            {% if report.headline and report.headline['긍정의견'] %}
-              {% for p in report.headline['긍정의견'].split('\n\n') %}
-                <p>{{ p }}</p>
-              {% endfor %}
-            {% else %}<div class="empty"><p>없음</p></div>{% endif %}
-          </div>
+          <div id="posBox" class="prose"></div>
         </div>
         <div class="card" style="border-color:#fb7185">
           <div class="card-header">⚠️ 부정 의견</div>
-          <div class="prose">
-            {% if report.headline and report.headline['부정의견'] %}
-              {% for p in report.headline['부정의견'].split('\n\n') %}
-                <p>{{ p }}</p>
-              {% endfor %}
-            {% else %}<div class="empty"><p>없음</p></div>{% endif %}
-          </div>
+          <div id="negBox" class="prose"></div>
         </div>
       </div>
 
       <!-- JD 커버리지 -->
-      {% if report.jdCoverage %}
       <div class="card">
         <div class="card-header" style="color:#7c3aed;">📋 JD 커버리지</div>
         <div style="overflow-x:auto;">
-          <table>
-            <thead><tr><th>ID</th><th>요구사항</th><th>기대치</th><th>충족도</th><th>근거</th></tr></thead>
-            <tbody>
-              {% for row in report.jdCoverage %}
-              <tr>
-                <td><strong>{{ row.jid }}</strong></td>
-                <td>{{ row['요구사항'] }}</td>
-                <td>{{ row['기대치'] }}</td>
-                <td>
-                  {% set c = row['충족도'] %}
-                  {% if c == "충분" %}<span class="badge badge-emerald">충분</span>
-                  {% elif c == "적정" %}<span class="badge badge-blue">적정</span>
-                  {% else %}<span class="badge badge-amber">{{ c }}</span>{% endif %}
-                </td>
-                <td>
-                  {% if row['근거'] %}
-                    {% for e in row['근거'] %}<span class="badge badge-indigo">{{ e }}</span>{% endfor %}
-                  {% else %}<span style="color:#9ca3af;">-</span>{% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
+          <table id="jdTable">
+            <thead><tr><th>ID</th><th>요구사항 / 기대치</th><th>충족도</th><th>근거</th></tr></thead>
+            <tbody></tbody>
           </table>
         </div>
       </div>
-      {% endif %}
 
       <!-- 증거 맵 -->
-      {% if report.evidence %}
       <div class="card">
         <div class="card-header" style="color:#d97706;">🔍 증거 맵</div>
         <div style="overflow-x:auto;">
-          <table>
+          <table id="evTable">
             <thead><tr><th>EID</th><th>출처</th><th>내용</th><th>연결 JD</th></tr></thead>
-            <tbody>
-              {% for ev in report.evidence %}
-              <tr>
-                <td><strong style="color:#4f46e5;">{{ ev.eid }}</strong></td>
-                <td style="color:#6b7280; font-size:0.75rem;">{{ ev['출처'] }}</td>
-                <td>{{ ev['내용'] }}</td>
-                <td><span class="badge badge-purple">{{ ev.jid }}</span></td>
-              </tr>
-              {% endfor %}
-            </tbody>
+            <tbody></tbody>
           </table>
         </div>
       </div>
-      {% endif %}
 
       <!-- 대화 통계 -->
-      {% if report.convStats %}
       <div class="card">
         <div class="card-header" style="color:#0891b2;">📈 대화 통계</div>
-        <div class="stats">
-          {% for kv in report.convStats %}
-          <div class="stats-item"><span class="stats-label">{{ kv.k }}</span><span>:</span><span class="stats-value">{{ kv.v }}</span></div>
-          {% endfor %}
-        </div>
+        <div id="stats" class="stats"></div>
       </div>
-      {% endif %}
-
-    {% else %}
-      <div class="empty"><p>리포트를 생성하려면 상단의 “리포트 생성” 버튼을 클릭하세요.</p></div>
-    {% endif %}
+    </div>
   </div>
 
-  <!-- 생성 호출 -->
   <script>
-  function generateReport() {
-    const btn = document.getElementById('genBtn');
-    const pill = document.getElementById('genStatus');
-    pill.style.display = 'inline-block';
-    if (btn) { btn.disabled = true; btn.textContent = '생성중…'; }
+  const $ = (id)=>document.getElementById(id);
+  const esc = (s)=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 
-    const resumePath = 'app/data/resume.txt';
-    const jdPath     = 'app/data/jd.txt';
-    const logPath    = 'app/data/log.txt';
-    const axesInput  = 'tech,fit,comm,exec,learn';
+  // 버튼 바인딩
+  $("genBtn").onclick = generateReport;
+  $("dlBtn").onclick = ()=>window.print();
+
+  async function generateReport() {
+    const btn = $("genBtn"), pill = $("genStatus"), err = $("errBox");
+    err.style.display="none"; err.textContent="";
+    pill.style.display="inline-block"; btn.disabled=true; btn.textContent="생성중…";
 
     const payload = new URLSearchParams();
-    payload.set('resume_path', resumePath);
-    payload.set('jd_path', jdPath);
-    payload.set('log_path', logPath);
-    payload.set('axes_keys', axesInput);
+    payload.set('resume_path','app/data/resume.txt');
+    payload.set('jd_path','app/data/jd.txt');
+    payload.set('log_path','app/data/log.txt');
+    payload.set('axes_keys','tech,fit,comm,exec,learn');
+    // 기본: 전체 페이지 렌더 모드 (format=html)
+    payload.set('format','html');    try {
+      const res = await fetch('/reports/generate', {
+        method:'POST',
+        headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json,text/html'},
+        body:payload
+      });
+      const ct = res.headers.get('content-type') || '';
+      console.log('✅ 응답 도착 - Content-Type:', ct, 'Status:', res.status);
 
-    fetch('/reports/generate', {
-      method: 'POST',
-      headers: {'Content-Type':'application/x-www-form-urlencoded'},
-      body: payload
-    })
-    .then(res => res.ok ? res.text() : res.text().then(t => { throw new Error(t || '리포트 생성 실패'); }))
-    .then(html => { document.open(); document.write(html); document.close(); })
-    .catch(err => alert('리포트 생성 실패:\n' + err.message));
+      if (ct.includes('application/json')) {
+        const j = await res.json();
+        console.log('📦 JSON 모드 응답:', j);
+        if (j.status === 'failed') return showError(j);
+        renderReport(j);
+        return;
+      }
+
+      // 백엔드가 HTML을 주는 경우 새 창에서 표시
+      console.log('📄 HTML 모드 - 새 창 열기');
+      const html = await res.text();
+      console.log('📏 HTML 길이:', html.length);
+      
+      // Blob URL 방식으로 새 탭에서 열기
+      const blob = new Blob([html], {type: 'text/html'});
+      const url = URL.createObjectURL(blob);
+      const newWin = window.open(url, '_blank');
+      if(newWin) {
+        // 새 창이 로드되면 URL 정리
+        newWin.addEventListener('load', () => URL.revokeObjectURL(url));
+        console.log('✅ 새 창에서 리포트 표시됨');
+      } else {
+        console.error('❌ 팝업 차단됨 - 브라우저 설정을 확인하세요');
+        alert('팝업이 차단되었습니다. 브라우저 설정에서 팝업을 허용해주세요.');
+      }
+    } catch(e){
+      showError({code:'NETWORK', message:'네트워크 오류', details:{why:String(e)}});
+    } finally {
+      pill.style.display="none"; btn.disabled=false; btn.textContent="리포트 생성";
+    }
   }
-  </script>
 
-  {% if report and report.axes and report.scores %}
-  <script>
-  (function () {
-    const ctx = document.getElementById('radarChart'); if (!ctx) return;
+  function showError(err){
+    const box=$("errBox");
+    box.innerHTML =
+      `<div class="alert-title">리포트 생성 실패</div>
+       <div class="alert-body"><span class="code">${esc(err.code||'ERROR')}</span> ${esc(err.message||'오류')}</div>
+       ${err.details?`<details class="alert-details"><summary>진단 정보</summary><pre>${esc(JSON.stringify(err.details,null,2))}</pre></details>`:''}
+       ${err.trace_id?`<div class="alert-trace">trace_id: <code>${esc(err.trace_id)}</code></div>`:''}`;
+    box.style.display="block";
+  }
+  function normalizeFulfill(v){
+  const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'');
+  if (/^(충족|만족|ok|pass|full)$/.test(s)) return 'full';
+  if (/^(부분|부분충족|부분만족|partial)$/.test(s)) return 'partial';
+  return 'none';
+  }
 
-    const axes   = {{ report.axes | tojson }};
-    const scores = {{ report.scores | tojson }};
+  // JSON 렌더
+  let radar;
+  function renderReport(r){
+    $("emptyBox").style.display="none";
+    $("reportRoot").style.display="block";
+    $("dlBtn").style.display="inline-block";
 
-    const labels = axes.map(a => a.label || a.key);
-    const keys   = axes.map(a => a.key);
-    const values = keys.map(k => {
-      const s = scores[k];
-      return typeof s === 'number' ? s : (s && typeof s.value === 'number' ? s.value : 0);
-    });
+    // 헤드라인 - 짧은 요약 + 해시태그 붙여서 표시
+    $("headlineSummary").textContent = r?.headline?.summary || "";
+    const keywords = (r?.headline?.tag || '').split(',').map(k => k.trim()).filter(Boolean);
+    $("headlineKeywords").innerHTML = keywords.map(kw => 
+      `<span class="headline-keyword">#${esc(kw)}</span>`
+    ).join('');
 
-    new Chart(ctx, {
-      type: 'radar',
-      data: { labels, datasets: [{ label: '점수', data: values, fill: true,
+    // 차트
+    const labels = (r.axes||[]).map(a=>a.label||a.key);
+    const keys   = (r.axes||[]).map(a=>a.key);
+    const values = keys.map(k => (typeof r.scores?.[k]==="number") ? r.scores[k]
+                      : (r.scores?.[k]?.value ?? 0));
+    if (radar) radar.destroy();
+    radar = new Chart($("radarChart"), {
+      type:'radar',
+      data:{ labels, datasets:[{ label:'점수', data:values, fill:true,
         backgroundColor:'rgba(99,102,241,0.2)', borderColor:'rgb(79,70,229)', borderWidth:2,
         pointBackgroundColor:'rgb(79,70,229)', pointBorderColor:'#fff', pointBorderWidth:2, pointRadius:4 }] },
-      options: { responsive:true, maintainAspectRatio:true,
+      options:{ responsive:true, maintainAspectRatio:true,
         scales:{ r:{ beginAtZero:true, min:0, max:100, ticks:{ stepSize:20 } } },
         plugins:{ legend:{ display:false } } }
     });
-  })();
-  </script>
+
+    // 인터뷰 요약 - 간단한 한 줄 요약
+    const items = (r.talkSummary && r.talkSummary.items) ? r.talkSummary.items : [];
+    const pos = items.find(x=>x.주제==='긍정 의견');
+    const neg = items.find(x=>x.주제==='부정 의견');
+    const flows = items.filter(x=>x.주제!=='인터뷰 요약' && x.주제!=='긍정 의견' && x.주제!=='부정 의견');
+    
+    $("flowList").innerHTML = flows.map(it=>{
+      const topic = it.주제 || '';
+      const content = it.발언요약 || '';
+      return `
+        <div class="qa-simple">
+          <div class="qa-topic">${esc(topic)}</div>
+          <div class="qa-summary">${esc(content)}</div>
+        </div>
+      `;
+    }).join("");
+
+    // 긍/부정
+    $("posBox").innerHTML = pos ? `<p>${esc(pos.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
+    $("negBox").innerHTML = neg ? `<p>${esc(neg.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
+
+    // JD 커버리지 - 세로 레이아웃, 기대치 표시
+    const jdBody = document.querySelector("#jdTable tbody");
+    jdBody.innerHTML = (r.jdCoverage||[]).map(row=>{
+      const chips = (row.근거||[]).map(e=>`<span class="badge badge-indigo">${esc(e)}</span>`).join(" ");
+      
+      // 충족도 배지 (세로)
+      const f = normalizeFulfill(row.충족도);
+      let label = '부족', cls = 'badge-red';
+      if (f === 'full')      { label = '적합'; cls = 'badge-emerald'; }
+      else if (f === 'partial') { label = '보통'; cls = 'badge-amber'; }
+
+      const fulfillBadge = `
+        <div class="fulfillment-badge">
+          <span class="fulfillment-label">충족도</span>
+          <span class="badge ${cls} nowrap">${esc(label)}</span>
+        </div>`;
+      const expect = String(row.기대치 || '').replace(/^\s*(기준[:\s-]*)?/,'').trim();
+      return `<tr>
+        <td><strong>${esc(row.jid)}</strong></td>
+        <td>
+          ${esc(row.요구사항)}
+          <div class="jd-expectation">기준: ${esc(expect)}</div>
+        </td>
+        <td>${fulfillBadge}</td>
+        <td>${chips||'<span style="color:#9ca3af;">-</span>'}</td>
+      </tr>`;
+    }).join("");
+
+    // 증거 맵
+    const evBody = document.querySelector("#evTable tbody");
+    evBody.innerHTML = (r.evidence||[]).map(ev=>
+      `<tr>
+        <td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td>
+        <td style="color:#6b7280; font-size:0.75rem;">${esc(ev.출처)}</td>
+        <td>${esc(ev.내용)}</td>
+        <td><span class="badge badge-purple">${esc(ev.jid)}</span></td>
+      </tr>`
+    ).join("");
+
+    // 통계
+    $("stats").innerHTML = (r.convStats||[]).map(kv =>
+      `<div class="stats-item"><span class="stats-label">${esc(kv.k)}</span><span>:</span><span class="stats-value">${esc(kv.v)}</span></div>`
+    ).join("");
+  }
+
+  // 서버가 초기 렌더 시 report 데이터를 넣어준 경우만 처리 (format=html이 아닌 경우)
+  {% if report and report.axes %}
+    window.addEventListener('DOMContentLoaded', ()=>{
+      const data = {{ report|tojson }};
+      if (data && data.status === 'failed') { showError(data); }
+      else { renderReport(data); }
+    });
   {% endif %}
+  </script>
 </body>
 </html>

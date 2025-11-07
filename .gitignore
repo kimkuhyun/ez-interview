@@ -199,3 +199,4 @@ checkpoints/
 config.ini
 secrets.json
 .secrets
+.env.txt
