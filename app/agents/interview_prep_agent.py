@@ -38,8 +38,8 @@ class InterviewPrepAgent:
 
         # 구조화 된 텍스트
         questions = self.question_agent.generate_questions(
-            resume_text=resume_parsed.structured["llm_raw"],
-            jd_text=jd_parsed.structured["llm_raw"],
+            resume_text=resume_parsed.raw_text,
+            jd_text=jd_parsed.raw_text,
             num_questions=5,
         )
 
