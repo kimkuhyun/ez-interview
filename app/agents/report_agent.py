@@ -19,7 +19,7 @@ EMBED_MODEL  = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
 TMP_DIR      = Path(os.getenv("RAG_TMP_DIR", "app/.tmp"))
 TMP_DIR.mkdir(parents=True, exist_ok=True)
 
-DEFAULT_TOKEN_BUDGET = 8000
+DEFAULT_TOKEN_BUDGET = 32000
 TOKEN_TO_CHARS = 4
 SAFETY_RATIO = 0.7
 
@@ -74,9 +74,26 @@ class ReportOut(BaseModel):
     jdCoverage: List[JDCoverRow] = Field(min_length=1)
     evidence: List[EvidenceRow] = Field(min_length=1)
 
-class JudgeOut(BaseModel):
-    score: float = Field(ge=0.0, le=1.0)
-    reasons: List[str] = Field(default_factory=list)
+class VerifyCoverage(BaseModel):
+    jid: J_ID
+    p_satisfy: float = Field(ge=0.0, le=1.0)
+    p_partial: float = Field(ge=0.0, le=1.0)
+    p_unsatisfied: float = Field(ge=0.0, le=1.0)
+    verdict: NonEmpty
+    valid_eids: List[E_ID] = Field(default_factory=list)
+    reasons: List[NonEmpty] = Field(default_factory=list)
+
+class AxisRescore(BaseModel):
+    key: KeyStr
+    score: Score
+    confidence: float = Field(ge=0.0, le=1.0)
+
+class VerifyLLMOut(BaseModel):
+    coverage: List[VerifyCoverage]
+    axis: List[AxisRescore]
+    headline: Optional[Headline] = None
+    positives: List[NonEmpty] = Field(default_factory=list)
+    negatives: List[NonEmpty] = Field(default_factory=list)
 
 # ==== 상태/파일 ====
 _STORE: Dict[str, Dict] = {}
@@ -210,26 +227,37 @@ def _build_context(selected: List[Dict[str, Any]], budget: int) -> Tuple[Tuple[s
 def _prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         ("system",
-         "당신은 [JD], [이력서], [인터뷰로그] 내용을 종합하여 평가 리포트를 생성하는 AI 전문가입니다. "
+         "당신은 검증 가능한 채용 평가 리포트를 만드는 전문가입니다. 입력은 [JD], [이력서], [인터뷰로그]입니다. "
          "반드시 주어진 컨텍스트에만 근거하여 'ReportOut' JSON 스키마에 맞춰 결과를 출력해야 합니다. "
-         "절대로 컨텍스트에 없는 내용을 추측하거나 과장해서는 안 됩니다.\n\n"
+         "오직 제공된 컨텍스트만 근거로 사용하고, 추측·일반론·키워드 일치(단어만 포함 됐다는 이유로 가점)금지\n\n"
+         "--- 주요 원칙 ---\n"
+         "1) 의미판단(NLI): JD 요구와 증거 문장의 뜻이 실제로 부합하는지로 충족/부분/부족을 결정\n"
+         "2) 구조 짝맞춤: 증거에서 역할-행동-성과(예: 역할-백엔드, 행동-성능튜닝, 성과-지연 40%↓)를 뽑아 JD 항목과 최적 짝을 찾습니다.\n"
+         "3) 자기일관성: 내부적으로 표현을 바꿔 최소 3회 재평가 후 합의 결과만 출력합니다(내부 계산·중간표는 출력 금지)\n"
+         "4) 상대 비교 점수: 축별 강약을 서로 비교해 순위를 정하고 0~100으로 분포화합니다(특정 단어 출현 수·상한캡 사용 금지)\n"
+         "5) 근거가 모호/적을수록 점수와 표현을 보수적으로 낮춥니다.\n"
+         "6) 동의어/가까운 개념 고려: 스킬의 뜻이 같은/가까운 표현도 인식하되, 실제 문장의미가 일치할 떄만 인정합니다.\n"
+         "7) 점수의 기준: 40점 미만-자격미달, 41~60점 - 부족함, 61~80점-보통, 80~95점- 탁월, 95점 이상 매우 탁월(내부 계산·중간표는 출력 금지)\n"
+         "8) 평가 스탠스: 채용 전문가로서, 후보자의 역량을 보수적으로 평가하되 객관적이고 공평한 자세를 유지할 것\n\n"
+         "9) 질문은 한 문장으로 쓰고 반드시 ‘?’로 끝낼 것. 답변은 간접화법·과거 시제 ‘~라고 하였음.’으로 마무리할 것. 명사에는 ‘~이라고 하였음’.\n\n"
+
          "--- 출력 규칙 ---\n"
          "1.  **axes**: 제공된 'axes_keys'를 'key'로, 자연스러운 한글 레이블을 'label'로 하여 5개의 역량 평가 축을 구성합니다.\n"
-         "2.  **scores**: 'axes'의 각 역량(key)에 대해 0~100점 사이의 정수 점수를 부여합니다.\n"
+         "2.  **scores**: 'axes'의 각 역량(key)에 대해 0~100점 사이의 정수 점수를 부여합니다. 내부 합의 결과만 반영.\n"
          "3.  **weights**: 'axes'의 각 역량(key)에 대해 중요도 가중치를 부여합니다. 총 합은 반드시 100이 되어야 합니다.\n"
          "4.  **headline**: 후보자에 대한 핵심 평가를 요약합니다.\n"
-         "    - `summary`: 후보자의 핵심 역량과 경험을 바탕으로, JD(직무기술서)와의 적합성을 고려하여 평가를 한 문장으로 제시합니다. 간결하고 명확한 전문가적 어조를 사용하세요.\n"
+         "    - `summary`: 후보자의 핵심 역량과 경험을 바탕으로, JD(직무기술서)와의 적합성을 고려하여 평가를 한 문장을 보수적으로 제시합니다. 간결하고 명확한 전문가적 어조를 사용하세요.\n"
          "    - `tag`: 후보자의 핵심 특징을 나타내는 키워드 3~5개를 쉼표로 구분하여 제시합니다.\n"
          "5.  **talkSummary**: 인터뷰 대화 내용을 구조화하여 요약합니다. '주제'는 다음을 정확히 따라야 합니다.\n"
          "    - `{{'주제': '인터뷰 요약', '발언요약': '인터뷰 전체 흐름을 2~3문장으로 요약'}}`\n"
-         "    - `{{'주제': 'Q. [질문 내용]', '발언요약': '[해당 질문에 대한 답변 요약 1줄]'}}` (인터뷰 질문/답변 순서대로 반복)\n"
+         "    - `{{'주제': '<질문 내용, 질문을 짧게 쓸 것, 꺾쇠는 출력하지 말 것.>', '발언요약': '(라고|이라고) 하였음\.$, 답변은 1줄 요약할 것'}}` (인터뷰 질문/답변 순서대로 반복)\n"
          "    - `{{'주제': '긍정 의견', '발언요약': '컨텍스트 기반의 강점 및 우수 역량에 대한 종합 의견 (200~300자)'}}`\n"
          "    - `{{'주제': '부정 의견', '발언요약': '컨텍스트 기반의 약점 및 개선점에 대한 종합 의견 (200~300자)'}}`\n"
          "6.  **jdCoverage**: JD의 각 요구사항(`Jxx`)에 대해 후보자가 얼마나 충족하는지를 평가합니다.\n"
          "    - `jid`: JD 요구사항 ID (`J01`, `J02`, ...)\n"
          "    - `요구사항`: 해당 JD의 핵심 요구사항\n"
          "    - `기대치`: 해당 요구사항에 대한 회사의 기대 수준\n"
-         "    - `충족도`: '상', '중', '하' 또는 구체적인 서술로 후보자의 충족 수준을 평가\n"
+         "    - `충족도`: '적합', '보통', '부족' 또는 구체적인 서술로 후보자의 충족 수준을 평가\n"
          "    - `근거`: 평가의 근거가 되는 이력서/인터뷰로그 증거 ID (`Exx`) 목록\n"
          "7.  **evidence**: 리포트 작성에 사용된 모든 증거(`Exx`)의 출처와 내용을 명시합니다.\n"
          "    - `eid`: 증거 ID (`E01`, `E02`, ...)\n"
@@ -242,20 +270,126 @@ def _prompt() -> ChatPromptTemplate:
         ("human", "평가 축: {axes_keys}\n\n[공고]\n{jd}\n\n[이력서]\n{resume}\n\n[인터뷰로그]\n{log}")
     ])
 
-def _judge_prompt() -> ChatPromptTemplate:
+def _verify_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
-        ("system", "너는 심판이다. 아래 리포트 일부가 주어진 컨텍스트와 논리적으로 일치하는지 평가한다. "
-                   "평가 기준: 근거충분성, 정확성, 누락(중요 요구 미반영). 0~1 점수와 이유 2~3개만 JSON으로 반환."),
-        ("human", "[공고]\n{jd}\n\n[이력서]\n{resume}\n\n[인터뷰로그]\n{log}\n\n[리포트 핵심]\n{core}")
+        ("system",
+         "당신은 '검증자'입니다. 아래 Draft(초안) 리포트의 주장을 오직 [JD],[이력서],[인터뷰로그]만으로 재평가하세요. "
+         "키워드 일치 금지, 의미 일치(NLI)로 판정하고, 역할-행동-성과 구조로 짝맞춥니다. "
+         "표현을 바꿔 1회 평가하되(비판적 톤), 결과는 구조화된 JSON으로만 출력하세요.\n\n"
+         "출력:\n"
+         "- coverage: 각 Jxx에 대해 p_satisfy/p_partial/p_unsatisfied(합≈1), verdict(충족|부분|미충족), valid_eids, reasons(2~3).\n"
+         "- axis: 축별 재산정 점수(0~100)와 confidence(0~1). 상대 비교로 분포화, 근거가 약할수록 낮춤.\n"
+         "- headline(선택): 근거 기반 1문장(보수적), tag 3~5개.\n"
+         "- positives/negatives: 각 3~5개, 항목마다 [Exx] 인용."),
+        ("human",
+         "[공고]\n{jd}\n\n[이력서]\n{resume}\n\n[인터뷰로그]\n{log}\n\n[Draft]\n{draft_json}")
     ])
 
 def _chain():
     return _prompt() | _llm().with_structured_output(ReportOut)
 
-def _judge(jd: str, resume: str, log: str, core: Dict[str, Any]) -> JudgeOut:
-    prompt = _judge_prompt()
-    j = prompt | _llm().with_structured_output(JudgeOut)
-    return j.invoke({"jd": jd, "resume": resume, "log": log, "core": json.dumps(core, ensure_ascii=False)})
+def verify_report(jd: str, resume: str, log: str, draft: Dict[str, Any], attempts: int = 3) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    - Draft(ReportOut 형식)를 의미 기반으로 재검증하고 점수/커버리지/헤드라인을 보정.
+    - 하드 규칙/상한캡 없이 확률+합의(자기일관성)로만 집계.
+    - 반환: (refined_report, meta)
+    """
+    # 표준화
+    obj = json.loads(json.dumps(draft, ensure_ascii=False))
+    if isinstance(obj.get("scores"), list):
+        obj["scores"] = {x["key"]: x["value"] for x in obj["scores"]}
+    if isinstance(obj.get("weights"), list):
+        obj["weights"] = {x["key"]: x["value"] for x in obj["weights"]}
+
+    chain = _verify_prompt() | _llm().with_structured_output(VerifyLLMOut)
+
+    # 다회 재평가(자기일관성)
+    outs: List[VerifyLLMOut] = []
+    styles = ["비판적 재평가", "중립적 재평가", "신중한 재평가"]
+    for i in range(min(attempts, 3)):
+        out = chain.invoke({
+            "jd": jd, "resume": resume, "log": log,
+            "draft_json": json.dumps(obj, ensure_ascii=False)
+        })
+        outs.append(out)
+
+    # 커버리지 확률 집계
+    cov_map: Dict[str, Dict[str, Any]] = {}
+    for out in outs:
+        for c in out.coverage:
+            m = cov_map.setdefault(c.jid, {"p_sat": [], "p_par": [], "p_uns": [], "valid_eids": []})
+            m["p_sat"].append(c.p_satisfy)
+            m["p_par"].append(c.p_partial)
+            m["p_uns"].append(c.p_unsatisfied)
+            m["valid_eids"].extend(c.valid_eids)
+
+    # 평균 확률로 최종 판정
+    jd_rows = obj.get("jdCoverage", [])
+    row_by_jid = {r.get("jid"): r for r in jd_rows}
+    consensus = []
+    for jid, m in cov_map.items():
+        ps, pp, pu = sum(m["p_sat"]) / len(m["p_sat"]), sum(m["p_par"]) / len(m["p_par"]), sum(m["p_uns"]) / len(m["p_uns"])
+        verdict = "충족" if ps >= max(pp, pu) else ("부분" if pp >= pu else "미충족")
+        r = row_by_jid.get(jid)
+        if r:
+            r["충족여부"] = verdict
+            # 근거 EID 교차(검증자가 인정한 것만 유지)
+            valid = sorted(set(m["valid_eids"]))
+            if valid:
+                r["근거"] = [e for e in r.get("근거", []) if e in valid]
+        consensus.append(max(ps, pp, pu))
+
+    # 축 점수 재산정(상대 비교)
+    axis_scores: Dict[str, List[float]] = {}
+    axis_conf: Dict[str, List[float]] = {}
+    for out in outs:
+        for a in out.axis:
+            axis_scores.setdefault(a.key, []).append(a.score)
+            axis_conf.setdefault(a.key, []).append(a.confidence)
+    for k, lst in axis_scores.items():
+        obj["scores"][k] = int(round(sum(lst) / len(lst)))
+    # 신뢰도 요약을 convStats에 기록(스키마 외 확장)
+    conf_stats = [{"k": f"axis_conf_{k}", "v": f"{sum(axis_conf[k])/len(axis_conf[k]):.2f}"} for k in axis_conf]
+    consensus_mean = sum(consensus) / len(consensus) if consensus else 0.0
+    obj.setdefault("convStats", [])
+    obj["convStats"].append({"k": "verify_consensus", "v": f"{consensus_mean:.2f}"})
+    obj["convStats"].extend(conf_stats)
+
+    # 헤드라인/의견 보수화(검증자가 제시하면 교체)
+    best_headline = None
+    pos_pool, neg_pool = [], []
+    for out in outs:
+        if out.headline:
+            best_headline = out.headline
+        if out.positives:
+            pos_pool.extend(out.positives)
+        if out.negatives:
+            neg_pool.extend(out.negatives)
+    if best_headline:
+        obj["headline"] = best_headline.model_dump(mode="json")
+    # 의견 반영(요약 항목에 녹여 넣기)
+    if pos_pool or neg_pool:
+        items = obj.get("talkSummary", {}).get("items", [])
+        # 기존 긍/부정 교체
+        items = [it for it in items if it.get("주제") not in ("긍정 의견", "부정 의견")]
+        if pos_pool:
+            items.append({"주제": "긍정 의견", "발언요약": "; ".join(pos_pool[:5])})
+        if neg_pool:
+            items.append({"주제": "부정 의견", "발언요약": "; ".join(neg_pool[:5])})
+        obj["talkSummary"] = {"items": items}
+
+    # 스키마 재검증(예외 시 원본 유지)
+    try:
+        _validate_schema(obj, [a["key"] if isinstance(a, dict) else a.key for a in obj["axes"]])
+    except Exception:
+        pass
+
+    meta = {
+        "attempts": len(outs),
+        "consensus": round(consensus_mean, 3),
+        "axis_conf": {k: round(sum(v)/len(v), 3) for k, v in axis_conf.items()}
+    }
+    return obj, meta
 
 # ==== 검증 ====
 def _validate_schema(obj: Dict, axes_keys: List[str]) -> None:
