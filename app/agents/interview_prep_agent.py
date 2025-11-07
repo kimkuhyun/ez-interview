@@ -25,7 +25,7 @@ class InterviewPrepAgent:
         parsed_docs = [resume_parsed, jd_parsed]
 
         # 2. JD Agent 호출: JD 를 분석해, 요약, 평가 기준, 기술 요구 정도 return
-        jd_analysis = self.jd_agent.analyze_jd(jd_parsed.structured["llm_raw"])
+        jd_analysis = self.jd_agent.analyze_jd(jd_parsed.raw_text)
 
         # 3. Question Agent 호출: 구조화 된 이력서, JD 를 토대로 대질문 5개 생성 (List)
 
