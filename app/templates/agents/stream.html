@@ -3,9 +3,10 @@
 
 <head>
   <meta charset="UTF-8" />
-  <style>
-    {% include 'css/stream.css' %}
-  </style>
+  <title>🎤 실시간 면접 보조 STT</title>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/stream.css') }}">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 
 <body>
@@ -13,6 +14,7 @@
     <div class="stt-bar">
       <div class="stt-indicator" id="stt-indicator"></div>
       <button id="stt-btn" onclick="toggleSTT()">STT 시작</button>
+      <button id="ai-toggle-btn" class="ai-toggle on" onclick="toggleAI()">AI 질문 생성: ON</button>
     </div>
     <div id="tab-bar" class="tab-bar"></div>
     <div id="chat-area" style="flex:1; overflow-y:auto;"></div>
@@ -23,7 +25,11 @@
     </div>
   </div>
 
-  <script>{% include 'js/stream.js' %}</script>
+    <button class="end-btn" onclick="endInterview()">면접 종료</button>
+
+  <script>const res = {{ question_list | tojson }};</script>
+  <!-- ✅ 정적 파일 로드 -->
+  <script src="{{ url_for('static', filename='js/stream.js') }}"></script>
 </body>
 
 </html>
