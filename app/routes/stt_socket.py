@@ -1,6 +1,6 @@
 from flask_socketio import emit
 from app.stt.stt_worker import STTWorker
-from config.config import Config
+from app.config.config import Config
 
 class STTSessionManager:
     """🎙️ 면접 STT 세션 관리 (시간 로직 제거 버전)"""

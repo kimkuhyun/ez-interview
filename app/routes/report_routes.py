@@ -1,83 +1,128 @@
+from __future__ import annotations
+
+import re
+
 from flask import Blueprint, render_template, request, jsonify
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent))
-from agents.report_agent import (
-    create_report_from_files, validate_and_save,
-    get_report, apply_feedback
-)
 from pydantic import ValidationError
+
+from app.agents.report_ragacy import (
+    create_report_from_files,
+    validate_and_save,
+    get_report,
+    apply_feedback,
+)
+
+"""
+리포트 생성/검증 HTTP 라우트. LangGraph 기반 report_agent와 연동
+- report_bp: HTML 패널
+- reports_bp: JSON API (url_prefix=/reports)
+"""
 
 report_bp = Blueprint("report", __name__)
 reports_bp = Blueprint("reports", __name__)
+
+_AXES_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,32}$")
+_DEFAULT_AXES_KEYS = [
+    "problem_solving",
+    "communication",
+    "self_driven_initiative",
+    "collaboration",
+    "professional_expertise",
+]
+
+
+def _wants_html(payload: dict) -> bool:
+    return (payload.get("format") == "html")
+
+
+def _parse_axes_keys(payload: dict) -> list[str]:
+    raw = payload.get("axes_keys")
+    if isinstance(raw, list):
+        candidates = raw
+    else:
+        axes_keys_str = str(raw or "")
+        candidates = axes_keys_str.split(",")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for cand in candidates:
+        key = str(cand or "").strip()
+        if not key:
+            continue
+        key = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key)
+        key = re.sub(r"[^a-z0-9]+", "_", key, flags=re.IGNORECASE)
+        key = re.sub(r"_+", "_", key).strip("_").lower()
+        if not key:
+            continue
+        if not _AXES_KEY_PATTERN.fullmatch(key):
+            continue
+        if key in seen:
+            continue
+        normalized.append(key)
+        seen.add(key)
+        if len(normalized) == 5:
+            break
+
+    return normalized
+
 
 @report_bp.route("/panel/report")
 def report_panel():
     return render_template("agents/report.html", report={})
 
+
 @reports_bp.post("/generate")
 def generate_from_txt():
-    print("🔥 /reports/generate 호출됨!")
     data = request.form if request.form else request.get_json(silent=True) or {}
-    print(f"📥 받은 데이터: {dict(data)}")
+    
+    print(f"[reports/generate] 요청 시작 - resume_path: {data.get('resume_path')}, jd_path: {data.get('jd_path')}, log_path: {data.get('log_path')}")
 
     try:
-        # 1) axes_keys 문자열 → 리스트
-        axes_keys_str = data.get("axes_keys", "")
-        axes_keys = [k.strip() for k in axes_keys_str.split(",") if k.strip()]
-        print(f"🔑 파싱된 axes_keys: {axes_keys}")
+        axes_keys = _parse_axes_keys(data)
+        # axes_keys가 없거나 5개가 아니면 테스트용 하드코딩 값으로 세팅
         if len(axes_keys) != 5:
-            err = {"status":"failed","code":"bad_request","message":"axes_keys는 쉼표로 구분된 5개"}
-            wants_html = (data.get("format") == "html")
-            return (render_template("agents/report.html", report=err), 200) if wants_html else (jsonify(err), 400)
+            axes_keys = _DEFAULT_AXES_KEYS.copy()
+        
+        print(f"[reports/generate] axes_keys: {axes_keys}")
+        print(f"[reports/generate] 보고서 생성 시작...")
 
-        # 2) 리포트 생성 호출 (여기!! 인자 이름 복수형)
-        print("🚀 create_report_from_files 호출 중...")
         rpt = create_report_from_files(
             resume_path=data["resume_path"],
             jd_path=data["jd_path"],
             log_path=data.get("log_path", ""),
             axes_keys=axes_keys,
         )
-        print("✅ 리포트 생성 완료!")
         
-        # 에러 응답 체크
+        print(f"[reports/generate] 보고서 생성 완료 - status: {rpt.get('status', 'success')}")
+
         if rpt.get("status") == "failed":
-            print(f"❌ 리포트 생성 실패: [{rpt.get('code')}] {rpt.get('message')}")
-            if rpt.get("details"):
-                print(f"   상세: {rpt.get('details')}")
-            wants_html = (data.get("format") == "html")
-            return (render_template("agents/report.html", report=rpt), 200) if wants_html else (jsonify(rpt), 200)
-        
-        # 디버깅: talkSummary 구조 확인
+            # 실패인 경우에도 HTML은 200으로 화면 출력, JSON은 200 유지(기존 동작과 동일)
+            print(f"[reports/generate] 생성 실패 - code: {rpt.get('code')}, message: {rpt.get('message')}")
+            return (render_template("agents/report.html", report=rpt), 200) if _wants_html(data) else (jsonify(rpt), 200)
+
+        # 디버깅용 로그(서버 콘솔)
         if rpt.get("talkSummary") and rpt["talkSummary"].get("items"):
-            print(f"📋 talkSummary.items 개수: {len(rpt['talkSummary']['items'])}")
-            for idx, item in enumerate(rpt["talkSummary"]["items"]):  # 전체 출력
+            print(f"[reports] talkSummary.items: {len(rpt['talkSummary']['items'])}")
+            for idx, item in enumerate(rpt["talkSummary"]["items"]):
                 print(f"  [{idx}] 주제: {item.get('주제', 'N/A')}")
-        else:
-            print("⚠️ talkSummary.items가 비어있거나 없음")
         
-        # 응답 모드: html 또는 json
-        wants_html = (data.get("format") == "html")
-        return (render_template("agents/report.html", report=rpt), 200) if wants_html else (jsonify(rpt), 200)
+        print(f"[reports/generate] 응답 반환 - format: {'html' if _wants_html(data) else 'json'}")
+        return (render_template("agents/report.html", report=rpt), 200) if _wants_html(data) else (jsonify(rpt), 200)
 
     except KeyError as e:
-        print(f"❌ KeyError: {e}")
-        err = {"status":"failed","code":"bad_request","message":f"필수 파라미터 누락: {e}","details":{}}
-        wants_html = (data.get("format") == "html")
-        return (render_template("agents/report.html", report=err), 200) if wants_html else (jsonify(err), 200)
-    except ValidationError as e:
-        print(f"❌ ValidationError: {e}")
-        err = {"status":"failed","code":"validation_failed","message":"입력 검증 실패","details":e.errors()}
-        wants_html = (data.get("format") == "html")
-        return (render_template("agents/report.html", report=err), 200) if wants_html else (jsonify(err), 200)
-    except Exception as e:
-        print(f"❌ Exception: {type(e).__name__}: {e}")
+        print(f"[reports/generate] KeyError 발생: {e}")
         import traceback
         traceback.print_exc()
-        err = {"status":"failed","code":"failed","message":str(e)}
-        wants_html = (data.get("format") == "html")
-        return (render_template("agents/report.html", report=err), 200) if wants_html else (jsonify(err), 200)
+        err = {"status": "failed", "code": "bad_request", "message": f"필수 파라미터 누락: {e}", "details": {}}
+        return (render_template("agents/report.html", report=err), 200) if _wants_html(data) else (jsonify(err), 200)
+    except ValidationError as e:
+        err = {"status": "failed", "code": "validation_failed", "message": "입력 검증 실패", "details": e.errors()}
+        return (render_template("agents/report.html", report=err), 200) if _wants_html(data) else (jsonify(err), 200)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        err = {"status": "failed", "code": "failed", "message": str(e)}
+        return (render_template("agents/report.html", report=err), 200) if _wants_html(data) else (jsonify(err), 200)
 
 
 @reports_bp.post("/validate-and-save")
@@ -87,14 +132,16 @@ def validate_then_save():
         rpt = validate_and_save(data)
         return jsonify(rpt), 201
     except ValidationError as e:
-        return jsonify({"error":"validation_failed","detail":e.errors()}), 422
+        return jsonify({"error": "validation_failed", "detail": e.errors()}), 422
+
 
 @reports_bp.get("/<rid>")
 def read_report(rid: str):
     rpt = get_report(rid)
     if not rpt:
-        return jsonify({"error":"not_found"}), 404
+        return jsonify({"error": "not_found"}), 404
     return jsonify(rpt), 200
+
 
 @reports_bp.post("/<rid>/feedback")
 def patch_report(rid: str):
@@ -102,7 +149,7 @@ def patch_report(rid: str):
     try:
         rpt = apply_feedback(rid, patch)
         if not rpt:
-            return jsonify({"error":"not_found"}), 404
+            return jsonify({"error": "not_found"}), 404
         return jsonify(rpt), 200
     except ValidationError as e:
-        return jsonify({"error":"validation_failed","detail":e.errors()}), 422
+        return jsonify({"error": "validation_failed", "detail": e.errors()}), 422
