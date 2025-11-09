@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import re
+
 from flask import Blueprint, render_template, request, jsonify
 from pydantic import ValidationError
 
-from app.agents.report_agent import (
+from app.agents.report_ragacy import (
     create_report_from_files,
     validate_and_save,
     get_report,
@@ -19,17 +21,49 @@ from app.agents.report_agent import (
 report_bp = Blueprint("report", __name__)
 reports_bp = Blueprint("reports", __name__)
 
+_AXES_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,32}$")
+_DEFAULT_AXES_KEYS = [
+    "problem_solving",
+    "communication",
+    "self_driven_initiative",
+    "collaboration",
+    "professional_expertise",
+]
+
 
 def _wants_html(payload: dict) -> bool:
     return (payload.get("format") == "html")
 
 
 def _parse_axes_keys(payload: dict) -> list[str]:
-    # 리스트(세션 전달) 또는 콤마 구분 문자열 모두 지원
-    if isinstance(payload.get("axes_keys"), list):
-        return [str(k).strip() for k in payload.get("axes_keys", []) if str(k).strip()]
-    axes_keys_str = payload.get("axes_keys", "")
-    return [k.strip() for k in axes_keys_str.split(",") if k.strip()]
+    raw = payload.get("axes_keys")
+    if isinstance(raw, list):
+        candidates = raw
+    else:
+        axes_keys_str = str(raw or "")
+        candidates = axes_keys_str.split(",")
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for cand in candidates:
+        key = str(cand or "").strip()
+        if not key:
+            continue
+        key = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key)
+        key = re.sub(r"[^a-z0-9]+", "_", key, flags=re.IGNORECASE)
+        key = re.sub(r"_+", "_", key).strip("_").lower()
+        if not key:
+            continue
+        if not _AXES_KEY_PATTERN.fullmatch(key):
+            continue
+        if key in seen:
+            continue
+        normalized.append(key)
+        seen.add(key)
+        if len(normalized) == 5:
+            break
+
+    return normalized
 
 
 @report_bp.route("/panel/report")
@@ -47,13 +81,7 @@ def generate_from_txt():
         axes_keys = _parse_axes_keys(data)
         # axes_keys가 없거나 5개가 아니면 테스트용 하드코딩 값으로 세팅
         if len(axes_keys) != 5:
-            axes_keys = [
-                "Problem-Solving Ability",
-                "Communication",
-                "Self-Driven Initiative",
-                "Collaboration",
-                "Professional Expertise"
-            ]
+            axes_keys = _DEFAULT_AXES_KEYS.copy()
         
         print(f"[reports/generate] axes_keys: {axes_keys}")
         print(f"[reports/generate] 보고서 생성 시작...")
@@ -125,4 +153,3 @@ def patch_report(rid: str):
         return jsonify(rpt), 200
     except ValidationError as e:
         return jsonify({"error": "validation_failed", "detail": e.errors()}), 422
-
