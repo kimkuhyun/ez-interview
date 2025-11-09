@@ -1,35 +1,47 @@
 <!DOCTYPE html>
 <html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <title>🎤 실시간 면접 보조 STT</title>
 
-<head>
-  <meta charset="UTF-8" />
-  <title>🎤 실시간 면접 보조 STT</title>
+    <link
+      rel="stylesheet"
+      href="{{ url_for('static', filename='css/stream.css') }}"
+    />
+  </head>
 
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/stream.css') }}">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
-</head>
-
-<body>
-  <div class="chat-container">
-    <div class="stt-bar">
-      <div class="stt-indicator" id="stt-indicator"></div>
-      <button id="stt-btn" onclick="toggleSTT()">STT 시작</button>
-      <button id="ai-toggle-btn" class="ai-toggle on" onclick="toggleAI()">AI 질문 생성: ON</button>
+  <body>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.5.4/dist/socket.io.min.js"></script>
+    <div class="chat-container">
+      <div class="stt-bar">
+        <div class="stt-indicator" id="stt-indicator"></div>
+        <button id="stt-btn" onclick="toggleSTT()">STT 시작</button>
+        <button id="ai-toggle-btn" class="ai-toggle on" onclick="toggleAI()">
+          AI 질문 생성: ON
+        </button>
+      </div>
+      <div id="tab-bar" class="tab-bar"></div>
+      <div id="chat-area" style="flex: 1; overflow-y: auto"></div>
+      <div class="input-area">
+        <input
+          type="text"
+          id="user-input"
+          placeholder="메시지를 입력하세요..."
+          onkeypress="if(event.key==='Enter'){ sendMessage(); }"
+        />
+        <button id="send-btn" onclick="sendMessage()">전송</button>
+      </div>
     </div>
-    <div id="tab-bar" class="tab-bar"></div>
-    <div id="chat-area" style="flex:1; overflow-y:auto;"></div>
-    <div class="input-area">
-      <input type="text" id="user-input" placeholder="메시지를 입력하세요..."
-        onkeypress="if(event.key==='Enter'){ sendMessage(); }">
-      <button id="send-btn" onclick="sendMessage()">전송</button>
-    </div>
-  </div>
 
     <button class="end-btn" onclick="endInterview()">면접 종료</button>
 
-  <script>const res = {{ question_list | tojson }};</script>
-  <!-- ✅ 정적 파일 로드 -->
-  <script src="{{ url_for('static', filename='js/stream.js') }}"></script>
-</body>
-
+    <script>
+      const res = {{ question_list | tojson }};
+    </script>
+    <!-- ✅ 정적 파일 로드 -->
+    <script
+      src="{{ url_for('static', filename='js/stream.js') }}"
+      defer
+    ></script>
+  </body>
 </html>
