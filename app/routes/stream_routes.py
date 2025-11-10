@@ -1,17 +1,55 @@
 from flask import Blueprint, render_template, request, jsonify
-from app.config.config import Config
-from app.state import state, now_iso
 from app.agents.stream_agent import StreamAgent
+from app.stt.stt_postprocessor import get_postprocessor
 
 stream_bp = Blueprint("stream", __name__)
 stream_agent = StreamAgent()
+stt_postprocessor = get_postprocessor()  # 후처리기 초기화
 
-# note: using in-memory `state` from app.state
+# 면접 대화 로그 (인메모리 저장)
+interview_logs = []
 
 
+# ========================================
+# 공통 함수
+# ========================================
+def get_request_data():
+    """요청 JSON 데이터 가져오기"""
+    return request.get_json()
+
+
+def find_conversation(question_id):
+    """질문 ID로 대화 찾기"""
+    return next(
+        (q for q in interview_logs if q["question_id"] == question_id),
+        None
+    )
+
+
+def validate_required_params(data, *params):
+    """필수 파라미터 검증"""
+    missing = [p for p in params if not data.get(p)]
+    if missing:
+        return False, f"{', '.join(missing)}는 필수입니다"
+    return True, None
+
+
+def error_response(message, status_code=400):
+    """에러 응답 생성"""
+    return jsonify({"error": message}), status_code
+
+
+def success_response(data=None):
+    """성공 응답 생성"""
+    return jsonify(data or {"status": "ok"})
+
+
+# ========================================
+# 라우트 핸들러
+# ========================================
 @stream_bp.route("/panel/stream")
 def stream_panel():
-    """Stream Agent 패널 로드"""
+    """면접 페이지 로드"""
     question_list = {
         "q1": "자기소개를 해주세요.",
         "q2": "가장 어려웠던 프로젝트는 무엇인가요?",
@@ -19,140 +57,157 @@ def stream_panel():
         "q4": "5년 뒤 본인의 커리어 목표는 무엇인가요?",
         "q5": "최근 관심있는 기술 트렌드는 무엇인가요?"
     }
-
-    # ✅ 초기화: 각 질문을 followups에 면접관 메시지로 저장 + 세션 시작 시간 기록
-    state["interview_start_ts"] = now_iso()
-    state["interview_end_ts"] = None
-    state["interview_logs"] = [
+    
+    # 세션 초기화
+    global interview_logs
+    interview_logs = [
         {
-            "question_id": key,
-            "followups": [
-                {
-                    "role": "면접관",
-                    "content": value
-                }
-            ],
-            "stt_end_times": [],
+            "question_id": qid,
+            "followups": [{"role": "면접관", "content": question}]
         }
-        for key, value in question_list.items()
+        for qid, question in question_list.items()
     ]
-
+    
     return render_template("agents/stream.html", question_list=question_list)
-
 
 @stream_bp.route("/send", methods=["POST"])
 def send_message():
-    data = request.get_json()
-    text = data.get("text")
-    qid = data.get("question_id")
-    role = data.get("role", "면접관")
+    """메시지 저장"""
+    data = get_request_data()
+    
+    # 필수 파라미터 검증
+    is_valid, error_msg = validate_required_params(data, "text", "question_id")
+    if not is_valid:
+        return error_response(error_msg)
 
-    if not text or not qid:
-        return jsonify({"error": "text와 question_id는 필수입니다"}), 400
+    # 대화 찾기
+    conversation = find_conversation(data.get("question_id"))
+    if not conversation:
+        return error_response(f"{data.get('question_id')} 대화를 찾을 수 없습니다", 404)
 
-    current_conv = next(
-        (q for q in state["interview_logs"] if q["question_id"] == qid),
-        None,
-    )
-    if not current_conv:
-        return jsonify({"error": f"{qid} 대화를 찾을 수 없습니다"}), 404
-
+    # 메시지 저장
+    message = {
+        "role": data.get("role", "면접관"),
+        "content": data.get("text")
+    }
+    
     offset = data.get("offset")
-    item = {"role": role, "content": text}
     if offset is not None:
         try:
-            item["offset_sec"] = int(offset)
-        except Exception:
+            message["offset_sec"] = int(offset)
+        except (ValueError, TypeError):
             pass
-
-    current_conv["followups"].append(item)
-    return jsonify({"status": "ok"})
+    
+    conversation["followups"].append(message)
+    return success_response()
 
 
 @stream_bp.route("/stt_final_time", methods=["POST"])
 def stt_final_time():
-    """STT가 최종 문장으로 종료된 시각을 기록합니다. 클라이언트에서 stt_final_stop 수신시 호출됩니다."""
-    data = request.get_json()
-    qid = data.get("question_id")
-    # we expect an offset (seconds from session start). ts strings are not needed.
-    offset = data.get("offset")
+    """STT 종료 엔드포인트 (레거시 호환성 유지)"""
+    return success_response()
 
-    if not qid:
-        return jsonify({"error": "question_id가 필요합니다"}), 400
-
-    print("======== stt 종료 시점 ===")
-    print(state["interview_logs"])
-    current_conv = next((q for q in state["interview_logs"] if q["question_id"] == qid), None)
-    print("current_conv:", current_conv)
-    if not current_conv:
-        return jsonify({"error": f"{qid} 대화를 찾을 수 없습니다"}), 404
-
-    if offset is not None:
-        try:
-            off = int(offset)
-            current_conv.setdefault("stt_end_times", []).append(off)
-            return jsonify({"status": "ok", "offset": off})
-        except Exception:
-            pass
-
-    current_conv.setdefault("stt_end_times", []).append(None)
-    return jsonify({"status": "ok", "offset": None})
+@stream_bp.route("/correct_stt", methods=["POST"])
+def correct_stt():
+    """STT 텍스트 후처리 (LLM 교정)"""
+    data = get_request_data()
+    
+    # 필수 파라미터 검증
+    is_valid, error_msg = validate_required_params(data, "text")
+    if not is_valid:
+        return error_response(error_msg)
+    
+    original_text = data.get("text", "")
+    
+    # LLM으로 텍스트 교정
+    corrected_text = stt_postprocessor.correct(original_text)
+    
+    return success_response({
+        "original": original_text,
+        "corrected": corrected_text,
+        "changed": original_text.strip() != corrected_text.strip()
+    })
 
 
 @stream_bp.route("/ai_followup", methods=["POST"])
 def ai_followup():
-    """후속 질문 3개 생성"""
-    data = request.get_json()
-    qid = data.get("question_id")
-    latest_answer = data.get("text", "")
-    regen = data.get("regen", False)
-
-    if not qid or not latest_answer:
-        return jsonify({"error": "question_id와 text가 필요합니다"}), 400
-
-    current_conv = next((q for q in state["interview_logs"] if q["question_id"] == qid), None)
-    if not current_conv:
-        return jsonify({"error": f"{qid} 대화가 없습니다"}), 404
-
-    # AI agent에 질문 생성 요청 (history는 구조체로 전달)
-    questions = stream_agent.generate_followups(
-        text=latest_answer,
-        question_id=qid,
-        history=current_conv.get("followups", []),
-        regen=regen,
-    )
-
-    return jsonify({"questions": questions})
-
-
-
-@stream_bp.route('/question_activated', methods=['POST'])
-def question_activated():
-    """
-     각 질문이 사용자에게 제시된 시점 기록
-    """
-    data = request.get_json()
-    qid = data.get('question_id')
-    offset = data.get('offset')
-
-    # 질문 ID 유효성 검사
-    if not qid:
-        return jsonify({'error': 'question_id required'}), 400
+    """AI 후속 질문 생성"""
+    data = get_request_data()
     
-    # 현재 질문에 해당하는 대화 기록 찾기
-    current_conv = next((q for q in state['interview_logs'] if q['question_id'] == qid), None)
-    if not current_conv:
-        return jsonify({'error': f'{qid} not found'}), 404
+    # 필수 파라미터 검증
+    is_valid, error_msg = validate_required_params(data, "question_id", "text")
+    if not is_valid:
+        return error_response(error_msg)
 
+    # 대화 찾기
+    conversation = find_conversation(data.get("question_id"))
+    if not conversation:
+        return error_response(f"{data.get('question_id')} 대화가 없습니다", 404)
+
+    # AI 에이전트 호출
+    questions = stream_agent.generate_followups(
+        text=data.get("text", ""),
+        question_id=data.get("question_id"),
+        history=conversation.get("followups", []),
+        regen=data.get("regen", False),
+    )
+    
+    return success_response({"questions": questions})
+
+@stream_bp.route("/question_activated", methods=["POST"])
+def question_activated():
+    """질문 활성화 시점 기록"""
+    data = get_request_data()
+    
+    # 필수 파라미터 검증
+    is_valid, error_msg = validate_required_params(data, "question_id")
+    if not is_valid:
+        return error_response(error_msg)
+
+    # 대화 찾기
+    conversation = find_conversation(data.get("question_id"))
+    if not conversation:
+        return error_response(f"{data.get('question_id')} not found", 404)
+
+    # offset 저장
+    offset = data.get("offset")
     try:
         if offset is not None:
-            # 질문 제시 시점 기록 (세션 시작 후 몇 초?)
-            current_conv['prompt_offset_sec'] = int(offset)
-            return jsonify({'status': 'ok', 'offset': int(offset)})
-    except Exception as e:
+            conversation["prompt_offset_sec"] = int(offset)
+            return success_response({"offset": int(offset)})
+    except (ValueError, TypeError):
         pass
 
-    # offset 처리 실패시 None으로 기록
-    current_conv['prompt_offset_sec'] = None
-    return jsonify({'status': 'ok', 'offset': None})
+    conversation["prompt_offset_sec"] = None
+    return success_response({"offset": None})
 
+@stream_bp.route("/end_interview", methods=["POST"])
+def end_interview():
+    """면접 종료 및 로그 출력"""
+    import json
+    
+    print("\n" + "="*80)
+    print("📋 면접 종료 - Interview Logs")
+    print("="*80)
+    
+    # interview_logs 전체를 보기 좋게 출력
+    print(json.dumps(interview_logs, ensure_ascii=False, indent=2))
+    
+    print("="*80)
+    print(f"총 {len(interview_logs)}개 질문")
+    
+    # 각 질문별 통계
+    for log in interview_logs:
+        qid = log.get("question_id", "?")
+        followup_count = len(log.get("followups", []))
+        print(f"  - {qid}: {followup_count}개 대화")
+    
+    print("="*80 + "\n")
+    
+    # TODO: 추후 VectorDB 저장 로직 추가
+    # vector_db.insert(interview_logs)
+    
+    return success_response({
+        "message": "면접 종료 완료",
+        "total_questions": len(interview_logs)
+    })

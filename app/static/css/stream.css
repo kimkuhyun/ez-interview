@@ -5,7 +5,7 @@ body {
   width: 100%;
   height: 100%;
   background: #f3f4f6;
-  font-family: 'Segoe UI', sans-serif;
+  font-family: "Segoe UI", sans-serif;
 }
 
 /* 🎙️ STT 상단 바 */
@@ -35,9 +35,15 @@ body {
 }
 
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
-  70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
 }
 
 /* 🎛️ STT 버튼 */
@@ -136,8 +142,6 @@ body {
   border-bottom-left-radius: 4px;
 }
 
-
-
 /* 입력창 */
 .input-area {
   display: flex;
@@ -189,10 +193,37 @@ body {
   transform: scale(1.02);
 }
 
+/* ✨ LLM 교정된 텍스트 */
+.message.stt.corrected {
+  background: #dbeafe;
+  color: #1e40af;
+  font-weight: 500;
+  border-left: 3px solid #3b82f6;
+  animation: correctPulse 0.5s ease;
+}
+
+@keyframes correctPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 /* 부드러운 등장 효과 */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(2px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* 🛑 면접 종료 버튼 */
@@ -207,13 +238,12 @@ body {
   border-radius: 50px;
   font-weight: bold;
   cursor: pointer;
-  box-shadow: 0 3px 6px rgba(0,0,0,0.2);
+  box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
 }
 
 .end-btn:hover {
   background: #b91c1c;
 }
-
 
 /* 💬 후속 질문 선택 버튼 */
 .followup-container {
@@ -267,8 +297,8 @@ body {
   align-items: center;
   gap: 2px;
   font-size: 15px;
-  align-self: flex-end;          /* ✅ 오른쪽 정렬 */
-  text-align: right;             /* ✅ 텍스트도 오른쪽 정렬 */
+  align-self: flex-end; /* ✅ 오른쪽 정렬 */
+  text-align: right; /* ✅ 텍스트도 오른쪽 정렬 */
   padding: 8px 12px;
   border-radius: 12px;
   max-width: 80%;
@@ -279,14 +309,28 @@ body {
 }
 
 @keyframes dotBlink {
-  0%, 20% { opacity: 0; }
-  40%, 100% { opacity: 1; }
+  0%,
+  20% {
+    opacity: 0;
+  }
+  40%,
+  100% {
+    opacity: 1;
+  }
 }
 
-.dot1 { animation: dotBlink 1.4s infinite; animation-delay: 0s; }
-.dot2 { animation: dotBlink 1.4s infinite; animation-delay: 0.2s; }
-.dot3 { animation: dotBlink 1.4s infinite; animation-delay: 0.4s; }
-
+.dot1 {
+  animation: dotBlink 1.4s infinite;
+  animation-delay: 0s;
+}
+.dot2 {
+  animation: dotBlink 1.4s infinite;
+  animation-delay: 0.2s;
+}
+.dot3 {
+  animation: dotBlink 1.4s infinite;
+  animation-delay: 0.4s;
+}
 
 /* 🤖 AI 질문 자동 생성 토글 버튼 */
 .ai-toggle {
@@ -312,7 +356,7 @@ body {
 
 /* 🧠 면접관(assistant) 쪽 질문 생성 버튼 */
 .inline-ai-btn {
-  align-self: flex-end;         /* 오른쪽 정렬 */
+  align-self: flex-end; /* 오른쪽 정렬 */
   background: #2563eb;
   color: white;
   border: none;
@@ -322,7 +366,7 @@ body {
   cursor: pointer;
   margin-top: 6px;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
   animation: fadeIn 0.3s ease-in;
 }
 
@@ -330,4 +374,3 @@ body {
   background: #1e40af;
   transform: translateY(-1px);
 }
-
