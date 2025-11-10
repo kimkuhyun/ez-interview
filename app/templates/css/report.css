@@ -151,4 +151,5 @@ tbody tr:hover { background:#f9fafb; }
 /* 충족도 배지 컨테이너(세로 배치) */
 .fulfillment-badge { display: inline-flex; flex-direction: column; align-items: center; gap: .25rem; padding: .5rem; }
 .fulfillment-label  { font-size: .75rem; color: #6b7280; font-weight: 600; }
+.fulfillment-score  { font-size: 1.25rem; color: #4f46e5; font-weight: 800; margin-top: .125rem; }
 

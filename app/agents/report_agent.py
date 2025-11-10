@@ -1,4 +1,3 @@
-# app/agents/report_agent.py
 from __future__ import annotations
 from typing import List, Dict, Optional, Any, Tuple
 from pathlib import Path
@@ -113,6 +112,7 @@ def _norm(t: str) -> str:
     return re.sub(r"\r\n?", "\n", t).strip()
 
 # ==== 청크 ====
+# ==================== RAG 파트 ====================
 def _chunk_paragraph(text: str, size: int = 700, overlap: int = 120) -> List[str]:
     text = _norm(text)
     if not text:
@@ -224,6 +224,7 @@ def _build_context(selected: List[Dict[str, Any]], budget: int) -> Tuple[Tuple[s
     return (jd, res, log), sorted(set(eids)), sorted(set(jids))
 
 # ==== 프롬프트/체인 ====
+# ==================== 에이전트 파트 ====================
 def _prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         ("system",
@@ -433,7 +434,7 @@ def _validate_grounding(obj: Dict, allowed_eids: List[str], allowed_jids: List[s
         if ev.get("eid") not in eids:
             raise ReportError("EID_UNKNOWN", f"unknown EID {ev.get('eid')}")
 
-# ==== RAG ====
+# ==================== RAG 파트 ====================
 def _hash_sources(resume_txt: str, jd_txt: str, log_txt: str) -> str:
     h = hashlib.sha1()
     for x in (resume_txt, jd_txt, log_txt):
@@ -476,7 +477,7 @@ def _retrieve(resume_txt: str, jd_txt: str, log_txt: str, axes_keys: List[str], 
         "ctx_chars": {"jd": len(jd), "resume": len(res), "log": len(log)}
     }
 
-# ==== 공개 API ====
+# ==================== API 파트 ====================
 def create_report_from_files(resume_path: str, jd_path: str, log_path: str, axes_keys: List[str]) -> Dict[str, Any]:
     try:
         resume_txt, jd_txt, log_txt = _read(resume_path), _read(jd_path), _read(log_path)
@@ -491,6 +492,7 @@ def create_report_from_files(resume_path: str, jd_path: str, log_path: str, axes
         obj = result.model_dump(mode="json")
         obj["scores"]  = {x["key"]: x["value"] for x in obj["scores"]}
         obj["weights"] = {x["key"]: x["value"] for x in obj["weights"]}
+        obj, _ = verify_report(jd=jd, resume=resume, log=log, draft=obj)
 
         # 1-1) talkSummary 필수 항목 확인
         items = obj.get("talkSummary", {}).get("items", [])

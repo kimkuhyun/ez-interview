@@ -60,9 +60,9 @@
         </div>
       </div>
 
-      <!-- JD 커버리지 -->
+      <!-- 핵심역량 -->
       <div class="card">
-        <div class="card-header" style="color:#7c3aed;">📋 JD 커버리지</div>
+        <div class="card-header" style="color:#7c3aed;">📋 핵심역량</div>
         <div style="overflow-x:auto;">
           <table id="jdTable">
             <thead><tr><th>ID</th><th>요구사항 / 기대치</th><th>충족도</th><th>근거</th></tr></thead>
@@ -183,8 +183,19 @@
     // 차트
     const labels = (r.axes||[]).map(a=>a.label||a.key);
     const keys   = (r.axes||[]).map(a=>a.key);
-    const values = keys.map(k => (typeof r.scores?.[k]==="number") ? r.scores[k]
-                      : (r.scores?.[k]?.value ?? 0));
+    
+    // scores가 배열 형식인 경우 [{key, value}] → 객체로 변환
+    let scoresObj = {};
+    if (Array.isArray(r.scores)) {
+      r.scores.forEach(s => { scoresObj[s.key] = s.value; });
+    } else {
+      scoresObj = r.scores || {};
+    }
+    
+    const values = keys.map(k => (typeof scoresObj[k]==="number") ? scoresObj[k] : 0);
+    
+    console.log('[DEBUG] 차트 데이터:', { labels, keys, values, scoresObj });
+    
     if (radar) radar.destroy();
     radar = new Chart($("radarChart"), {
       type:'radar',
@@ -198,11 +209,26 @@
 
     // 인터뷰 요약 - 간단한 한 줄 요약
     const items = (r.talkSummary && r.talkSummary.items) ? r.talkSummary.items : [];
+    console.log('[DEBUG] talkSummary.items:', items.length, items);
+    
+    const overall = items.find(x=>x.주제==='인터뷰 요약');
     const pos = items.find(x=>x.주제==='긍정 의견');
     const neg = items.find(x=>x.주제==='부정 의견');
     const flows = items.filter(x=>x.주제!=='인터뷰 요약' && x.주제!=='긍정 의견' && x.주제!=='부정 의견');
     
-    $("flowList").innerHTML = flows.map(it=>{
+    // 인터뷰 요약 표시 (overall이 있으면 맨 위에 표시)
+    let flowHTML = '';
+    if (overall && overall.발언요약) {
+      flowHTML += `
+        <div class="qa-simple" style="border-left: 3px solid #10b981; background: #f0fdf4;">
+          <div class="qa-topic" style="font-weight: 600; color: #059669;">전체 요약</div>
+          <div class="qa-summary">${esc(overall.발언요약)}</div>
+        </div>
+      `;
+    }
+    
+    // Q&A 요약들
+    flowHTML += flows.map(it=>{
       const topic = it.주제 || '';
       const content = it.발언요약 || '';
       return `
@@ -212,17 +238,38 @@
         </div>
       `;
     }).join("");
+    
+    // 비어있으면 메시지 표시
+    if (!flowHTML) {
+      flowHTML = '<div class="empty"><p>인터뷰 요약이 없습니다</p></div>';
+    }
+    
+    $("flowList").innerHTML = flowHTML;
 
     // 긍/부정
     $("posBox").innerHTML = pos ? `<p>${esc(pos.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
     $("negBox").innerHTML = neg ? `<p>${esc(neg.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
 
-    // JD 커버리지 - 세로 레이아웃, 기대치 표시
+    // 핵심역량 테이블 - 점수와 충족도 함께 표시
     const jdBody = document.querySelector("#jdTable tbody");
+    
+    // axes와 scores를 매핑 (C01 → key → score)
+    const axesMap = {};  // {C01: {key: "problem_solving", label: "Problem Solving"}}
+    (r.axes||[]).forEach((ax, idx) => {
+      axesMap[`C${String(idx+1).padStart(2, '0')}`] = ax;
+    });
+    
     jdBody.innerHTML = (r.jdCoverage||[]).map(row=>{
       const chips = (row.근거||[]).map(e=>`<span class="badge badge-indigo">${esc(e)}</span>`).join(" ");
       
-      // 충족도 배지 (세로)
+      // 해당 역량의 점수 찾기
+      const axInfo = axesMap[row.jid];
+      let score = 0;
+      if (axInfo && scoresObj[axInfo.key] !== undefined) {
+        score = scoresObj[axInfo.key];
+      }
+      
+      // 충족도 배지
       const f = normalizeFulfill(row.충족도);
       let label = '부족', cls = 'badge-red';
       if (f === 'full')      { label = '적합'; cls = 'badge-emerald'; }
@@ -230,8 +277,7 @@
 
       const fulfillBadge = `
         <div class="fulfillment-badge">
-          <span class="fulfillment-label">충족도</span>
-          <span class="badge ${cls} nowrap">${esc(label)}</span>
+          <span class="fulfillment-score">${score}점</span>
         </div>`;
       const expect = String(row.기대치 || '').replace(/^\s*(기준[:\s-]*)?/,'').trim();
       return `<tr>

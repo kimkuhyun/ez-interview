@@ -5,8 +5,11 @@ import re
 from flask import Blueprint, render_template, request, jsonify
 from pydantic import ValidationError
 
-from app.agents.report_ragacy import (
-    create_report_from_files,
+# report_agent_test에서 create_report_from_files만 가져오기
+from app.agents.report_agent_test import create_report_from_files
+
+# 나머지는 기존 report_agent에서 가져오기
+from app.agents.report_agent import (
     validate_and_save,
     get_report,
     apply_feedback,
@@ -84,7 +87,7 @@ def generate_from_txt():
             axes_keys = _DEFAULT_AXES_KEYS.copy()
         
         print(f"[reports/generate] axes_keys: {axes_keys}")
-        print(f"[reports/generate] 보고서 생성 시작...")
+        print(f"[reports/generate] 보고서 생성 시작 (V2 with validation)...")
 
         rpt = create_report_from_files(
             resume_path=data["resume_path"],
