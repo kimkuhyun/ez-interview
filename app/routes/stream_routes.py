@@ -1,10 +1,10 @@
 from flask import Blueprint, render_template, request, jsonify
-from openai import OpenAI
 from app.config.config import Config
 from app.state import state, now_iso
+from app.agents.stream_agent import StreamAgent
 
-client = OpenAI(api_key=Config.OPENAI_API_KEY)
 stream_bp = Blueprint("stream", __name__)
+stream_agent = StreamAgent()
 
 # note: using in-memory `state` from app.state
 
@@ -37,17 +37,12 @@ def stream_panel():
         for key, value in question_list.items()
     ]
 
-    print("🗒️ 초기 로그 구조화:", state["interview_logs"]) 
     return render_template("agents/stream.html", question_list=question_list)
 
 
 @stream_bp.route("/send", methods=["POST"])
 def send_message():
-    """로그에 면접관/면접자 메시지 추가 (role 포함).
-    클라이언트는 body에 {text, question_id, role}을 보내야 합니다.
-    """
     data = request.get_json()
-    print(f"[INCOMING /send] {data}")
     text = data.get("text")
     qid = data.get("question_id")
     role = data.get("role", "면접관")
@@ -55,15 +50,15 @@ def send_message():
     if not text or not qid:
         return jsonify({"error": "text와 question_id는 필수입니다"}), 400
 
-    current_conv = next((q for q in state["interview_logs"] if q["question_id"] == qid), None)
+    current_conv = next(
+        (q for q in state["interview_logs"] if q["question_id"] == qid),
+        None,
+    )
     if not current_conv:
         return jsonify({"error": f"{qid} 대화를 찾을 수 없습니다"}), 404
 
     offset = data.get("offset")
-    item = {
-        "role": role,
-        "content": text,
-    }
+    item = {"role": role, "content": text}
     if offset is not None:
         try:
             item["offset_sec"] = int(offset)
@@ -71,8 +66,6 @@ def send_message():
             pass
 
     current_conv["followups"].append(item)
-    print(f"[STATE] Added followup to {qid}: {item}")
-
     return jsonify({"status": "ok"})
 
 
@@ -80,7 +73,6 @@ def send_message():
 def stt_final_time():
     """STT가 최종 문장으로 종료된 시각을 기록합니다. 클라이언트에서 stt_final_stop 수신시 호출됩니다."""
     data = request.get_json()
-    print(f"[INCOMING /stt_final_time] {data}")
     qid = data.get("question_id")
     # we expect an offset (seconds from session start). ts strings are not needed.
     offset = data.get("offset")
@@ -88,7 +80,10 @@ def stt_final_time():
     if not qid:
         return jsonify({"error": "question_id가 필요합니다"}), 400
 
+    print("======== stt 종료 시점 ===")
+    print(state["interview_logs"])
     current_conv = next((q for q in state["interview_logs"] if q["question_id"] == qid), None)
+    print("current_conv:", current_conv)
     if not current_conv:
         return jsonify({"error": f"{qid} 대화를 찾을 수 없습니다"}), 404
 
@@ -96,13 +91,11 @@ def stt_final_time():
         try:
             off = int(offset)
             current_conv.setdefault("stt_end_times", []).append(off)
-            print(f"[STATE] Recorded STT final for {qid}: offset_sec={off}")
             return jsonify({"status": "ok", "offset": off})
         except Exception:
             pass
 
     current_conv.setdefault("stt_end_times", []).append(None)
-    print(f"[STATE] Recorded STT final for {qid}: offset_sec=None")
     return jsonify({"status": "ok", "offset": None})
 
 
@@ -112,6 +105,7 @@ def ai_followup():
     data = request.get_json()
     qid = data.get("question_id")
     latest_answer = data.get("text", "")
+    regen = data.get("regen", False)
 
     if not qid or not latest_answer:
         return jsonify({"error": "question_id와 text가 필요합니다"}), 400
@@ -120,83 +114,45 @@ def ai_followup():
     if not current_conv:
         return jsonify({"error": f"{qid} 대화가 없습니다"}), 404
 
-    history_text = "\n".join(
-        f"{m['role']}: {m['content']}" for m in current_conv["followups"]
+    # AI agent에 질문 생성 요청 (history는 구조체로 전달)
+    questions = stream_agent.generate_followups(
+        text=latest_answer,
+        question_id=qid,
+        history=current_conv.get("followups", []),
+        regen=regen,
     )
 
-    prompt = f"""
-너는 면접관 AI야.
-아래는 지금까지의 대화야.
-면접자의 최신 답변을 참고해서 후속 질문 3개를 자연스럽게 만들어줘.
+    return jsonify({"questions": questions})
 
-[이전 대화 기록]
-{history_text}
-
-[면접자의 최신 답변]
-{latest_answer}
-
-요구사항:
-- 각 질문은 한 줄씩 출력
-- 번호 없이 순수 질문만 3줄
-"""
-
-    try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "너는 면접관 AI야."},
-                {"role": "user", "content": prompt}
-            ]
-        )
-
-        ai_reply = response.choices[0].message.content.strip()
-        # 한 줄씩 split
-        questions = [q.strip("-• ").strip() for q in ai_reply.split("\n") if q.strip()]
-
-        return jsonify({"questions": questions})
-
-    except Exception as e:
-        print(f"❌ OpenAI API 오류: {e}")
-        return jsonify({"error": str(e)}), 500
-
-
-@stream_bp.route("/debug/state")
-def debug_state():
-    """디버그용: 현재 in-memory 상태를 반환합니다. 운영 환경에서는 제거하세요."""
-    # 안전을 위해 간단한 복사본을 반환
-    try:
-        return jsonify(state)
-    except Exception as e:
-        print("debug_state error:", e)
-        return jsonify({"error": "unable to serialize state"}), 500
 
 
 @stream_bp.route('/question_activated', methods=['POST'])
 def question_activated():
-    """Record that a question (prompt) was presented to the user at a given offset (seconds).
-    Client sends {question_id, offset} where offset is seconds from session start.
+    """
+     각 질문이 사용자에게 제시된 시점 기록
     """
     data = request.get_json()
     qid = data.get('question_id')
     offset = data.get('offset')
 
+    # 질문 ID 유효성 검사
     if not qid:
         return jsonify({'error': 'question_id required'}), 400
-
+    
+    # 현재 질문에 해당하는 대화 기록 찾기
     current_conv = next((q for q in state['interview_logs'] if q['question_id'] == qid), None)
     if not current_conv:
         return jsonify({'error': f'{qid} not found'}), 404
 
     try:
         if offset is not None:
+            # 질문 제시 시점 기록 (세션 시작 후 몇 초?)
             current_conv['prompt_offset_sec'] = int(offset)
-            print(f"[STATE] Recorded prompt offset for {qid}: offset_sec={offset}")
             return jsonify({'status': 'ok', 'offset': int(offset)})
     except Exception as e:
-        print('question_activated error:', e)
+        pass
 
-    # fallback
+    # offset 처리 실패시 None으로 기록
     current_conv['prompt_offset_sec'] = None
-    print(f"[STATE] Recorded prompt offset for {qid}: offset_sec=None")
     return jsonify({'status': 'ok', 'offset': None})
 

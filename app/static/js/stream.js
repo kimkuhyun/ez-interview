@@ -6,6 +6,17 @@ console.log("✅ Stream page loaded");
 let socket = null;
 // Prevent double-registration of socket event handlers
 let handlersRegistered = false;
+
+let sttActive = false;
+let currentTab = "";
+let finalText = ""; // 전체 누적 텍스트
+let partialText = ""; // STT 임시 문장
+let currentSTTDiv = null;
+let aiAutoGenerate = true; // 기본값: 자동 생성 ON
+// 세션 타이머: 최초 STT 시작 시점(밀리초)
+let sessionStart = null;
+
+
 function ensureSocketConnected(cb) {
   if (typeof io !== "undefined") {
     socket = io("http://127.0.0.1:5000");
@@ -164,15 +175,6 @@ function registerSocketHandlers() {
     box.scrollTop = box.scrollHeight;
   });
 }
-
-let sttActive = false;
-let currentTab = "";
-let finalText = ""; // 전체 누적 텍스트
-let partialText = ""; // STT 임시 문장
-let currentSTTDiv = null;
-let aiAutoGenerate = true; // 기본값: 자동 생성 ON
-// 세션 타이머: 최초 STT 시작 시점(밀리초)
-let sessionStart = null;
 
 function ensureSessionStart() {
   if (sessionStart === null) sessionStart = Date.now();
