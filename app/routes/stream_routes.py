@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify
 from app.agents.stream_agent import StreamAgent
-from app.stt.stt_postprocessor import get_postprocessor
+from app.agents.grammar_agent import get_postprocessor
+import time
 
 stream_bp = Blueprint("stream", __name__)
 stream_agent = StreamAgent()
@@ -8,6 +9,9 @@ stt_postprocessor = get_postprocessor()  # 후처리기 초기화
 
 # 면접 대화 로그 (인메모리 저장)
 interview_logs = []
+
+# 세션 시작 시간 (서버 기준)
+session_start_time = None
 
 
 # ========================================
@@ -58,8 +62,10 @@ def stream_panel():
         "q5": "최근 관심있는 기술 트렌드는 무엇인가요?"
     }
     
-    # 세션 초기화
-    global interview_logs
+    # 세션 초기화 (타이머는 STT 시작 시 시작됨)
+    global interview_logs, session_start_time
+    session_start_time = None  # STT 시작 버튼을 눌러야 시작
+    
     interview_logs = [
         {
             "question_id": qid,
@@ -72,7 +78,7 @@ def stream_panel():
 
 @stream_bp.route("/send", methods=["POST"])
 def send_message():
-    """메시지 저장"""
+    """메시지 저장 (서버 타임스탬프 자동 기록)"""
     data = get_request_data()
     
     # 필수 파라미터 검증
@@ -85,27 +91,51 @@ def send_message():
     if not conversation:
         return error_response(f"{data.get('question_id')} 대화를 찾을 수 없습니다", 404)
 
+    # 서버 기준 offset 계산
+    offset_sec = None
+    if session_start_time is not None:
+        offset_sec = int(time.time() - session_start_time)
+    
     # 메시지 저장
     message = {
         "role": data.get("role", "면접관"),
-        "content": data.get("text")
+        "content": data.get("text"),
+        "offset_sec": offset_sec  # 서버 타임스탬프
     }
     
-    offset = data.get("offset")
-    if offset is not None:
-        try:
-            message["offset_sec"] = int(offset)
-        except (ValueError, TypeError):
-            pass
-    
     conversation["followups"].append(message)
-    return success_response()
+    
+    return success_response({
+        "offset_sec": offset_sec
+    })
 
 
 @stream_bp.route("/stt_final_time", methods=["POST"])
 def stt_final_time():
     """STT 종료 엔드포인트 (레거시 호환성 유지)"""
     return success_response()
+
+@stream_bp.route("/session_start", methods=["POST"])
+def session_start():
+    """세션 시작 (STT 첫 시작 시점)"""
+    global session_start_time
+    
+    # 이미 시작된 경우 무시
+    if session_start_time is not None:
+        return success_response({
+            "message": "세션 이미 시작됨",
+            "session_started": True
+        })
+    
+    # 세션 시작 시간 기록
+    session_start_time = time.time()
+    print(f"🎬 면접 세션 시작: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(session_start_time))}")
+    
+    return success_response({
+        "message": "세션 시작됨",
+        "session_started": True,
+        "start_time": session_start_time
+    })
 
 @stream_bp.route("/correct_stt", methods=["POST"])
 def correct_stt():
@@ -156,7 +186,7 @@ def ai_followup():
 
 @stream_bp.route("/question_activated", methods=["POST"])
 def question_activated():
-    """질문 활성화 시점 기록"""
+    """질문 활성화 시점 기록 (서버 타임스탬프)"""
     data = get_request_data()
     
     # 필수 파라미터 검증
@@ -169,17 +199,14 @@ def question_activated():
     if not conversation:
         return error_response(f"{data.get('question_id')} not found", 404)
 
-    # offset 저장
-    offset = data.get("offset")
-    try:
-        if offset is not None:
-            conversation["prompt_offset_sec"] = int(offset)
-            return success_response({"offset": int(offset)})
-    except (ValueError, TypeError):
-        pass
-
-    conversation["prompt_offset_sec"] = None
-    return success_response({"offset": None})
+    # 서버 기준 offset 계산
+    offset_sec = None
+    if session_start_time is not None:
+        offset_sec = int(time.time() - session_start_time)
+    
+    conversation["prompt_offset_sec"] = offset_sec
+    
+    return success_response({"offset_sec": offset_sec})
 
 @stream_bp.route("/end_interview", methods=["POST"])
 def end_interview():

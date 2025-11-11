@@ -8,9 +8,6 @@ const state = {
   socket: null, // Socket.IO 연결 객체
   handlersRegistered: false, // 소켓 핸들러 중복 등록 방지 플래그
 
-  // 세션 타이머
-  sessionStart: null, // 면접 세션 시작 시각 (밀리초, Date.now())
-
   // STT 관련
   sttCurrentQuestion: null, // STT 세그먼트가 시작된 질문 ID (탭 전환 대비 고정)
   sttActive: false, // STT 활성화 여부
@@ -21,45 +18,20 @@ const state = {
   // UI 상태
   currentTab: "", // 현재 활성화된 질문 탭 ID (q1, q2, ...)
   aiAutoGenerate: true, // AI 자동 질문 생성 ON/OFF
-
-  // 질문 활성화 추적
-  activationTimes: {}, // 각 질문 탭이 활성화된 시각 {q1: timestamp, q2: timestamp, ...}
-  activationSent: {}, // 각 질문의 활성화 시각을 서버에 전송했는지 여부
 };
 
 // ========================================
 // 유틸리티 함수
 // ========================================
-function getElapsedSeconds() {
-  if (state.sessionStart === null) return 0;
-  return Math.floor((Date.now() - state.sessionStart) / 1000);
-}
-
-function ensureSessionStart() {
-  if (state.sessionStart === null) {
-    state.sessionStart = Date.now();
-    // 저장된 activation times를 offset으로 변환하여 전송
-    Object.entries(state.activationTimes).forEach(([qid, ts]) => {
-      if (!state.activationSent[qid] && ts) {
-        const offset = Math.max(
-          0,
-          Math.floor((ts - state.sessionStart) / 1000)
-        );
-        console.log("[DEBUG] flush activation ->", qid, "offset", offset);
-        sendQuestionActivation(qid, offset);
-      }
-    });
-  }
-}
-
-function sendQuestionActivation(questionId, offset) {
+function sendQuestionActivation(questionId) {
   fetch("/question_activated", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question_id: questionId, offset }),
+    body: JSON.stringify({ question_id: questionId }),
   })
-    .then(() => {
-      state.activationSent[questionId] = true;
+    .then((res) => res.json())
+    .then((data) => {
+      console.log(`[DEBUG] 질문 활성화 기록: ${questionId}, offset: ${data.offset_sec}초`);
     })
     .catch((err) => console.error("question_activated error", err));
 }
@@ -163,8 +135,7 @@ function handleSTTFinalStop(targetQ, box) {
           console.log("✅ UI 업데이트 완료:", correctedText);
         }
 
-        // 교정된 텍스트 저장
-        const offset = getElapsedSeconds();
+        // 교정된 텍스트 저장 (서버에서 자동으로 offset 계산)
         return fetch("/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -172,7 +143,6 @@ function handleSTTFinalStop(targetQ, box) {
             text: correctedText,
             question_id: targetQ,
             role: "면접자",
-            offset,
           }),
         });
       })
@@ -196,7 +166,6 @@ function handleSTTFinalStop(targetQ, box) {
             text: originalText,
             question_id: targetQ,
             role: "면접자",
-            offset: getElapsedSeconds(),
           }),
         });
       });
@@ -300,15 +269,8 @@ function switchTab(tabId, el) {
   el.classList.add("active");
   state.currentTab = tabId;
 
-  // 탭 활성화 시각 기록
-  state.activationTimes[tabId] = Date.now();
-
-  // 세션이 시작된 상태라면 즉시 전송
-  if (state.sessionStart !== null && !state.activationSent[tabId]) {
-    const offset = getElapsedSeconds();
-    console.log("[DEBUG] immediate activation ->", tabId, "offset", offset);
-    sendQuestionActivation(tabId, offset);
-  }
+  // 탭 활성화 시 서버에 기록 (서버에서 자동으로 offset 계산)
+  sendQuestionActivation(tabId);
 }
 
 function appendMessage(tab, role, text) {
@@ -354,7 +316,17 @@ function toggleSTT() {
   state.sttActive = !state.sttActive;
 
   if (state.sttActive) {
-    ensureSessionStart();
+    // 🎬 최초 STT 시작 시 세션 시작
+    fetch("/session_start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        console.log("🎬 세션 시작:", data);
+      })
+      .catch((err) => console.error("❌ 세션 시작 오류:", err));
+
     if (state.socket) state.socket.emit("stt_start");
     indicator.classList.add("active");
     btn.textContent = "STT 중지";
@@ -470,7 +442,6 @@ function selectFollowup(question, box, wrapper) {
       text: question,
       question_id: state.currentTab,
       role: "면접관",
-      offset: getElapsedSeconds(),
     }),
   })
     .then((res) => res.json())
@@ -519,7 +490,6 @@ function sendMessage() {
       text,
       question_id: state.currentTab,
       role: "면접관",
-      offset: getElapsedSeconds(),
     }),
   })
     .then((res) => res.json())

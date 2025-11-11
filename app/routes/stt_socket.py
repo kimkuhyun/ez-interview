@@ -3,7 +3,7 @@ from app.stt.stt_worker import STTWorker
 from app.config.config import Config
 
 class STTSessionManager:
-    """🎙️ 면접 STT 세션 관리 (시간 로직 제거 버전)"""
+    """🎙️ 면접 STT 세션 관리"""
     def __init__(self, socketio):
         self.socketio = socketio
         self.worker = None
