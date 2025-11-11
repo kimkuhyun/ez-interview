@@ -17,8 +17,8 @@
       </div>
       <div class="header-actions">
         <span id="genStatus" class="pill" style="display:none;">생성중…</span>
-  <button id="genBtn" class="btn btn-primary no-print" onclick="generateReport()">리포트 생성</button>
-        <button id="dlBtn" class="btn btn-success no-print" style="display:none;">PDF 다운로드</button>
+        <button id="genBtn" class="btn btn-primary no-print" onclick="generateReport()">리포트 생성</button>
+        <button id="dlBtn" class="btn btn-success no-print" style="display:none;" onclick="downloadHTML()">HTML 다운로드</button>
       </div>
     </div>
     <div class="header-line"></div>
@@ -96,7 +96,40 @@
 
   // 버튼 바인딩
   $("genBtn").onclick = generateReport;
-  $("dlBtn").onclick = ()=>window.print();
+
+  // HTML 다운로드 함수
+  function downloadHTML() {
+    // 현재 페이지의 HTML을 복제
+    const htmlDoc = document.documentElement.cloneNode(true);
+    
+    // 버튼들과 상태 표시 제거
+    const headerActions = htmlDoc.querySelector('.header-actions');
+    if (headerActions) headerActions.remove();
+    
+    // 에러 박스 제거
+    const errBox = htmlDoc.querySelector('#errBox');
+    if (errBox) errBox.remove();
+    
+    // emptyBox 제거
+    const emptyBox = htmlDoc.querySelector('#emptyBox');
+    if (emptyBox) emptyBox.remove();
+    
+    // HTML 문자열 생성
+    const htmlStr = '<!DOCTYPE html>\n' + htmlDoc.outerHTML;
+    
+    // Blob 생성 및 다운로드
+    const blob = new Blob([htmlStr], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `interview_report_${new Date().toISOString().slice(0,10)}.html`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    console.log('✅ HTML 파일 다운로드 완료');
+  }
 
   async function generateReport() {
     const btn = $("genBtn"), pill = $("genStatus"), err = $("errBox");
@@ -260,7 +293,9 @@
     });
     
     jdBody.innerHTML = (r.jdCoverage||[]).map(row=>{
-      const chips = (row.근거||[]).map(e=>`<span class="badge badge-indigo">${esc(e)}</span>`).join(" ");
+      const chips = (row.근거||[]).map(e=>
+        `<span class="badge badge-indigo eid-link" data-eid="${esc(e)}" onclick="scrollToEvidence('${esc(e)}')">${esc(e)}</span>`
+      ).join(" ");
       
       // 해당 역량의 점수 찾기
       const axInfo = axesMap[row.jid];
@@ -294,7 +329,7 @@
     // 증거 맵
     const evBody = document.querySelector("#evTable tbody");
     evBody.innerHTML = (r.evidence||[]).map(ev=>
-      `<tr>
+      `<tr id="ev-${esc(ev.eid)}" class="evidence-row">
         <td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td>
         <td style="color:#6b7280; font-size:0.75rem;">${esc(ev.출처)}</td>
         <td>${esc(ev.내용)}</td>
@@ -316,6 +351,36 @@
       else { renderReport(data); }
     });
   {% endif %}
+
+  // EID 클릭 시 증거 맵으로 스크롤 및 하이라이트
+  function scrollToEvidence(eid) {
+    const targetRow = document.getElementById(`ev-${eid}`);
+    if (!targetRow) {
+      console.warn(`증거 항목 ${eid}를 찾을 수 없습니다.`);
+      return;
+    }
+
+    // 기존 하이라이트 제거
+    document.querySelectorAll('.evidence-row').forEach(row => {
+      row.classList.remove('evidence-highlight');
+    });
+
+    // 부드러운 스크롤 이동
+    targetRow.scrollIntoView({ 
+      behavior: 'smooth', 
+      block: 'center' 
+    });
+
+    // 약간의 지연 후 하이라이트 추가 (스크롤 애니메이션과 타이밍 맞춤)
+    setTimeout(() => {
+      targetRow.classList.add('evidence-highlight');
+      
+      // 3초 후 하이라이트 제거
+      setTimeout(() => {
+        targetRow.classList.remove('evidence-highlight');
+      }, 3000);
+    }, 500);
+  }
   </script>
 </body>
 </html>
