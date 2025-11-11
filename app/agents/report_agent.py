@@ -1,67 +1,126 @@
+"""
+리포트 생성 에이전트
+
+필요한 입력:
+- resume_text: str (이력서 텍스트)
+- jd_text: str (공고 텍스트)
+- log_text: str (인터뷰 로그 텍스트)
+- axes_keys: List[str] (핵심역량 키 리스트)
+  예: ["problem_solving", "communication", "self_driven_initiative", "collaboration", "professional_expertise"]
+
+반환:
+- Dict[str, Any]: 리포트 결과
+  - status: "ok" | "failed"
+  - report_id: str (성공 시)
+  - 기타 리포트 데이터
+
+VectorDB 통합 TODO:
+1. app/utils/chunker_report_test.py -> app/utils/embedding.py 청킹 함수로 교체
+2. app/utils/embedder_report_test.py -> app/utils/embedding.py 임베딩 함수로 교체
+3. app/utils/retriever_report_test.py -> app/utils/retriever.py 검색 함수로 교체
+4. _build_context_from_vectordb() 함수 구현 (VectorDB에서 컨텍스트 가져오기)
+
+사용 예시:
+```python
+from app.agents.report_agent import create_report
+
+result = create_report(
+    resume_text="...",
+    jd_text="...",
+    log_text="...",
+    axes_keys=["problem_solving", "communication", "self_driven_initiative", 
+               "collaboration", "professional_expertise"]
+)
+
+if result["status"] == "ok":
+    print("리포트 생성 성공:", result["report_id"])
+else:
+    print("리포트 생성 실패:", result["message"])
+```
+"""
 from __future__ import annotations
-from typing import List, Dict, Optional, Any, Tuple
-from pathlib import Path
+from typing import List, Dict, Optional, Any
 from uuid import uuid4
 from datetime import datetime
-import json, re, os, hashlib
+import os
+import re
+from collections import defaultdict
 
 from pydantic import BaseModel, Field, ValidationError, StringConstraints
 from typing_extensions import Annotated
 from annotated_types import Ge, Le
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_openai import ChatOpenAI
 
-# ==== 환경 ====
+# 임시 유틸 임포트 (TODO: VectorDB 통합 시 삭제)
+from app.utils.chunker_report_test import (
+    chunk_paragraph_report_test,
+    chunk_log_report_test,
+    extract_clean_question_report_test
+)
+from app.utils.embedder_report_test import (
+    build_index_report_test,
+    cos_similarity_report_test
+)
+from app.utils.retriever_report_test import (
+    retrieve_context_report_test,
+    assign_ids_report_test
+)
+
+# ==================== 환경 설정 ====================
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
-EMBED_MODEL  = os.getenv("OPENAI_EMBED_MODEL", "text-embedding-3-small")
-TMP_DIR      = Path(os.getenv("RAG_TMP_DIR", "app/.tmp"))
-TMP_DIR.mkdir(parents=True, exist_ok=True)
-
-DEFAULT_TOKEN_BUDGET = 32000
-TOKEN_TO_CHARS = 4
-SAFETY_RATIO = 0.7
 
 def _llm() -> ChatOpenAI:
-    return ChatOpenAI(model_name=OPENAI_MODEL, temperature=0.1, timeout=60)
+    return ChatOpenAI(model_name=OPENAI_MODEL, temperature=0.1, timeout=90)
 
-def _emb() -> OpenAIEmbeddings:
-    return OpenAIEmbeddings(model=EMBED_MODEL)
-
-# ==== 에러 ====
-class ReportError(Exception):
-    def __init__(self, code: str, message: str, http: int = 400, details: Dict[str, Any] | None = None):
-        super().__init__(message)
-        self.code, self.message, self.http, self.details = code, message, http, details or {}
-
-def _error(code: str, message: str, http: int = 400, details: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    return {
-        "status": "failed",
-        "code": code,
-        "message": message,
-        "http": http,
-        "trace_id": uuid4().hex,
-        "timestamp": datetime.utcnow().isoformat() + "Z",
-        "details": details or {},
-    }
-
-# ==== 스키마 ====
-KeyStr  = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[a-z][a-z0-9_]{1,32}$")]
+# ==================== 스키마 정의 ====================
+KeyStr = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[a-z][a-z0-9_]{1,32}$")]
 NonEmpty = Annotated[str, StringConstraints(min_length=1)]
-E_ID   = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^E\d{2,3}$")]
-J_ID   = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^J\d{2,3}$")]
-Score  = Annotated[int, Ge(0), Le(100)]
+E_ID = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^E\d{2,3}$")]
+COMP_ID = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^C\d{2,3}$")]
+Score = Annotated[int, Ge(0), Le(100)]
 Weight = Annotated[int, Ge(0), Le(100)]
 
-class Competency(BaseModel): key: KeyStr; label: NonEmpty
-class ScoreItem(BaseModel): key: KeyStr; value: Score
-class WeightItem(BaseModel): key: KeyStr; value: Weight
-class Headline(BaseModel): summary: NonEmpty; tag: NonEmpty
-class TalkSummaryItem(BaseModel): 주제: NonEmpty; 발언요약: NonEmpty
-class TalkSummary(BaseModel): items: List[TalkSummaryItem] = Field(min_length=1)
-class JDCoverRow(BaseModel): jid: J_ID; 요구사항: NonEmpty; 기대치: NonEmpty; 충족도: NonEmpty; 근거: List[E_ID] = Field(min_length=1)
-class EvidenceRow(BaseModel): eid: E_ID; 출처: NonEmpty; 내용: NonEmpty; jid: J_ID
-class ConvKV(BaseModel): k: NonEmpty; v: NonEmpty
+class Competency(BaseModel):
+    key: KeyStr
+    label: NonEmpty
+
+class ScoreItem(BaseModel):
+    key: KeyStr
+    value: Score
+
+class WeightItem(BaseModel):
+    key: KeyStr
+    value: Weight
+
+class Headline(BaseModel):
+    summary: NonEmpty
+    tag: NonEmpty
+
+class TalkSummaryItem(BaseModel):
+    주제: NonEmpty
+    발언요약: NonEmpty
+
+class TalkSummary(BaseModel):
+    items: List[TalkSummaryItem] = Field(min_length=1)
+
+class JDCoverRow(BaseModel):
+    jid: COMP_ID
+    요구사항: NonEmpty
+    기대치: NonEmpty
+    충족도: NonEmpty
+    근거: List[E_ID]
+
+class EvidenceRow(BaseModel):
+    eid: E_ID
+    출처: NonEmpty
+    내용: NonEmpty
+    jid: COMP_ID
+
+class ConvKV(BaseModel):
+    k: NonEmpty
+    v: NonEmpty
 
 class ReportOut(BaseModel):
     axes: List[Competency] = Field(min_length=5, max_length=5)
@@ -73,487 +132,574 @@ class ReportOut(BaseModel):
     jdCoverage: List[JDCoverRow] = Field(min_length=1)
     evidence: List[EvidenceRow] = Field(min_length=1)
 
-class VerifyCoverage(BaseModel):
-    jid: J_ID
-    p_satisfy: float = Field(ge=0.0, le=1.0)
-    p_partial: float = Field(ge=0.0, le=1.0)
-    p_unsatisfied: float = Field(ge=0.0, le=1.0)
-    verdict: NonEmpty
-    valid_eids: List[E_ID] = Field(default_factory=list)
-    reasons: List[NonEmpty] = Field(default_factory=list)
+# ==================== Validation 스키마 ====================
+class LightIssue(BaseModel):
+    code: str
+    where: Optional[str] = None
+    detail: str
+    severity: str = "error"  # "error" | "warning"
 
-class AxisRescore(BaseModel):
-    key: KeyStr
-    score: Score
+class LightValidationResult(BaseModel):
+    ok: bool
+    issues: List[LightIssue] = Field(default_factory=list)
+    stats: Dict[str, int] = Field(default_factory=dict)
+
+# Heavy Validation 스키마
+class QualityAssessment(BaseModel):
+    """품질 평가"""
+    is_good: bool
+    score: float = Field(ge=0.0, le=1.0)
+    issues: List[str] = Field(default_factory=list)
+    suggestions: List[str] = Field(default_factory=list)
+
+class HeavyValidationOut(BaseModel):
+    """LLM 기반 품질 검증 출력"""
+    headline_quality: QualityAssessment
+    summary_quality: QualityAssessment
+    opinion_quality: QualityAssessment
+    axis_quality: QualityAssessment
+    jd_quality: QualityAssessment
+    overall_grade: str  # A+, A, B+, B, C, D, F
     confidence: float = Field(ge=0.0, le=1.0)
+    recommendations: List[str] = Field(default_factory=list)
 
-class VerifyLLMOut(BaseModel):
-    coverage: List[VerifyCoverage]
-    axis: List[AxisRescore]
-    headline: Optional[Headline] = None
-    positives: List[NonEmpty] = Field(default_factory=list)
-    negatives: List[NonEmpty] = Field(default_factory=list)
+class RepairSuggestion(BaseModel):
+    """수정 제안"""
+    field: str
+    action: str  # "update", "add", "remove"
+    value: Any
+    reason: str
 
-# ==== 상태/파일 ====
-_STORE: Dict[str, Dict] = {}
-ROOT = Path(__file__).resolve().parents[1]
+# ==================== 에러 처리 ====================
+class ReportError(Exception):
+    def __init__(self, code: str, message: str, http: int = 400, details: Dict[str, Any] = None):
+        super().__init__(message)
+        self.code, self.message, self.http = code, message, http
+        self.details = details or {}
 
-def _resolve(p: str) -> Path:
-    p = (p or "").strip().replace("\\", "/")
-    for c in [Path(p), ROOT / p, ROOT / "data" / Path(p).name, ROOT / "app" / "data" / Path(p).name]:
-        if c.exists():
-            return c
-    return Path(p)
+def _error(code: str, message: str, http: int = 400, details: Dict = None) -> Dict:
+    return {
+        "status": "failed",
+        "code": code,
+        "message": message,
+        "http": http,
+        "trace_id": uuid4().hex,
+        "timestamp": datetime.utcnow().isoformat() + "Z",
+        "details": details or {}
+    }
 
-def _read(p: str) -> str:
-    return _resolve(p).read_text(encoding="utf-8", errors="ignore").strip()
+# ==================== VectorDB 연동 (TODO: 구현 필요) ====================
+def _build_context_from_vectordb(resume_text: str, jd_text: str, log_text: str) -> tuple:
+    """
+    VectorDB에서 컨텍스트 가져오기 (TODO: 구현 필요)
+    
+    현재는 임시 로컬 임베딩 사용.
+    VectorDB 통합 시 다음과 같이 변경:
+    1. 이력서, 공고, 로그를 VectorDB에 저장 (청크 + 임베딩)
+    2. VectorDB에서 검색하여 컨텍스트 반환
+    3. ID 할당은 VectorDB 메타데이터에서 관리
+    
+    Args:
+        resume_text: 이력서 텍스트
+        jd_text: 공고 텍스트
+        log_text: 인터뷰 로그
+    
+    Returns:
+        (jd_ctx, resume_ctx, log_ctx, comp_id_list, eid_list, qa_pairs)
+    """
+    # 임시: 로컬 임베딩 사용
+    docs, qa_pairs = build_index_report_test(
+        resume_text, jd_text, log_text,
+        chunk_paragraph_report_test,
+        chunk_log_report_test
+    )
+    docs, jid_list, eid_list = assign_ids_report_test(docs, cos_similarity_report_test)
+    
+    jd_ctx = retrieve_context_report_test(docs, "JD")
+    resume_ctx = retrieve_context_report_test(docs, "이력서")
+    log_ctx = retrieve_context_report_test(docs, "인터뷰로그")
+    
+    # 역량 ID는 항상 5개 (핵심역량 개수)
+    comp_id_list = [f"C{i+1:02d}" for i in range(5)]
+    
+    return jd_ctx, resume_ctx, log_ctx, comp_id_list, eid_list, qa_pairs
 
-def _norm(t: str) -> str:
-    return re.sub(r"\r\n?", "\n", t).strip()
+# ==================== 체인 1: 핵심역량 평가 ====================
+class CompetencyEvalOut(BaseModel):
+    scores: List[ScoreItem]
+    weights: List[WeightItem]
+    headline: Headline
+    reasoning: List[str] = Field(default_factory=list)
 
-# ==== 청크 ====
-# ==================== RAG 파트 ====================
-def _chunk_paragraph(text: str, size: int = 700, overlap: int = 120) -> List[str]:
-    text = _norm(text)
-    if not text:
-        return []
-    paras = [p.strip() for p in text.split("\n\n") if p.strip()]
-    chunks: List[str] = []
-    for para in paras:
-        if len(para) <= size:
-            chunks.append(para); continue
-        sents = re.split(r"(?<=[.!?。…])\s+|\n", para); buf = ""
-        for s in sents:
-            if not s.strip(): continue
-            cand = (buf + " " + s).strip() if buf else s.strip()
-            if len(cand) <= size: buf = cand
-            else:
-                if buf: chunks.append(buf)
-                buf = s.strip()
-        if buf: chunks.append(buf)
-    if not chunks:
-        return []
-    out: List[str] = [chunks[0]]
-    for i in range(1, len(chunks)):
-        out.append((chunks[i - 1][-overlap:] + " " + chunks[i]).strip())
-    return out
-
-def _chunk_log(log: str) -> List[str]:
-    return [b.strip() for b in re.split(r"(?m)^(?=Q\d+)", _norm(log)) if b.strip()]
-
-# ==== 임시 JSON 벡터스토어 ====
-class JsonVecStore:
-    def __init__(self, path: Path):
-        self.path = path
-        self.items: List[Dict[str, Any]] = []
-    def load(self):
-        if self.path.exists():
-            self.items = json.loads(self.path.read_text(encoding="utf-8"))
-        return self
-    def persist(self):
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(json.dumps(self.items, ensure_ascii=False), encoding="utf-8")
-    def upsert(self, docs: List[Dict[str, Any]]):
-        self.items = docs
-
-# ==== 유사도/MMR ====
-def _cos(a: List[float], b: List[float]) -> float:
-    da = sum(x * x for x in a) ** 0.5 if a else 0.0
-    db = sum(x * x for x in b) ** 0.5 if b else 0.0
-    if da == 0.0 or db == 0.0:
-        return 0.0
-    return sum(x * y for x, y in zip(a, b)) / (da * db)
-
-def _mmr(qv: List[float], cand: List[List[float]], k: int = 12, lamb: float = 0.6) -> List[int]:
-    chosen: List[int] = []
-    remain = list(range(len(cand)))
-    sims_q = [_cos(qv, v) for v in cand]
-    while remain and len(chosen) < k:
-        best_i, best_score = None, float("-inf")
-        for i in remain:
-            div = 0.0 if not chosen else max(_cos(cand[i], cand[j]) for j in chosen)
-            score = lamb * sims_q[i] - (1 - lamb) * div
-            if score > best_score:
-                best_i, best_score = i, score
-        chosen.append(best_i)  # type: ignore[arg-type]
-        remain.remove(best_i)  # type: ignore[arg-type]
-    return chosen
-
-def _budget_chars(tokens: int = DEFAULT_TOKEN_BUDGET) -> int:
-    return int(tokens * TOKEN_TO_CHARS * SAFETY_RATIO)
-
-# ==== 컨텍스트 ====
-def _attach_ids(chunks: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[str], List[str]]:
-    jmap: Dict[int, str] = {}; emap: Dict[int, str] = {}; j_cnt = e_cnt = 0
-    for i, c in enumerate(chunks):
-        if c["doc_type"] == "JD":
-            j_cnt += 1; jmap[i] = f"J{j_cnt:02d}"
-        else:
-            e_cnt += 1; emap[i] = f"E{e_cnt:02d}"
-    jd_idx = [i for i in range(len(chunks)) if i in jmap]
-    for i in range(len(chunks)):
-        if i in jmap: continue
-        best, bs = None, -1.0
-        for j in jd_idx:
-            s = _cos(chunks[i]["vec"], chunks[j]["vec"])
-            if s > bs: best, bs = j, s
-        if best is not None:
-            chunks[i]["jid"] = jmap.get(best)
-    out: List[Dict[str, Any]] = []; used_e: List[str] = []; used_j: List[str] = []
-    for i, c in enumerate(chunks):
-        if i in jmap:
-            out.append({**c, "text": f"[{jmap[i]}][JD]\n{c['text']}", "jid": jmap[i]})
-            used_j.append(jmap[i])
-        else:
-            out.append({**c, "text": f"[{emap[i]}][{c['doc_type']}]\n{c['text']}", "eid": emap[i]})
-            used_e.append(emap[i])
-    return out, sorted(set(used_e)), sorted(set(used_j))
-
-def _build_context(selected: List[Dict[str, Any]], budget: int) -> Tuple[Tuple[str, str, str], List[str], List[str]]:
-    buf: List[str] = []; used = 0; eids: List[str] = []; jids: List[str] = []
-    for c in selected:
-        t = c["text"].strip()
-        if not t: continue
-        if used + len(t) + 2 > budget: break
-        buf.append(t); used += len(t) + 2
-        if c.get("eid"): eids.append(c["eid"])
-        if c.get("jid"): jids.append(c["jid"])
-    jd  = "\n\n".join([t for t in buf if "[JD]" in t])
-    res = "\n\n".join([t for t in buf if "[이력서]" in t])
-    log = "\n\n".join([t for t in buf if "[인터뷰로그]" in t])
-    return (jd, res, log), sorted(set(eids)), sorted(set(jids))
-
-# ==== 프롬프트/체인 ====
-# ==================== 에이전트 파트 ====================
-def _prompt() -> ChatPromptTemplate:
+def _competency_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         ("system",
-         "당신은 검증 가능한 채용 평가 리포트를 만드는 전문가입니다. 입력은 [JD], [이력서], [인터뷰로그]입니다. "
-         "반드시 주어진 컨텍스트에만 근거하여 'ReportOut' JSON 스키마에 맞춰 결과를 출력해야 합니다. "
-         "오직 제공된 컨텍스트만 근거로 사용하고, 추측·일반론·키워드 일치(단어만 포함 됐다는 이유로 가점)금지\n\n"
-         "--- 주요 원칙 ---\n"
-         "1) 의미판단(NLI): JD 요구와 증거 문장의 뜻이 실제로 부합하는지로 충족/부분/부족을 결정\n"
-         "2) 구조 짝맞춤: 증거에서 역할-행동-성과(예: 역할-백엔드, 행동-성능튜닝, 성과-지연 40%↓)를 뽑아 JD 항목과 최적 짝을 찾습니다.\n"
-         "3) 자기일관성: 내부적으로 표현을 바꿔 최소 3회 재평가 후 합의 결과만 출력합니다(내부 계산·중간표는 출력 금지)\n"
-         "4) 상대 비교 점수: 축별 강약을 서로 비교해 순위를 정하고 0~100으로 분포화합니다(특정 단어 출현 수·상한캡 사용 금지)\n"
-         "5) 근거가 모호/적을수록 점수와 표현을 보수적으로 낮춥니다.\n"
-         "6) 동의어/가까운 개념 고려: 스킬의 뜻이 같은/가까운 표현도 인식하되, 실제 문장의미가 일치할 떄만 인정합니다.\n"
-         "7) 점수의 기준: 40점 미만-자격미달, 41~60점 - 부족함, 61~80점-보통, 80~95점- 탁월, 95점 이상 매우 탁월(내부 계산·중간표는 출력 금지)\n"
-         "8) 평가 스탠스: 채용 전문가로서, 후보자의 역량을 보수적으로 평가하되 객관적이고 공평한 자세를 유지할 것\n\n"
-         "9) 질문은 한 문장으로 쓰고 반드시 ‘?’로 끝낼 것. 답변은 간접화법·과거 시제 ‘~라고 하였음.’으로 마무리할 것. 명사에는 ‘~이라고 하였음’.\n\n"
-
-         "--- 출력 규칙 ---\n"
-         "1.  **axes**: 제공된 'axes_keys'를 'key'로, 자연스러운 한글 레이블을 'label'로 하여 5개의 역량 평가 축을 구성합니다.\n"
-         "2.  **scores**: 'axes'의 각 역량(key)에 대해 0~100점 사이의 정수 점수를 부여합니다. 내부 합의 결과만 반영.\n"
-         "3.  **weights**: 'axes'의 각 역량(key)에 대해 중요도 가중치를 부여합니다. 총 합은 반드시 100이 되어야 합니다.\n"
-         "4.  **headline**: 후보자에 대한 핵심 평가를 요약합니다.\n"
-         "    - `summary`: 후보자의 핵심 역량과 경험을 바탕으로, JD(직무기술서)와의 적합성을 고려하여 평가를 한 문장을 보수적으로 제시합니다. 간결하고 명확한 전문가적 어조를 사용하세요.\n"
-         "    - `tag`: 후보자의 핵심 특징을 나타내는 키워드 3~5개를 쉼표로 구분하여 제시합니다.\n"
-         "5.  **talkSummary**: 인터뷰 대화 내용을 구조화하여 요약합니다. '주제'는 다음을 정확히 따라야 합니다.\n"
-         "    - `{{'주제': '인터뷰 요약', '발언요약': '인터뷰 전체 흐름을 2~3문장으로 요약'}}`\n"
-         "    - `{{'주제': '<질문 내용, 질문을 짧게 쓸 것, 꺾쇠는 출력하지 말 것.>', '발언요약': '(라고|이라고) 하였음\.$, 답변은 1줄 요약할 것'}}` (인터뷰 질문/답변 순서대로 반복)\n"
-         "    - `{{'주제': '긍정 의견', '발언요약': '컨텍스트 기반의 강점 및 우수 역량에 대한 종합 의견 (200~300자)'}}`\n"
-         "    - `{{'주제': '부정 의견', '발언요약': '컨텍스트 기반의 약점 및 개선점에 대한 종합 의견 (200~300자)'}}`\n"
-         "6.  **jdCoverage**: JD의 각 요구사항(`Jxx`)에 대해 후보자가 얼마나 충족하는지를 평가합니다.\n"
-         "    - `jid`: JD 요구사항 ID (`J01`, `J02`, ...)\n"
-         "    - `요구사항`: 해당 JD의 핵심 요구사항\n"
-         "    - `기대치`: 해당 요구사항에 대한 회사의 기대 수준\n"
-         "    - `충족도`: '적합', '보통', '부족' 또는 구체적인 서술로 후보자의 충족 수준을 평가\n"
-         "    - `근거`: 평가의 근거가 되는 이력서/인터뷰로그 증거 ID (`Exx`) 목록\n"
-         "7.  **evidence**: 리포트 작성에 사용된 모든 증거(`Exx`)의 출처와 내용을 명시합니다.\n"
-         "    - `eid`: 증거 ID (`E01`, `E02`, ...)\n"
-         "    - `출처`: '이력서' 또는 '인터뷰로그'\n"
-         "    - `내용`: 해당 증거의 원본 텍스트 또는 요약\n"
-         "    - `jid`: 해당 증거가 가장 관련 깊은 JD 요구사항 ID (`Jxx`)\n"
-         "8.  **convStats**: 인터뷰의 주요 통계 정보를 `[{{'k': '항목명', 'v': '값'}}]` 형식으로 제공합니다. (예: 총 질문 수, 답변 평균 길이 등)\n"
-         "9.  **근거 제시**: `jdCoverage`의 '근거' 필드와 같이, 모든 주장은 반드시 컨텍스트에 존재하는 증거 ID(`Exx`, `Jxx`)와 연결되어야 합니다."),
-
-        ("human", "평가 축: {axes_keys}\n\n[공고]\n{jd}\n\n[이력서]\n{resume}\n\n[인터뷰로그]\n{log}")
-    ])
-
-def _verify_prompt() -> ChatPromptTemplate:
-    return ChatPromptTemplate.from_messages([
-        ("system",
-         "당신은 '검증자'입니다. 아래 Draft(초안) 리포트의 주장을 오직 [JD],[이력서],[인터뷰로그]만으로 재평가하세요. "
-         "키워드 일치 금지, 의미 일치(NLI)로 판정하고, 역할-행동-성과 구조로 짝맞춥니다. "
-         "표현을 바꿔 1회 평가하되(비판적 톤), 결과는 구조화된 JSON으로만 출력하세요.\n\n"
-         "출력:\n"
-         "- coverage: 각 Jxx에 대해 p_satisfy/p_partial/p_unsatisfied(합≈1), verdict(충족|부분|미충족), valid_eids, reasons(2~3).\n"
-         "- axis: 축별 재산정 점수(0~100)와 confidence(0~1). 상대 비교로 분포화, 근거가 약할수록 낮춤.\n"
-         "- headline(선택): 근거 기반 1문장(보수적), tag 3~5개.\n"
-         "- positives/negatives: 각 3~5개, 항목마다 [Exx] 인용."),
+         "당신은 엄격한 면접 평가 전문가입니다. 이력서와 인터뷰 로그를 바탕으로 후보자의 핵심역량을 **보수적이고 엄격하게** 평가하세요.\n\n"
+         "평가 원칙:\n"
+         "1. 실제 증거에 기반한 평가 (추측 금지)\n"
+         "2. 구체적인 성과와 수치가 있어야 높은 점수\n"
+         "3. 막연한 표현이나 일반론은 낮은 점수\n"
+         "4. 증거가 약하면 과감히 낮은 점수 부여\n"
+         "5. 가중치 합계는 정확히 100\n"
+         "6. **기술 스택 나열만으로는 높은 점수 불가** (어떻게 사용했는지 구체적 설명 필수)\n"
+         "7. **각 역량마다 명확한 차별화** (최소 15점 이상 점수 편차 필수)\n\n"
+         "점수 기준 (엄격 적용):\n"
+         "- 0-30: 증거 없음 또는 매우 부족 (단순 기술 나열만 있는 경우 포함)\n"
+         "- 31-50: 기본적 수준, 구체성 부족 (HOW/WHY 없이 WHAT만 언급)\n"
+         "- 51-65: 보통 수준, 일부 구체적 사례 있음 (문제-해결 과정 일부 설명)\n"
+         "- 66-75: 양호, 명확한 성과 입증 (구체적 문제 정의 + 해결 과정 + 결과)\n"
+         "- 76-85: 우수, 복수의 구체적 성과와 수치 (정량적 성과 + 깊이 있는 기술 설명)\n"
+         "- 86-95: 탁월, 예외적인 성과와 깊이 (복수의 정량적 성과 + 기술적 통찰)\n"
+         "- 96-100: 최고 수준 (거의 부여하지 않음)\n\n"
+         "⚠️ **중요 경고 - 반드시 지킬 것:**\n"
+         "- **단순 기술 스택 나열 (Spring, Docker, AWS 등)만으로는 절대 60점 이상 불가**\n"
+         "- **'사용해봤다', '경험 있다'는 구체적 성과 없으면 40점 이하**\n"
+         "- **문제 상황-해결 과정-결과가 명확하지 않으면 50점 이하**\n"
+         "- **정량적 지표(%, 시간, 건수 등)가 없으면 65점 이하**\n"
+         "- **모든 역량 점수가 10점 내외로 비슷하면 안됨 (최소 20점 편차 권장)**\n"
+         "- **증거가 강한 1-2개 역량에 집중, 나머지는 과감히 낮게**\n\n"
+         "차별화 전략:\n"
+         "- 가장 증거가 명확한 역량 1개: 70-80점대\n"
+         "- 증거가 있는 역량 1-2개: 55-65점대\n"
+         "- 증거가 약한 역량 2-3개: 30-50점대\n"
+         "- 증거가 전혀 없는 역량: 20-35점대\n\n"
+         "**필수 출력 필드:**\n"
+         "- scores: List[{{key: str, value: int}}] - 각 역량 키에 대한 점수 배열 (예: [{{key: 'problem_solving', value: 65}}, ...])\n"
+         "- weights: List[{{key: str, value: int}}] - 각 역량 키에 대한 가중치 배열, 합계 반드시 100\n"
+         "- headline: {{summary: str, tag: str}} - 1줄 요약 + 키워드 3-5개 (쉼표 구분)\n"
+         "- reasoning: List[str] - 각 역량에 대한 평가 근거 (5개, 각 역량당 1개씩, 왜 그 점수인지 명확히)"),
         ("human",
-         "[공고]\n{jd}\n\n[이력서]\n{resume}\n\n[인터뷰로그]\n{log}\n\n[Draft]\n{draft_json}")
+         "평가 축: {axes_str}\n\n"
+         "[이력서]\n{resume}\n\n"
+         "[인터뷰로그]\n{log}\n\n"
+         "⚠️ **평가 전 체크리스트:**\n"
+         "1. 각 역량마다 구체적인 증거(문제-해결-결과)가 있는가?\n"
+         "2. 기술 스택만 나열한 것은 아닌가?\n"
+         "3. 정량적 지표가 있는가?\n"
+         "4. 5개 역량의 점수가 모두 비슷하지 않은가? (최소 20점 편차)\n\n"
+         "위 체크리스트를 확인한 후, scores, weights, headline, reasoning을 모두 반환하세요.\n"
+         "**증거가 약한 역량은 과감히 30-40점대로 평가하세요.**")
     ])
 
-def _chain():
-    return _prompt() | _llm().with_structured_output(ReportOut)
-
-def verify_report(jd: str, resume: str, log: str, draft: Dict[str, Any], attempts: int = 3) -> Tuple[Dict[str, Any], Dict[str, Any]]:
-    """
-    - Draft(ReportOut 형식)를 의미 기반으로 재검증하고 점수/커버리지/헤드라인을 보정.
-    - 하드 규칙/상한캡 없이 확률+합의(자기일관성)로만 집계.
-    - 반환: (refined_report, meta)
-    """
-    # 표준화
-    obj = json.loads(json.dumps(draft, ensure_ascii=False))
-    if isinstance(obj.get("scores"), list):
-        obj["scores"] = {x["key"]: x["value"] for x in obj["scores"]}
-    if isinstance(obj.get("weights"), list):
-        obj["weights"] = {x["key"]: x["value"] for x in obj["weights"]}
-
-    chain = _verify_prompt() | _llm().with_structured_output(VerifyLLMOut)
-
-    # 다회 재평가(자기일관성)
-    outs: List[VerifyLLMOut] = []
-    styles = ["비판적 재평가", "중립적 재평가", "신중한 재평가"]
-    for i in range(min(attempts, 3)):
-        out = chain.invoke({
-            "jd": jd, "resume": resume, "log": log,
-            "draft_json": json.dumps(obj, ensure_ascii=False)
-        })
-        outs.append(out)
-
-    # 커버리지 확률 집계
-    cov_map: Dict[str, Dict[str, Any]] = {}
-    for out in outs:
-        for c in out.coverage:
-            m = cov_map.setdefault(c.jid, {"p_sat": [], "p_par": [], "p_uns": [], "valid_eids": []})
-            m["p_sat"].append(c.p_satisfy)
-            m["p_par"].append(c.p_partial)
-            m["p_uns"].append(c.p_unsatisfied)
-            m["valid_eids"].extend(c.valid_eids)
-
-    # 평균 확률로 최종 판정
-    jd_rows = obj.get("jdCoverage", [])
-    row_by_jid = {r.get("jid"): r for r in jd_rows}
-    consensus = []
-    for jid, m in cov_map.items():
-        ps, pp, pu = sum(m["p_sat"]) / len(m["p_sat"]), sum(m["p_par"]) / len(m["p_par"]), sum(m["p_uns"]) / len(m["p_uns"])
-        verdict = "충족" if ps >= max(pp, pu) else ("부분" if pp >= pu else "미충족")
-        r = row_by_jid.get(jid)
-        if r:
-            r["충족여부"] = verdict
-            # 근거 EID 교차(검증자가 인정한 것만 유지)
-            valid = sorted(set(m["valid_eids"]))
-            if valid:
-                r["근거"] = [e for e in r.get("근거", []) if e in valid]
-        consensus.append(max(ps, pp, pu))
-
-    # 축 점수 재산정(상대 비교)
-    axis_scores: Dict[str, List[float]] = {}
-    axis_conf: Dict[str, List[float]] = {}
-    for out in outs:
-        for a in out.axis:
-            axis_scores.setdefault(a.key, []).append(a.score)
-            axis_conf.setdefault(a.key, []).append(a.confidence)
-    for k, lst in axis_scores.items():
-        obj["scores"][k] = int(round(sum(lst) / len(lst)))
-    # 신뢰도 요약을 convStats에 기록(스키마 외 확장)
-    conf_stats = [{"k": f"axis_conf_{k}", "v": f"{sum(axis_conf[k])/len(axis_conf[k]):.2f}"} for k in axis_conf]
-    consensus_mean = sum(consensus) / len(consensus) if consensus else 0.0
-    obj.setdefault("convStats", [])
-    obj["convStats"].append({"k": "verify_consensus", "v": f"{consensus_mean:.2f}"})
-    obj["convStats"].extend(conf_stats)
-
-    # 헤드라인/의견 보수화(검증자가 제시하면 교체)
-    best_headline = None
-    pos_pool, neg_pool = [], []
-    for out in outs:
-        if out.headline:
-            best_headline = out.headline
-        if out.positives:
-            pos_pool.extend(out.positives)
-        if out.negatives:
-            neg_pool.extend(out.negatives)
-    if best_headline:
-        obj["headline"] = best_headline.model_dump(mode="json")
-    # 의견 반영(요약 항목에 녹여 넣기)
-    if pos_pool or neg_pool:
-        items = obj.get("talkSummary", {}).get("items", [])
-        # 기존 긍/부정 교체
-        items = [it for it in items if it.get("주제") not in ("긍정 의견", "부정 의견")]
-        if pos_pool:
-            items.append({"주제": "긍정 의견", "발언요약": "; ".join(pos_pool[:5])})
-        if neg_pool:
-            items.append({"주제": "부정 의견", "발언요약": "; ".join(neg_pool[:5])})
-        obj["talkSummary"] = {"items": items}
-
-    # 스키마 재검증(예외 시 원본 유지)
-    try:
-        _validate_schema(obj, [a["key"] if isinstance(a, dict) else a.key for a in obj["axes"]])
-    except Exception:
-        pass
-
-    meta = {
-        "attempts": len(outs),
-        "consensus": round(consensus_mean, 3),
-        "axis_conf": {k: round(sum(v)/len(v), 3) for k, v in axis_conf.items()}
-    }
-    return obj, meta
-
-# ==== 검증 ====
-def _validate_schema(obj: Dict, axes_keys: List[str]) -> None:
-    # 1차: 모델 검증
-    v = ReportOut(**{
-        "axes": obj["axes"],
-        "scores": [{"key": k, "value": v} for k, v in obj["scores"].items()],
-        "weights": [{"key": k, "value": v} for k, v in obj["weights"].items()],
-        "headline": obj["headline"],
-        "talkSummary": obj["talkSummary"],
-        "convStats": obj.get("convStats", []),
-        "jdCoverage": obj["jdCoverage"],
-        "evidence": obj["evidence"],
+def evaluate_competency(resume: str, log: str, axes_keys: List[str]) -> CompetencyEvalOut:
+    chain = _competency_prompt() | _llm().with_structured_output(CompetencyEvalOut, method="function_calling")
+    
+    result = chain.invoke({
+        "axes_str": ", ".join(axes_keys),
+        "resume": resume,
+        "log": log
     })
-    # 2차: 추가 정합성
-    axes_set = {a.key for a in v.axes}
-    if sorted(axes_set) != sorted(axes_keys):
-        raise ReportError("AXES_KEYS", "axes keys mismatch", details={"axes": sorted(axes_set), "expect": axes_keys})
-    score_keys = {s.key for s in v.scores}
-    weight_keys = {w.key for w in v.weights}
-    if score_keys != axes_set:
-        raise ReportError("SCORES_KEYS", "scores keys mismatch", details={"scores": sorted(score_keys)})
-    if weight_keys != axes_set:
-        raise ReportError("WEIGHTS_KEYS", "weights keys mismatch", details={"weights": sorted(weight_keys)})
-    wsum = sum(w.value for w in v.weights)
-    if wsum != 100:
-        raise ReportError("WEIGHT_SUM", "weights sum != 100", details={"sum": wsum})
+    
+    # 가중치 정규화
+    weights_dict = {w.key: w.value for w in result.weights}
+    total_w = sum(weights_dict.values())
+    if total_w != 100:
+        factor = 100 / total_w
+        weights_dict = {k: int(round(v * factor)) for k, v in weights_dict.items()}
+        diff = 100 - sum(weights_dict.values())
+        if diff != 0:
+            max_key = max(weights_dict, key=weights_dict.get)
+            weights_dict[max_key] += diff
+        result.weights = [WeightItem(key=k, value=v) for k, v in weights_dict.items()]
+    
+    return result
 
-def _validate_grounding(obj: Dict, allowed_eids: List[str], allowed_jids: List[str]) -> None:
-    eids, jids = set(allowed_eids), set(allowed_jids)
-    for row in obj.get("jdCoverage", []):
-        jid = row.get("jid")
-        if jid not in jids:
-            raise ReportError("JID_UNKNOWN", f"unknown JID {jid}")
-        for e in row.get("근거", []):
-            if e not in eids:
-                raise ReportError("EID_UNKNOWN", f"unknown EID {e}")
-    for ev in obj.get("evidence", []):
-        if ev.get("jid") not in jids:
-            raise ReportError("JID_UNKNOWN", f"unknown JID {ev.get('jid')}")
-        if ev.get("eid") not in eids:
-            raise ReportError("EID_UNKNOWN", f"unknown EID {ev.get('eid')}")
+# ==================== 체인 2: 핵심역량-증거 매핑 ====================
+class CompetencyEvidenceOut(BaseModel):
+    competencyCoverage: List[JDCoverRow]
+    evidence: List[EvidenceRow]
 
-# ==================== RAG 파트 ====================
-def _hash_sources(resume_txt: str, jd_txt: str, log_txt: str) -> str:
-    h = hashlib.sha1()
-    for x in (resume_txt, jd_txt, log_txt):
-        h.update(x.encode())
-    return h.hexdigest()[:10]
+def _competency_evidence_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages([
+        ("system",
+         "당신은 핵심역량과 증거를 매핑하는 전문가입니다.\n\n"
+         "작업:\n"
+         "1. 각 핵심역량에 대해 관련 증거(Exx)를 이력서와 인터뷰 로그에서 찾으세요\n"
+         "2. 충족도는 증거의 강도에 따라 평가: 적합/보통/부족\n"
+         "3. **모든 핵심역량은 최소 1개 이상의 EID 필수**\n"
+         "4. 각 증거는 1-2문장으로 요약 (20-30단어)\n\n"
+         "**필수 출력:**\n"
+         "- competencyCoverage: 핵심역량별 평가 (jid=역량ID, 근거[EID 배열])\n"
+         "- evidence: 증거 배열 (eid, 출처, 내용, jid=역량ID)"),
+        ("human",
+         "[핵심역량]\n{competencies}\n\n"
+         "[이력서]\n{resume}\n\n"
+         "[인터뷰로그]\n{log}\n\n"
+         "역량 ID: {competency_details}\n"
+         "사용 가능 EID: {eid_list}\n\n"
+         "competencyCoverage와 evidence를 반환하세요.\n"
+         "**모든 내용을 한국어로 작성하세요.**")
+    ])
 
-def _build_index(resume_txt: str, jd_txt: str, log_txt: str) -> List[Dict[str, Any]]:
-    emb = _emb()
-    docs: List[Dict[str, Any]] = []
-    for t in _chunk_paragraph(jd_txt): docs.append({"doc_type": "JD", "text": t})
-    for t in _chunk_paragraph(resume_txt): docs.append({"doc_type": "이력서", "text": t})
-    for t in _chunk_log(log_txt): docs.append({"doc_type": "인터뷰로그", "text": t})
-    if not docs:
-        return []
-    vecs = emb.embed_documents([d["text"] for d in docs])
-    for d, v in zip(docs, vecs): d["vec"] = v
-    JsonVecStore(TMP_DIR / f"rag_{_hash_sources(resume_txt, jd_txt, log_txt)}.json").upsert(docs)
-    return docs
-
-def _retrieve(resume_txt: str, jd_txt: str, log_txt: str, axes_keys: List[str], top_k: int = 18
-) -> Tuple[Tuple[str, str, str], List[str], List[str], Dict[str, Any]]:
-    docs = _build_index(resume_txt, jd_txt, log_txt)
-    emb = _emb()
-    q = " / ".join(axes_keys + ["JD 요구사항 충족도", "전반 요약", "핵심 답변"])
-    qv = emb.embed_query(q)
-    type_w = {"JD": 1.0, "이력서": 0.9, "인터뷰로그": 1.1}
-    sims = [_cos(qv, d["vec"]) * type_w.get(d["doc_type"], 1.0) for d in docs]
-    max_sim = max(sims) if sims else 0.0
-    if max_sim < 0.18:
-        raise ReportError("RETRIEVE_LOW_CONF", "검색 신뢰도가 기준 미달입니다.", details={"max_sim": round(max_sim, 4)})
-    order = _mmr(qv, [d["vec"] for d in docs], k=min(top_k, len(docs)))
-    selected = [docs[i] for i in order]
-    selected, eids, jids = _attach_ids(selected)
-    (jd, res, log), used_e, used_j = _build_context(selected, _budget_chars(DEFAULT_TOKEN_BUDGET))
-    if not any([jd, res, log]):
-        raise ReportError("RAG_EMPTY_CONTEXT", "컨텍스트가 비어 있습니다.")
-    return (jd, res, log), used_e, used_j, {
-        "max_sim": round(max_sim, 4),
-        "selected": len(selected),
-        "ctx_chars": {"jd": len(jd), "resume": len(res), "log": len(log)}
+def map_competency_evidence(axes_keys: List[str], resume: str, log: str, 
+                            eid_list: List[str]) -> CompetencyEvidenceOut:
+    competency_names = {
+        "problem_solving": "문제해결능력",
+        "communication": "커뮤니케이션",
+        "self_driven_initiative": "자기주도성",
+        "collaboration": "협업능력",
+        "professional_expertise": "전문성"
     }
+    
+    competency_details = "\n".join([
+        f"C{i+1:02d} ({axes_keys[i]}): {competency_names.get(axes_keys[i], axes_keys[i])}"
+        for i in range(len(axes_keys))
+    ])
+    
+    competencies_text = "\n".join([
+        f"{competency_names.get(key, key)}: {key.replace('_', ' ')}"
+        for key in axes_keys
+    ])
+    
+    chain = _competency_evidence_prompt() | _llm().with_structured_output(CompetencyEvidenceOut, method="function_calling")
+    
+    result = chain.invoke({
+        "competencies": competencies_text,
+        "resume": resume,
+        "log": log,
+        "competency_details": competency_details,
+        "eid_list": ", ".join(eid_list)
+    })
+    
+    return result
 
-# ==================== API 파트 ====================
-def create_report_from_files(resume_path: str, jd_path: str, log_path: str, axes_keys: List[str]) -> Dict[str, Any]:
+# ==================== 체인 3: 인터뷰 요약 ====================
+class InterviewSummaryOut(BaseModel):
+    overall: str
+    qa_summaries: List[Dict[str, str]] = Field(default_factory=list)
+    positive: str
+    negative: str
+    stats: Dict[str, str] = Field(default_factory=dict)
+
+def _interview_summary_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages([
+        ("system",
+         "당신은 인터뷰 분석 전문가입니다. 인터뷰 로그를 분석하여 요약하세요.\n\n"
+         "작업:\n"
+         "1. 전체 인터뷰 흐름을 2-3문장으로 요약 (overall 필드)\n"
+         "2. 각 질문에 대한 답변을 1~3줄로 요약 (qa_summaries 필드 - 배열)\n"
+         "   - 질문은 **5~10단어 이내**로 핵심만 압축 (의문형 유지)\n"
+         "   - 예: \"간단히 자기소개 부탁드립니다.\" → \"자기소개?\"\n"
+         "   - 예: \"이력서에서 언급한 N+1 개선을 어떻게 했는지?\" → \"N+1 개선 방법?\"\n"
+         "   - 예: \"마지막으로 하고 싶은 말이 있나요?\" → \"마지막 한마디?\"\n"
+         "   - 답변 요약은 **1~3줄 이내**로 작성 (꼬리물기 질문이 있으면 3줄까지 가능)\n"
+         "3. 긍정 의견: 강점과 우수 역량 (200-300자, positive 필드)\n"
+         "4. 부정 의견: 약점과 개선점 (200-300자, negative 필드)\n"
+         "5. 통계: 총 질문 수, 평균 답변 길이 등 (stats 필드 - Dict)\n\n"
+         "**필수 출력 필드:**\n"
+         "- overall: string (전체 요약)\n"
+         "- qa_summaries: List[Dict] - **반드시 필수** (각 항목: {{q_num: string, question_short: string, answer_summary: string}})\n"
+         "  예시: [{{'q_num': '1', 'question_short': '자기소개?', 'answer_summary': 'Spring Boot와 Node.js 기반 백엔드 엔지니어로 REST API 개발, Docker/AWS 배포 경험 보유'}}]\n"
+         "- positive: string (긍정 의견)\n"
+         "- negative: string (부정 의견)\n"
+         "- stats: Dict[string, string] (통계 정보)\n\n"
+         "**중요:** \n"
+         "- qa_summaries는 빈 배열이 아닌, 모든 질문에 대한 답변 요약을 담은 배열이어야 합니다.\n"
+         "- question_short는 5~10단어 이내로 매우 짧게 압축하세요.\n"
+         "- answer_summary는 1~3줄로 제한하되, 후속 질문이 있으면 3줄까지 사용하세요."),
+        ("human",
+         "[인터뷰 로그]\n{log}\n\n"
+         "[질문-답변 쌍]\n{qa_pairs}\n\n"
+         "위 형식에 맞춰 overall, qa_summaries(필수-배열), positive, negative, stats를 모두 반환하세요.\n"
+         "qa_summaries는 반드시 포함되어야 하며, 제공된 모든 질문-답변 쌍에 대한 요약을 포함해야 합니다.\n"
+         "question_short는 5~10단어로 매우 짧게, answer_summary는 1~3줄로 작성하세요.")
+    ])
+
+def summarize_interview(log: str, qa_pairs: List[Dict]) -> InterviewSummaryOut:
+    chain = _interview_summary_prompt() | _llm().with_structured_output(InterviewSummaryOut, method="function_calling")
+    
+    qa_str = "\n\n".join([
+        f"Q{qa['q_num']}: {qa['question'][:100]}...\n"
+        f"A{qa['q_num']}: {qa['answer'][:200]}..."
+        for qa in qa_pairs
+    ])
+    
+    result = chain.invoke({
+        "log": log,
+        "qa_pairs": qa_str
+    })
+    
+    return result
+
+# ==================== Light Validation ====================
+def validate_light(report: Dict, comp_id_list: List[str], eid_list: List[str], 
+                   qa_pairs: List[Dict]) -> LightValidationResult:
+    """경량 검증 - 구조적 무결성"""
+    issues = []
+    
+    # 1. 역량 ID 연속성
+    expected_ids = [f"C{i+1:02d}" for i in range(len(comp_id_list))]
+    if comp_id_list != expected_ids:
+        issues.append(LightIssue(
+            code="COMP_ID_NOT_SEQUENTIAL",
+            detail=f"역량 ID가 연속적이지 않음: {comp_id_list}"
+        ))
+    
+    # 2. EID 연속성
+    expected_eids = [f"E{i:02d}" for i in range(1, len(eid_list) + 1)]
+    if eid_list != expected_eids:
+        issues.append(LightIssue(
+            code="EID_NOT_SEQUENTIAL",
+            detail=f"EID가 연속적이지 않음: {eid_list}"
+        ))
+    
+    # 3. 빈 근거 배열 체크
+    for row in report.get("jdCoverage", []):
+        if not row.get("근거") or len(row.get("근거", [])) == 0:
+            issues.append(LightIssue(
+                code="EMPTY_EVIDENCE",
+                where=row["jid"],
+                detail=f"{row['jid']}에 근거가 없습니다",
+                severity="warning"
+            ))
+    
+    # 4. 증거 참조 유효성
+    evidence_in_map = {ev["eid"] for ev in report.get("evidence", [])}
+    referenced_eids = set()
+    for row in report.get("jdCoverage", []):
+        referenced_eids.update(row.get("근거", []))
+    
+    invalid_refs = referenced_eids - evidence_in_map
+    if invalid_refs:
+        issues.append(LightIssue(
+            code="INVALID_EVIDENCE_REF",
+            detail=f"존재하지 않는 증거 참조: {sorted(invalid_refs)}"
+        ))
+    
+    # 5. 가중치 합계
+    weight_sum = sum(w["value"] for w in report.get("weights", []))
+    if abs(weight_sum - 100) > 1:
+        issues.append(LightIssue(
+            code="WEIGHT_SUM",
+            detail=f"가중치 합계가 100이 아님: {weight_sum}"
+        ))
+    
+    stats = {
+        "total_competencies": len(comp_id_list),
+        "total_evidences": len(eid_list),
+        "total_qa": len(qa_pairs)
+    }
+    
+    return LightValidationResult(
+        ok=(len([i for i in issues if i.severity == "error"]) == 0),
+        issues=issues,
+        stats=stats
+    )
+
+# ==================== Heavy Validation (LLM 기반) ====================
+def _heavy_validation_prompt() -> ChatPromptTemplate:
+    return ChatPromptTemplate.from_messages([
+        ("system",
+         "당신은 채용 리포트 품질 검증 전문가입니다. 생성된 리포트의 품질을 엄격하게 평가하세요.\n\n"
+         "평가 항목:\n"
+         "1. **헤드라인**: 1줄 요약이 핵심을 잘 담았는가? 키워드가 적절한가?\n"
+         "2. **요약**: 인터뷰 전체 흐름과 각 질문 답변이 빠짐없이 요약되었는가?\n"
+         "3. **의견**: 긍정/부정 의견이 구체적이고 균형잡혔는가? 근거가 명확한가?\n"
+         "4. **역량 평가**: 점수가 증거에 기반하였는가? 과대/과소 평가는 없는가?\n"
+         "5. **JD 충족도**: 각 JD 요구사항에 대한 평가가 정확한가? 증거 매핑이 적절한가?\n\n"
+         "품질 기준:\n"
+         "- is_good: 해당 항목이 기준을 충족하는가 (True/False)\n"
+         "- score: 품질 점수 (0.0~1.0)\n"
+         "- issues: 발견된 문제점들 (구체적으로)\n"
+         "- suggestions: 개선 제안들\n\n"
+         "등급 기준:\n"
+         "- A+: 모든 항목 excellent (0.9+)\n"
+         "- A: 대부분 good (0.8+)\n"
+         "- B+/B: 보통 수준 (0.7+, 0.6+)\n"
+         "- C: 개선 필요 (0.5+)\n"
+         "- D/F: 심각한 문제 (0.5 미만)"),
+        ("human",
+         "[원본 데이터]\n"
+         "JD: {jd_text}\n"
+         "이력서: {resume_text}\n"
+         "인터뷰 로그: {log_text}\n\n"
+         "[생성된 리포트]\n{report_json}\n\n"
+         "위 리포트의 품질을 엄격하게 평가하세요.")
+    ])
+
+def validate_heavy(report: Dict, jd_text: str, resume_text: str, 
+                   log_text: str) -> HeavyValidationOut:
+    """LLM 기반 품질 검증"""
+    import json
+    chain = _heavy_validation_prompt() | _llm().with_structured_output(HeavyValidationOut, method="function_calling")
+    
+    # 텍스트 길이 제한 (컨텍스트 윈도우 고려)
+    max_len = 3000
+    jd_short = jd_text[:max_len] + "..." if len(jd_text) > max_len else jd_text
+    resume_short = resume_text[:max_len] + "..." if len(resume_text) > max_len else resume_text
+    log_short = log_text[:max_len] + "..." if len(log_text) > max_len else log_text
+    
+    result = chain.invoke({
+        "jd_text": jd_short,
+        "resume_text": resume_short,
+        "log_text": log_short,
+        "report_json": json.dumps(report, ensure_ascii=False, indent=2)
+    })
+    
+    return result
+
+# ==================== 자동 수정 ====================
+def auto_repair(report: Dict, validation: HeavyValidationOut) -> tuple:
+    """
+    검증 결과를 바탕으로 자동 수정 시도
+    Returns: (수정된 리포트, 적용된 수정 목록)
+    """
+    repairs_applied = []
+    
+    # 1. 헤드라인 품질 개선
+    if not validation.headline_quality.is_good:
+        if validation.headline_quality.suggestions:
+            repairs_applied.append("헤드라인 품질 경고: " + validation.headline_quality.issues[0])
+    
+    # 2. 점수 보정 (과대평가 방지)
+    if not validation.axis_quality.is_good:
+        for issue in validation.axis_quality.issues:
+            if "과대평가" in issue or "overestimate" in issue.lower():
+                # 모든 점수를 10% 하향 조정
+                for score_item in report["scores"]:
+                    old_val = score_item["value"]
+                    score_item["value"] = max(0, int(old_val * 0.9))
+                    repairs_applied.append(f"점수 하향 조정 (과대평가 방지): {old_val} -> {score_item['value']}")
+    
+    # 3. JD 충족도 보정
+    if not validation.jd_quality.is_good:
+        for row in report.get("jdCoverage", []):
+            # 근거가 없거나 약한 경우 충족도 하향
+            if len(row.get("근거", [])) == 0:
+                row["충족도"] = "부족"
+                repairs_applied.append(f"{row['jid']}: 근거 부족으로 충족도 '부족'으로 변경")
+    
+    return report, repairs_applied
+
+# ==================== 메인 생성 함수 ====================
+def create_report_with_validation(resume_text: str, jd_text: str, log_text: str,
+                                  axes_keys: List[str],
+                                  enable_heavy: bool = False,
+                                  auto_fix: bool = False) -> Dict[str, Any]:
+    """
+    리포트 생성 - Heavy Validation 포함 버전
+    
+    Args:
+        resume_text: 이력서 텍스트
+        jd_text: 공고 텍스트
+        log_text: 인터뷰 로그 텍스트
+        axes_keys: 핵심역량 키 리스트
+        enable_heavy: Heavy Validation 활성화 (LLM 품질 검증, 비용↑)
+        auto_fix: 자동 수정 활성화
+    
+    Returns:
+        리포트 결과 딕셔너리
+    """
     try:
-        resume_txt, jd_txt, log_txt = _read(resume_path), _read(jd_path), _read(log_path)
-        if min(len(resume_txt), len(jd_txt)) == 0:
-            raise ReportError("EMPTY_INPUT", "이력서/공고 중 하나가 비어 있습니다.")
-        (jd, resume, log), eids, jids, rinfo = _retrieve(resume_txt, jd_txt, log_txt, axes_keys)
-
-        # 1) 생성
-        result: ReportOut = _chain().invoke({
-            "resume": resume, "jd": jd, "log": log, "axes_keys": ", ".join(axes_keys)
+        # 1. VectorDB에서 컨텍스트 가져오기 (TODO: 구현)
+        jd_ctx, resume_ctx, log_ctx, comp_id_list, eid_list, qa_pairs = \
+            _build_context_from_vectordb(resume_text, jd_text, log_text)
+        
+        # 2. 체인 실행
+        comp_result = evaluate_competency(resume_ctx, log_ctx, axes_keys)
+        comp_ev_result = map_competency_evidence(axes_keys, resume_ctx, log_ctx, eid_list)
+        interview_result = summarize_interview(log_ctx, qa_pairs)
+        
+        # 3. 결과 조합
+        report = {
+            "axes": [{"key": k, "label": k.replace("_", " ").title()} for k in axes_keys],
+            "scores": [s.model_dump() for s in comp_result.scores],
+            "weights": [w.model_dump() for w in comp_result.weights],
+            "headline": comp_result.headline.model_dump(),
+            "talkSummary": {
+                "items": [
+                    {"주제": "인터뷰 요약", "발언요약": interview_result.overall}
+                ] + [
+                    {
+                        "주제": qa["question_short"],
+                        "발언요약": qa["answer_summary"]
+                    }
+                    for qa in interview_result.qa_summaries
+                ] + [
+                    {"주제": "긍정 의견", "발언요약": interview_result.positive},
+                    {"주제": "부정 의견", "발언요약": interview_result.negative}
+                ]
+            },
+            "convStats": [{"k": k, "v": str(v)} for k, v in interview_result.stats.items()],
+            "jdCoverage": [comp.model_dump() for comp in comp_ev_result.competencyCoverage],
+            "evidence": [ev.model_dump() for ev in comp_ev_result.evidence]
+        }
+        
+        # 4. Light Validation
+        light_validation = validate_light(report, comp_id_list, eid_list, qa_pairs)
+        
+        # 5. Heavy Validation (선택적)
+        heavy_validation = None
+        repairs_applied = []
+        
+        if enable_heavy:
+            heavy_validation = validate_heavy(report, jd_text, resume_text, log_text)
+            
+            # 자동 수정
+            if auto_fix and heavy_validation.overall_grade in ["C", "D", "F"]:
+                report, repairs_applied = auto_repair(report, heavy_validation)
+        
+        # 6. 최종 검증
+        errors = [i for i in light_validation.issues if i.severity == "error"]
+        if errors:
+            return _error("VALIDATION_FAILED", "리포트 검증 실패",
+                         details={"errors": [i.model_dump() for i in errors]})
+        
+        # 7. 최종 스키마 검증
+        try:
+            ReportOut(**report)
+        except ValidationError as ve:
+            print(f"\n[SCHEMA_ERROR] Pydantic 검증 실패:")
+            for err in ve.errors():
+                print(f"  - 위치: {err.get('loc')}")
+                print(f"    메시지: {err.get('msg')}")
+                print(f"    타입: {err.get('type')}")
+                print(f"    입력값: {err.get('input', 'N/A')}")
+            print()
+            raise
+        
+        report.update({
+            "status": "ok",
+            "report_id": uuid4().hex,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "validation": {
+                "light": light_validation.model_dump(),
+                "heavy": heavy_validation.model_dump() if heavy_validation else None,
+                "warnings": len([i for i in light_validation.issues if i.severity == "warning"]),
+                "repairs_applied": repairs_applied
+            }
         })
-        obj = result.model_dump(mode="json")
-        obj["scores"]  = {x["key"]: x["value"] for x in obj["scores"]}
-        obj["weights"] = {x["key"]: x["value"] for x in obj["weights"]}
-        obj, _ = verify_report(jd=jd, resume=resume, log=log, draft=obj)
-
-        # 1-1) talkSummary 필수 항목 확인
-        items = obj.get("talkSummary", {}).get("items", [])
-        need = {"인터뷰 요약", "긍정 의견", "부정 의견"}
-        have = {it.get("주제", "") for it in items}
-        if not need.issubset(have):
-            raise ReportError("STRUCT_MISSING", "talkSummary 필수 항목 누락")
-
-        # 2) 스키마·근거 검증
-        _validate_schema(obj, axes_keys)
-        _validate_grounding(obj, eids, jids)
-
-        # 3) 저장
-        rid = uuid4().hex
-        obj.update({"status": "ok", "report_id": rid, "created_at": datetime.utcnow().isoformat() + "Z"})
-        _STORE[rid] = obj
-        return obj
-
+        
+        return report
+        
     except ReportError as e:
-        return _error(e.code, e.message, http=e.http, details=e.details)
+        return _error(e.code, e.message, e.http, e.details)
     except ValidationError as e:
-        return _error("SCHEMA_MISMATCH", "출력 검증 실패", http=400, details={"why": str(e)})
+        print(f"\n[VALIDATION_ERROR] 최종 검증 실패:")
+        for err in e.errors():
+            print(f"  - {err}")
+        return _error("SCHEMA_ERROR", "스키마 검증 실패", 400, {"errors": e.errors()})
     except Exception as e:
-        return _error("INTERNAL", f"내부 오류: {type(e).__name__}", http=500, details={"why": str(e)})
+        import traceback
+        return _error("INTERNAL", f"내부 오류: {type(e).__name__}", 500, {"trace": traceback.format_exc()})
 
-def validate_and_save(report_json: Dict) -> Dict:
-    if isinstance(report_json.get("scores"), dict):
-        report_json["scores"] = [{"key": k, "value": v} for k, v in report_json["scores"].items()]
-    if isinstance(report_json.get("weights"), dict):
-        report_json["weights"] = [{"key": k, "value": v} for k, v in report_json["weights"].items()]
-    obj = ReportOut(**report_json).model_dump(mode="json")
-    obj["scores"]  = {x["key"]: x["value"] for x in obj["scores"]}
-    obj["weights"] = {x["key"]: x["value"] for x in obj["weights"]}
-    rid = uuid4().hex
-    obj.update({"status": "ok", "report_id": rid, "created_at": datetime.utcnow().isoformat() + "Z"})
-    _STORE[rid] = obj
-    return obj
-
-def get_report(report_id: str) -> Optional[Dict]:
-    return _STORE.get(report_id)
-
-def apply_feedback(rid: str, patch: Dict) -> Optional[Dict]:
-    rpt = _STORE.get(rid)
-    if not rpt or rpt.get("status") != "ok":
-        return None
-    for k in ("scores", "weights", "headline"):
-        if isinstance(patch.get(k), dict):
-            rpt[k].update(patch[k])
-    if isinstance(patch.get("talkSummary"), dict):
-        rpt["talkSummary"] = patch["talkSummary"]
-    if isinstance(patch.get("convStats"), list):
-        rpt["convStats"] = patch["convStats"]
-    # 최종 유효성
-    ReportOut(**{
-        "axes": rpt["axes"],
-        "scores": [{"key": k, "value": v} for k, v in rpt["scores"].items()],
-        "weights": [{"key": k, "value": v} for k, v in rpt["weights"].items()],
-        "headline": rpt["headline"],
-        "talkSummary": rpt["talkSummary"],
-        "convStats": rpt.get("convStats", []),
-        "jdCoverage": rpt["jdCoverage"],
-        "evidence": rpt["evidence"],
-    })
-    return rpt
+# ==================== 간단한 래퍼 함수 ====================
+def create_report(resume_text: str, jd_text: str, log_text: str,
+                 axes_keys: List[str]) -> Dict[str, Any]:
+    """
+    리포트 생성 - 기본 버전 (Light Validation만 사용)
+    
+    Args:
+        resume_text: 이력서 텍스트
+        jd_text: 공고 텍스트
+        log_text: 인터뷰 로그 텍스트
+        axes_keys: 핵심역량 키 리스트
+    
+    Returns:
+        리포트 결과 딕셔너리
+    """
+    return create_report_with_validation(
+        resume_text, jd_text, log_text, axes_keys,
+        enable_heavy=False,
+        auto_fix=False
+    )

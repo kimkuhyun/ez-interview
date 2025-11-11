@@ -153,3 +153,43 @@ tbody tr:hover { background:#f9fafb; }
 .fulfillment-label  { font-size: .75rem; color: #6b7280; font-weight: 600; }
 .fulfillment-score  { font-size: 1.25rem; color: #4f46e5; font-weight: 800; margin-top: .125rem; }
 
+/* EID 링크 스타일 - 클릭 가능하도록 */
+.eid-link {
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.eid-link:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.3);
+}
+
+.eid-link:active {
+  transform: translateY(0);
+}
+
+/* 증거 맵 테이블 행 트랜지션 */
+.evidence-row {
+  transition: all 0.3s ease;
+}
+
+/* 증거 맵 하이라이트 애니메이션 */
+.evidence-highlight {
+  background: linear-gradient(90deg, #eef2ff 0%, #e0e7ff 100%) !important;
+  box-shadow: 0 0 0 3px #a5b4fc;
+  animation: pulse-highlight 0.5s ease-in-out;
+}
+
+@keyframes pulse-highlight {
+  0% {
+    box-shadow: 0 0 0 0 rgba(165, 180, 252, 0);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(165, 180, 252, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 3px rgba(165, 180, 252, 1);
+  }
+}
+

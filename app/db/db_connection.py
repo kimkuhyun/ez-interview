@@ -1,5 +1,5 @@
 import psycopg2
-from config.config import Config
+from app.config.config import Config
 
 def get_connection():
     conn = psycopg2.connect(

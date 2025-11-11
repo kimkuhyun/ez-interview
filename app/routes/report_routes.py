@@ -6,14 +6,17 @@ from flask import Blueprint, render_template, request, jsonify
 from pydantic import ValidationError
 
 # report_agent_test에서 create_report_from_files만 가져오기
-from app.agents.report_agent_test import create_report_from_files
+from app.agents.report_agent import create_report
 
 # 나머지는 기존 report_agent에서 가져오기
+"""
 from app.agents.report_agent import (
     validate_and_save,
     get_report,
     apply_feedback,
 )
+
+"""
 
 """
 리포트 생성/검증 HTTP 라우트. LangGraph 기반 report_agent와 연동
@@ -89,10 +92,22 @@ def generate_from_txt():
         print(f"[reports/generate] axes_keys: {axes_keys}")
         print(f"[reports/generate] 보고서 생성 시작 (V2 with validation)...")
 
-        rpt = create_report_from_files(
-            resume_path=data["resume_path"],
-            jd_path=data["jd_path"],
-            log_path=data.get("log_path", ""),
+        # 파일 읽기
+        from pathlib import Path
+        resume_path = Path(data["resume_path"])
+        jd_path = Path(data["jd_path"])
+        log_path = Path(data.get("log_path", ""))
+        
+        resume_text = resume_path.read_text(encoding="utf-8") if resume_path.exists() else ""
+        jd_text = jd_path.read_text(encoding="utf-8") if jd_path.exists() else ""
+        log_text = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+        
+        print(f"[reports/generate] 파일 읽기 완료 - resume: {len(resume_text)} chars, jd: {len(jd_text)} chars, log: {len(log_text)} chars")
+
+        rpt = create_report(
+            resume_text=resume_text,
+            jd_text=jd_text,
+            log_text=log_text,
             axes_keys=axes_keys,
         )
         
