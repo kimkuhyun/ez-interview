@@ -2,13 +2,15 @@ from app.agents.parse_agent import ParseAgent
 from app.agents.jd_agent import JDAgent
 from app.agents.question_agent import QuestionAgent
 from app.utils.schemas import InterviewPlan
-
+from app.utils.retriever import insert_resume_jd_embeddings
+import time
 
 class InterviewPrepAgent:
     """
     1) 문서들 파싱
     2) JD 분석
-    3) 질문 생성
+    3) RAG 인덱싱 (resume + JD)
+    4) 질문 생성
     을 한 번에 돌리고, Stream Agent / Report Agent 에 필요한 값을 반환
     """
 
@@ -26,6 +28,12 @@ class InterviewPrepAgent:
 
         # 2. JD Agent 호출: JD 를 분석해, 요약, 평가 기준, 기술 요구 정도 return
         jd_analysis = self.jd_agent.analyze_jd(jd_parsed.raw_text)
+
+        # 3. RAG 인덱싱 (DB 저장)
+        print("📚 [RAG] resume + JD 문서 인덱싱 중...")
+        insert_resume_jd_embeddings("resume_input", "resume", resume_parsed.raw_text)
+        insert_resume_jd_embeddings("jd_input", "jd", jd_parsed.raw_text)
+        print("✅ [RAG] 인덱싱 완료")
 
         # 3. Question Agent 호출: 구조화 된 이력서, JD 를 토대로 대질문 5개 생성 (List)
 
