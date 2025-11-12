@@ -404,9 +404,25 @@
         messageContainer.innerHTML = "";
         questionSection.innerHTML = '<div class="loading-spinner"></div> 질문 생성 중...';
 
+        // 먼저 GLOBAL_STATE에서 session_id 가져오기
+        console.log("🔍 현재 State 조회 중...");
+        const stateRes = await fetch("/api/state", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" }
+        });
+        
+        if (!stateRes.ok) {
+          throw new Error("현재 State를 조회할 수 없습니다. 먼저 문서를 임베딩해주세요.");
+        }
+        
+        const stateData = await stateRes.json();
+        const sessionId = stateData.session_id;
+        console.log("✅ Session ID 획득:", sessionId);
+
         const requestBody = {
           query_text: "지원자 이력서 및 JD를 기반으로 면접 질문과 평가지표를 생성해라.",
-          num_questions: 8  // 고정 2개를 제외한 8개만 생성
+          num_questions: 8,  // 고정 2개를 제외한 8개만 생성
+          session_id: sessionId  // ✅ session_id 포함
         };
         
         console.log("   - 요청 내용:", requestBody);

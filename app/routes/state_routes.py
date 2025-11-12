@@ -146,9 +146,8 @@ def get_state():
     현재 State 조회
     """
     print("\n📍 [API] /api/state (GET) 호출")
-    print(f"   - 현재 State: {GLOBAL_STATE.model_dump()}\n")
+    state_data = GLOBAL_STATE.model_dump()
+    print(f"   - 현재 State: {state_data}\n")
     
-    return jsonify({
-        "status": "ok",
-        "state": GLOBAL_STATE.model_dump(),
-    })
+    # State 필드들을 직접 반환 (프론트에서 최상위 레벨로 접근 가능)
+    return jsonify(state_data)

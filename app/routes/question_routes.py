@@ -104,10 +104,17 @@ def generate_questions():
         data = request.get_json()
         print(f"   - 전체 요청: {data}")
         
+        from app.routes.state_routes import GLOBAL_STATE
+        
         query_text = data.get("query_text", "지원자 이력서 및 JD를 기반으로 면접 질문을 생성해라.")
         num_questions = data.get("num_questions", 10)
         num_metrics = data.get("num_metrics", 10)
         session_id = data.get("session_id", None)
+        
+        # session_id가 None이면 GLOBAL_STATE에서 가져오기
+        if session_id is None:
+            session_id = GLOBAL_STATE.session_id
+            print(f"   ℹ️  session_id가 요청에 없음 → GLOBAL_STATE에서 조회")
         
         print(f"   ✅ query_text: {query_text[:100]}...")
         print(f"   ✅ num_questions: {num_questions}")
@@ -159,7 +166,6 @@ def generate_questions():
         
         # 4️⃣ State에 저장
         print("\n5️⃣ State에 질문 및 평가지표 저장")
-        from app.routes.state_routes import GLOBAL_STATE
         
         # 고정 질문 추가 (맨 앞과 맨 뒤)
         FIXED_FIRST = "자신에 대해 간단히 소개해 주세요."
