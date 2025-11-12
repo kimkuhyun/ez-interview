@@ -1,14 +1,12 @@
 from flask import Blueprint, render_template, request, jsonify
 from app.agents.stream_agent import StreamAgent
 from app.agents.grammar_agent import get_postprocessor
+from app.routes.state_routes import GLOBAL_STATE
 import time
 
 stream_bp = Blueprint("stream", __name__)
 stream_agent = StreamAgent()
 stt_postprocessor = get_postprocessor()  # 후처리기 초기화
-
-# 면접 대화 로그 (인메모리 저장)
-interview_logs = []
 
 # 세션 시작 시간 (서버 기준)
 session_start_time = None
@@ -24,8 +22,11 @@ def get_request_data():
 
 def find_conversation(question_id):
     """질문 ID로 대화 찾기"""
+    if not GLOBAL_STATE.interview_logs:
+        return None
+    
     return next(
-        (q for q in interview_logs if q["question_id"] == question_id),
+        (q for q in GLOBAL_STATE.interview_logs if q["question_id"] == question_id),
         None
     )
 
@@ -54,25 +55,39 @@ def success_response(data=None):
 @stream_bp.route("/panel/stream")
 def stream_panel():
     """면접 페이지 로드"""
-    question_list = {
-        "q1": "자기소개를 해주세요.",
-        "q2": "가장 어려웠던 프로젝트는 무엇인가요?",
-        "q3": "팀 내에서 갈등을 어떻게 해결하셨나요?",
-        "q4": "5년 뒤 본인의 커리어 목표는 무엇인가요?",
-        "q5": "최근 관심있는 기술 트렌드는 무엇인가요?"
-    }
+    # GLOBAL_STATE의 questions 사용
+    if GLOBAL_STATE.questions and len(GLOBAL_STATE.questions) >= 5:
+        # state에 저장된 질문 사용
+        question_list = {
+            f"q{i+1}": q 
+            for i, q in enumerate(GLOBAL_STATE.questions[:5])
+        }
+    else:
+        # 기본 질문 사용
+        question_list = {
+            "q1": "자기소개를 해주세요.",
+            "q2": "가장 어려웠던 프로젝트는 무엇인가요?",
+            "q3": "팀 내에서 갈등을 어떻게 해결하셨나요?",
+            "q4": "5년 뒤 본인의 커리어 목표는 무엇인가요?",
+            "q5": "최근 관심있는 기술 트렌드는 무엇인가요?"
+        }
     
-    # 세션 초기화 (타이머는 STT 시작 시 시작됨)
-    global interview_logs, session_start_time
+    # GLOBAL_STATE에 interview_logs 초기화
+    global session_start_time
     session_start_time = None  # STT 시작 버튼을 눌러야 시작
     
-    interview_logs = [
+    GLOBAL_STATE.interview_logs = [
         {
             "question_id": qid,
             "followups": [{"role": "면접관", "content": question}]
         }
         for qid, question in question_list.items()
     ]
+    
+    print(f"\n🎬 Stream 패널 로드")
+    print(f"   - session_id: {GLOBAL_STATE.session_id}")
+    print(f"   - 질문 개수: {len(question_list)}개")
+    print(f"   - 질문 출처: {'GLOBAL_STATE' if GLOBAL_STATE.questions else '기본값'}\n")
     
     return render_template("agents/stream.html", question_list=question_list)
 
@@ -210,12 +225,16 @@ def question_activated():
 
 @stream_bp.route("/end_interview", methods=["POST"])
 def end_interview():
-    """면접 종료 및 로그 출력"""
+    """면접 종료 및 interview_logs DB 저장"""
     import json
+    from app.utils.interview_store import save_interview_logs
     
     print("\n" + "="*80)
     print("📋 면접 종료 - Interview Logs")
     print("="*80)
+    
+    # GLOBAL_STATE.interview_logs 사용
+    interview_logs = GLOBAL_STATE.interview_logs or []
     
     # interview_logs 전체를 보기 좋게 출력
     print(json.dumps(interview_logs, ensure_ascii=False, indent=2))
@@ -231,10 +250,18 @@ def end_interview():
     
     print("="*80 + "\n")
     
-    # TODO: 추후 VectorDB 저장 로직 추가
-    # vector_db.insert(interview_logs)
-    
-    return success_response({
-        "message": "면접 종료 완료",
-        "total_questions": len(interview_logs)
-    })
+    # DB에 interview_logs 저장 (GLOBAL_STATE의 session_id 사용)
+    try:
+        session_id = save_interview_logs(interview_logs, GLOBAL_STATE.session_id)
+        print(f"✅ DB 저장 완료 - Session ID: {session_id}\n")
+        
+        return success_response({
+            "message": "면접 종료 및 DB 저장 완료",
+            "total_questions": len(interview_logs),
+            "session_id": session_id,
+            "redirect": "/panel/report"
+        })
+        
+    except Exception as e:
+        print(f"❌ DB 저장 실패: {e}\n")
+        return error_response(f"DB 저장 실패: {str(e)}", 500)

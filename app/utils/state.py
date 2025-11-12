@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Any
 import uuid
 
 class InterviewState(BaseModel):
@@ -13,6 +13,7 @@ class InterviewState(BaseModel):
     jd_len: Optional[int] = None
     questions: Optional[List[str]] = None
     metrics: Optional[List[str]] = None
+    interview_logs: Optional[List[Any]] = None  # 면접 대화 로그
     
     def __init__(self, **data):
         super().__init__(**data)
