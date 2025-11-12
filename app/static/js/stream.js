@@ -240,7 +240,14 @@ function loadtab() {
   const tabBar = document.getElementById("tab-bar");
   const chatArea = document.getElementById("chat-area");
 
-  Object.entries(res).forEach(([id, text], i) => {
+  // 질문 ID를 숫자순으로 정렬 (q1, q2, ..., q10, q11)
+  const sortedEntries = Object.entries(res).sort((a, b) => {
+    const numA = parseInt(a[0].replace('q', ''));
+    const numB = parseInt(b[0].replace('q', ''));
+    return numA - numB;
+  });
+
+  sortedEntries.forEach(([id, text], i) => {
     const tab = document.createElement("div");
     tab.className = "tab";
     tab.textContent = id.toUpperCase();
@@ -375,9 +382,14 @@ function endInterview() {
           `리포트 페이지로 이동합니다.`
       );
 
-      // 리포트 페이지로 리다이렉트
-      if (data.redirect) {
-        window.location.href = data.redirect;
+      // 오른쪽 패널만 리포트로 변경 (전체 페이지 리다이렉트 방지)
+      if (window.parent && window.parent.loadPanel) {
+        // interview.html의 loadPanel 함수 호출
+        window.parent.loadPanel('report');
+      } else {
+        console.warn("⚠️ loadPanel 함수를 찾을 수 없어 fallback 사용");
+        // fallback: 전체 페이지 리다이렉트
+        window.location.href = "/panel/report";
       }
     })
     .catch((err) => {

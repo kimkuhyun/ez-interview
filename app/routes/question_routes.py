@@ -1,8 +1,4 @@
 from flask import Blueprint, request, jsonify, render_template
-from app.agents.interview_prep_agent import InterviewPrepAgent
-from app.agents.interview_prep_agent_lcel import InterviewPrepAgentLCEL
-from app.utils.file_utils import extract_text
-from flask import Blueprint, request, jsonify
 from app.agents.embedding_agent import EmbeddingAgent
 from app.agents.question_agent import QuestionAgent
 from app.utils.state import InterviewState
@@ -13,42 +9,6 @@ question_bp = Blueprint("question", __name__)
 @question_bp.route("/panel/question")
 def question_panel():
     return render_template("agents/question.html")
-
-@question_bp.route("/api/interview-prep", methods=["POST"])
-def build_interview_plan():
-    total_start = time.perf_counter()
-
-    # 1. 파일 읽기
-    pdf_start = time.perf_counter()
-    resume_file = request.files.get("resume")
-    jd_file = request.files.get("jd")
-
-    # PDF 텍스트 추출
-    resume_text = extract_text(resume_file)
-    jd_text = extract_text(jd_file)
-    pdf_end = time.perf_counter()
-
-
-    # 2. Interview Prep 에이전트 호출
-    ai_start = time.perf_counter()
-    agent = InterviewPrepAgent()
-    plan = agent.run(resume_text, jd_text)
-
-    # agent_lc = InterviewPrepAgentLCEL()
-    # plan = agent_lc.run(resume_text, jd_text)
-
-    ai_end = time.perf_counter()
-
-    total_end = time.perf_counter()
-
-    print("\n[🧩 Flask Time Report]")
-    print(f" - PDF Read Time     : {pdf_end - pdf_start:6.2f} sec")
-    print(f" - AI Agent Time     : {ai_end - ai_start:6.2f} sec")
-    print(f" - Total Runtime     : {total_end - total_start:6.2f} sec")
-
-    print(plan.model_dump_json(indent=2, ensure_ascii=False))
-
-    return jsonify(plan.model_dump())   # pydantic → dict → json
 
 # -------------------------------
 # 1️⃣ 문서 임베딩 단계
