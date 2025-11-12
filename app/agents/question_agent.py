@@ -1,10 +1,10 @@
 import os
+import time
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import JsonOutputParser
-from langchain_core.runnables import RunnableLambda, RunnableSequence
-from app.utils.schemas import InterviewQuestions, InterviewQuestionsAndMetrics
-from app.utils.rag_retriever import search_similar_chunks # ✅ RAG 검색 함수 import
+from langchain_core.runnables import RunnableLambda
+from app.utils.rag_retriever import search_similar_chunks
 from app.utils.state import InterviewState
 
 
@@ -19,7 +19,8 @@ class QuestionAgent:
 
         # LLM 초기화
         self.llm = ChatOpenAI(
-            model="gpt-4o-mini",
+            # model="gpt-4o-mini",
+            model="gpt-3.5-turbo",
             temperature=0.5,
             openai_api_key=api_key,
         )
@@ -85,20 +86,24 @@ class QuestionAgent:
             num_metrics: 생성할 평가지표 개수 (기본값: 10)
             session_id: 세션 UUID (같은 세션 내의 문서만 검색)
         """
+        
+        total_start = time.time()
 
         print("\n" + "="*80)
         print("🤖 [QuestionAgent] 시작")
         print("="*80)
         
         # 1️⃣ RAG DB 검색
-        print(f"📝 [Step 1] RAG 검색 시작")
+        rag_start = time.time()
+        print(f"\n📝 [Step 1] RAG 검색 시작")
         print(f"   - Query: {query_text[:100]}...")
         print(f"   - Session ID: {session_id}")
         print(f"   - Top-K: 5")
         
         try:
             rag_results = search_similar_chunks(query_text, session_id=session_id, top_k=5)
-            print(f"✅ [Step 1] RAG 검색 완료: {len(rag_results)}개 문서 검색됨")
+            rag_time = time.time() - rag_start
+            print(f"✅ [Step 1] RAG 검색 완료: {len(rag_results)}개 문서 검색됨 (⏱️  {rag_time:.2f}초)")
             
             if rag_results:
                 for idx, result in enumerate(rag_results):
@@ -112,12 +117,14 @@ class QuestionAgent:
             print(f"   - 최종 Context 길이: {len(context_text)}자")
             
         except Exception as e:
-            print(f"❌ [Step 1] RAG 검색 실패: {e}")
+            rag_time = time.time() - rag_start
+            print(f"❌ [Step 1] RAG 검색 실패 (⏱️  {rag_time:.2f}초): {e}")
             import traceback
             traceback.print_exc()
             context_text = ""
 
         # 2️⃣ LLM 호출
+        llm_start = time.time()
         print(f"\n📡 [Step 2] LLM 호출 시작")
         print(f"   - 요청 질문 수: {num_questions}")
         print(f"   - 요청 평가지표 수: {num_metrics}")
@@ -140,7 +147,10 @@ class QuestionAgent:
             traceback.print_exc()
             response = {"questions": [], "metrics": []}
 
+        llm_time = time.time() - llm_start
+
         # 3️⃣ 결과 파싱
+        parse_start = time.time()
         print(f"\n📊 [Step 3] 결과 파싱")
         
         try:
@@ -210,9 +220,9 @@ class QuestionAgent:
             
             # 평가지표가 부족하면 한국어 기본값으로 채우기
             default_metrics = [
-                "문제해결력",
+                "문제 해결력",
                 "기술 이해도",
-                "의사소통 능력",
+                "의사 소통 능력",
                 "코드 작성 능력",
                 "분석력",
                 "창의성",
@@ -220,9 +230,9 @@ class QuestionAgent:
                 "학습 의지",
                 "자신감",
                 "준비도",
-                "세부사항 파악",
+                "세부 사항 파악",
                 "시스템 설계",
-                "트러블슈팅",
+                "트러블 슈팅",
                 "성능 최적화",
                 "코드 리뷰 능력"
             ]
@@ -241,18 +251,25 @@ class QuestionAgent:
                 questions=questions[:num_questions],
                 metrics=metrics[:num_metrics],
             )
-            print(f"✅ [Step 3] 파싱 완료")
+            parse_time = time.time() - parse_start
+            print(f"✅ [Step 3] 파싱 완료 (⏱️  {parse_time:.2f}초)")
             print(f"   - 최종 질문: {len(result.questions)}개")
             print(f"   - 최종 지표: {len(result.metrics)}개")
             
+            total_time = time.time() - total_start
             print("\n" + "="*80)
             print("✅ [QuestionAgent] 완료!")
+            print(f"📊 종합 소요 시간: {total_time:.2f}초")
+            print(f"   - RAG 검색: {rag_time:.2f}초 ({rag_time/total_time*100:.1f}%)")
+            print(f"   - LLM 호출: {llm_time:.2f}초 ({llm_time/total_time*100:.1f}%)")
+            print(f"   - 파싱:     {parse_time:.2f}초 ({parse_time/total_time*100:.1f}%)")
             print("="*80 + "\n")
             
             return result
             
         except Exception as e:
-            print(f"❌ [Step 3] 파싱 실패: {e}")
+            total_time = time.time() - total_start
+            print(f"❌ [Step 3] 파싱 실패 (⏱️  {total_time:.2f}초 경과): {e}")
             import traceback
             traceback.print_exc()
             
