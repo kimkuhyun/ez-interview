@@ -226,7 +226,6 @@ class StreamAgent:
             combined_chain.invoke({...})
         """
         return self.chain
-        return self.chain
     
     def analyze_answer(self, text, criteria=None):
         """답변 분석 (추후 구현)

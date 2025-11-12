@@ -55,22 +55,15 @@ def success_response(data=None):
 @stream_bp.route("/panel/stream")
 def stream_panel():
     """면접 페이지 로드"""
-    # GLOBAL_STATE의 questions 사용
-    if GLOBAL_STATE.questions and len(GLOBAL_STATE.questions) >= 5:
-        # state에 저장된 질문 사용
-        question_list = {
-            f"q{i+1}": q 
-            for i, q in enumerate(GLOBAL_STATE.questions[:5])
-        }
-    else:
-        # 기본 질문 사용
-        question_list = {
-            "q1": "자기소개를 해주세요.",
-            "q2": "가장 어려웠던 프로젝트는 무엇인가요?",
-            "q3": "팀 내에서 갈등을 어떻게 해결하셨나요?",
-            "q4": "5년 뒤 본인의 커리어 목표는 무엇인가요?",
-            "q5": "최근 관심있는 기술 트렌드는 무엇인가요?"
-        }
+    # GLOBAL_STATE의 questions 사용 (필수)
+    if not GLOBAL_STATE.questions or len(GLOBAL_STATE.questions) == 0:
+        return error_response("질문이 생성되지 않았습니다. Question Agent를 먼저 실행하세요.", 400)
+    
+    # state에 저장된 질문 사용 (모든 질문 사용)
+    question_list = {
+        f"q{i+1}": q 
+        for i, q in enumerate(GLOBAL_STATE.questions)
+    }
     
     # GLOBAL_STATE에 interview_logs 초기화
     global session_start_time
@@ -87,7 +80,7 @@ def stream_panel():
     print(f"\n🎬 Stream 패널 로드")
     print(f"   - session_id: {GLOBAL_STATE.session_id}")
     print(f"   - 질문 개수: {len(question_list)}개")
-    print(f"   - 질문 출처: {'GLOBAL_STATE' if GLOBAL_STATE.questions else '기본값'}\n")
+    print(f"   - 질문 출처: GLOBAL_STATE\n")
     
     return render_template("agents/stream.html", question_list=question_list)
 
