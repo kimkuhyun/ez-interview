@@ -347,10 +347,18 @@ function toggleSTT() {
 }
 
 function endInterview() {
+  // 확인 대화상자
+  if (!confirm("면접을 종료하시겠습니까?\nDB에 저장 후 리포트 페이지로 이동합니다.")) {
+    return;
+  }
+
   // STT 종료 신호 전송
   if (state.socket) state.socket.emit("stt_end");
 
-  // 면접 로그를 백엔드로 전송하여 콘솔 출력
+  // 면접 종료 알림
+  console.log("🎬 면접 종료 중...");
+
+  // 면접 로그를 DB에 저장하고 리포트 페이지로 이동
   fetch("/end_interview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -358,9 +366,23 @@ function endInterview() {
     .then((res) => res.json())
     .then((data) => {
       console.log("✅ 면접 종료 완료:", data);
+
+      // 성공 알림
+      alert(
+        `면접이 종료되었습니다!\n\n` +
+          `총 질문: ${data.total_questions}개\n` +
+          `Session ID: ${data.session_id}\n\n` +
+          `리포트 페이지로 이동합니다.`
+      );
+
+      // 리포트 페이지로 리다이렉트
+      if (data.redirect) {
+        window.location.href = data.redirect;
+      }
     })
     .catch((err) => {
       console.error("❌ 면접 종료 오류:", err);
+      alert("면접 종료 중 오류가 발생했습니다.\n콘솔을 확인하세요.");
     });
 
   // UI 초기화

@@ -210,8 +210,9 @@ def question_activated():
 
 @stream_bp.route("/end_interview", methods=["POST"])
 def end_interview():
-    """면접 종료 및 로그 출력"""
+    """면접 종료 및 interview_logs DB 저장"""
     import json
+    from app.utils.interview_store import save_interview_logs
     
     print("\n" + "="*80)
     print("📋 면접 종료 - Interview Logs")
@@ -231,10 +232,18 @@ def end_interview():
     
     print("="*80 + "\n")
     
-    # TODO: 추후 VectorDB 저장 로직 추가
-    # vector_db.insert(interview_logs)
-    
-    return success_response({
-        "message": "면접 종료 완료",
-        "total_questions": len(interview_logs)
-    })
+    # DB에 interview_logs 저장
+    try:
+        session_id = save_interview_logs(interview_logs)
+        print(f"✅ DB 저장 완료 - Session ID: {session_id}\n")
+        
+        return success_response({
+            "message": "면접 종료 및 DB 저장 완료",
+            "total_questions": len(interview_logs),
+            "session_id": session_id,
+            "redirect": "/panel/report"  # 프론트엔드에서 리다이렉트용
+        })
+        
+    except Exception as e:
+        print(f"❌ DB 저장 실패: {e}\n")
+        return error_response(f"DB 저장 실패: {str(e)}", 500)
