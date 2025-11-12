@@ -81,34 +81,56 @@ def report_panel():
 def generate_from_txt():
     data = request.form if request.form else request.get_json(silent=True) or {}
     
-    print(f"[reports/generate] 요청 시작 - resume_path: {data.get('resume_path')}, jd_path: {data.get('jd_path')}, log_path: {data.get('log_path')}")
+    print(f"[reports/generate] 요청 시작")
+    print(f"   - session_id: {data.get('session_id')}")
+    print(f"   - axes_keys: {data.get('axes_keys')}")
 
     try:
+        # 1. session_id 필수 체크
+        session_id = data.get('session_id')
+        if not session_id:
+            return jsonify({
+                "status": "failed",
+                "code": "missing_session_id",
+                "message": "session_id가 필요합니다"
+            }), 400
+        
+        # 2. axes_keys 파싱 (state.metrics에서 전달된 값)
         axes_keys = _parse_axes_keys(data)
-        # axes_keys가 없거나 5개가 아니면 테스트용 하드코딩 값으로 세팅
         if len(axes_keys) != 5:
             axes_keys = _DEFAULT_AXES_KEYS.copy()
         
         print(f"[reports/generate] axes_keys: {axes_keys}")
-        print(f"[reports/generate] 보고서 생성 시작 (V2 with validation)...")
+        print(f"[reports/generate] 보고서 생성 시작 (VectorDB + interview_store 기반)...")
 
-        # 파일 읽기
+        # 3. 폴백용 텍스트 (선택적)
         from pathlib import Path
-        resume_path = Path(data["resume_path"])
-        jd_path = Path(data["jd_path"])
-        log_path = Path(data.get("log_path", ""))
+        resume_text = ""
+        jd_text = ""
+        log_text = ""
         
-        resume_text = resume_path.read_text(encoding="utf-8") if resume_path.exists() else ""
-        jd_text = jd_path.read_text(encoding="utf-8") if jd_path.exists() else ""
-        log_text = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+        # 폴백 경로가 제공된 경우에만 읽기
+        if data.get("resume_path"):
+            resume_path = Path(data["resume_path"])
+            resume_text = resume_path.read_text(encoding="utf-8") if resume_path.exists() else ""
         
-        print(f"[reports/generate] 파일 읽기 완료 - resume: {len(resume_text)} chars, jd: {len(jd_text)} chars, log: {len(log_text)} chars")
+        if data.get("jd_path"):
+            jd_path = Path(data["jd_path"])
+            jd_text = jd_path.read_text(encoding="utf-8") if jd_path.exists() else ""
+        
+        if data.get("log_path"):
+            log_path = Path(data["log_path"])
+            log_text = log_path.read_text(encoding="utf-8") if log_path.exists() else ""
+        
+        print(f"[reports/generate] 폴백 텍스트 - resume: {len(resume_text)} chars, jd: {len(jd_text)} chars, log: {len(log_text)} chars")
 
+        # 4. report_agent 호출 (VectorDB + interview_store 기반)
         rpt = create_report(
+            session_id=session_id,
+            axes_keys=axes_keys,
             resume_text=resume_text,
             jd_text=jd_text,
-            log_text=log_text,
-            axes_keys=axes_keys,
+            log_text=log_text
         )
         
         print(f"[reports/generate] 보고서 생성 완료 - status: {rpt.get('status', 'success')}")
@@ -142,32 +164,3 @@ def generate_from_txt():
         err = {"status": "failed", "code": "failed", "message": str(e)}
         return (render_template("agents/report.html", report=err), 200) if _wants_html(data) else (jsonify(err), 200)
 
-
-@reports_bp.post("/validate-and-save")
-def validate_then_save():
-    data = request.get_json(silent=True) or {}
-    try:
-        rpt = validate_and_save(data)
-        return jsonify(rpt), 201
-    except ValidationError as e:
-        return jsonify({"error": "validation_failed", "detail": e.errors()}), 422
-
-
-@reports_bp.get("/<rid>")
-def read_report(rid: str):
-    rpt = get_report(rid)
-    if not rpt:
-        return jsonify({"error": "not_found"}), 404
-    return jsonify(rpt), 200
-
-
-@reports_bp.post("/<rid>/feedback")
-def patch_report(rid: str):
-    patch = request.get_json(silent=True) or {}
-    try:
-        rpt = apply_feedback(rid, patch)
-        if not rpt:
-            return jsonify({"error": "not_found"}), 404
-        return jsonify(rpt), 200
-    except ValidationError as e:
-        return jsonify({"error": "validation_failed", "detail": e.errors()}), 422

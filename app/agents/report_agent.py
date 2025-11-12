@@ -2,8 +2,8 @@
 리포트 생성 에이전트
 
 필요한 입력:
-- resume_text: str (이력서 텍스트)
-- jd_text: str (공고 텍스트)
+- resume_text: str (이력서 텍스트 - 또는 Vector DB에서 자동 검색)
+- jd_text: str (공고 텍스트 - 또는 Vector DB에서 자동 검색)
 - log_text: str (인터뷰 로그 텍스트)
 - axes_keys: List[str] (핵심역량 키 리스트)
   예: ["problem_solving", "communication", "self_driven_initiative", "collaboration", "professional_expertise"]
@@ -14,19 +14,17 @@
   - report_id: str (성공 시)
   - 기타 리포트 데이터
 
-VectorDB 통합 TODO:
-1. app/utils/chunker_report_test.py -> app/utils/embedding.py 청킹 함수로 교체
-2. app/utils/embedder_report_test.py -> app/utils/embedding.py 임베딩 함수로 교체
-3. app/utils/retriever_report_test.py -> app/utils/retriever.py 검색 함수로 교체
-4. _build_context_from_vectordb() 함수 구현 (VectorDB에서 컨텍스트 가져오기)
+VectorDB 통합 완료:
+- app/utils/retriever.py의 search_similar_chunks 함수 사용
+- Vector DB에서 이력서, 공고 문서 검색하여 컨텍스트 구성
 
 사용 예시:
 ```python
 from app.agents.report_agent import create_report
 
 result = create_report(
-    resume_text="...",
-    jd_text="...",
+    resume_text="",  # Vector DB에서 자동 검색됨
+    jd_text="",      # Vector DB에서 자동 검색됨
     log_text="...",
     axes_keys=["problem_solving", "communication", "self_driven_initiative", 
                "collaboration", "professional_expertise"]
@@ -53,20 +51,9 @@ from annotated_types import Ge, Le
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
 
-# 임시 유틸 임포트 (TODO: VectorDB 통합 시 삭제)
-from app.utils.chunker_report_test import (
-    chunk_paragraph_report_test,
-    chunk_log_report_test,
-    extract_clean_question_report_test
-)
-from app.utils.embedder_report_test import (
-    build_index_report_test,
-    cos_similarity_report_test
-)
-from app.utils.retriever_report_test import (
-    retrieve_context_report_test,
-    assign_ids_report_test
-)
+# Vector DB 리트리버 임포트
+from app.utils.rag_retriever import search_similar_chunks
+from app.utils.interview_store import retrieve_interview_context
 
 # ==================== 환경 설정 ====================
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
@@ -188,40 +175,194 @@ def _error(code: str, message: str, http: int = 400, details: Dict = None) -> Di
         "details": details or {}
     }
 
-# ==================== VectorDB 연동 (TODO: 구현 필요) ====================
-def _build_context_from_vectordb(resume_text: str, jd_text: str, log_text: str) -> tuple:
+# ==================== VectorDB 연동 ====================
+def _extract_qa_pairs(log_text: str) -> List[Dict]:
     """
-    VectorDB에서 컨텍스트 가져오기 (TODO: 구현 필요)
-    
-    현재는 임시 로컬 임베딩 사용.
-    VectorDB 통합 시 다음과 같이 변경:
-    1. 이력서, 공고, 로그를 VectorDB에 저장 (청크 + 임베딩)
-    2. VectorDB에서 검색하여 컨텍스트 반환
-    3. ID 할당은 VectorDB 메타데이터에서 관리
+    인터뷰 로그에서 질문-답변 쌍 추출
     
     Args:
-        resume_text: 이력서 텍스트
-        jd_text: 공고 텍스트
-        log_text: 인터뷰 로그
+        log_text: 인터뷰 로그 텍스트
+    
+    Returns:
+        질문-답변 쌍 리스트 [{'q_num': '1', 'question': '...', 'answer': '...'}]
+    """
+    qa_pairs = []
+    lines = log_text.split('\n')
+    current_q = None
+    current_a = []
+    q_num = 0
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        
+        # 질문 패턴 감지 (Q:, 면접관:, Question: 등)
+        if any(line.startswith(prefix) for prefix in ['Q:', 'q:', '면접관:', 'Question:', 'Q.', '[면접관]']):
+            # 이전 Q&A 저장
+            if current_q and current_a:
+                q_num += 1
+                qa_pairs.append({
+                    'q_num': str(q_num),
+                    'question': current_q,
+                    'answer': ' '.join(current_a)
+                })
+                current_a = []
+            
+            # 새 질문 시작
+            for prefix in ['Q:', 'q:', '면접관:', 'Question:', 'Q.', '[면접관]']:
+                if line.startswith(prefix):
+                    current_q = line[len(prefix):].strip()
+                    break
+        
+        # 답변 패턴 감지 (A:, 지원자:, Answer: 등)
+        elif any(line.startswith(prefix) for prefix in ['A:', 'a:', '지원자:', 'Answer:', 'A.', '[지원자]']):
+            for prefix in ['A:', 'a:', '지원자:', 'Answer:', 'A.', '[지원자]']:
+                if line.startswith(prefix):
+                    answer_text = line[len(prefix):].strip()
+                    current_a.append(answer_text)
+                    break
+        
+        # 답변 계속
+        elif current_q and current_a:
+            current_a.append(line)
+    
+    # 마지막 Q&A 저장
+    if current_q and current_a:
+        q_num += 1
+        qa_pairs.append({
+            'q_num': str(q_num),
+            'question': current_q,
+            'answer': ' '.join(current_a)
+        })
+    
+    return qa_pairs
+
+
+def _build_context_from_vectordb(session_id: str, axes_keys: List[str], 
+                                 resume_text: str = "", jd_text: str = "", log_text: str = "") -> tuple:
+    """
+    VectorDB와 interview_store를 활용한 컨텍스트 구성
+    
+    - 이력서/공고: rag_retriever.search_similar_chunks (session_id 기반)
+    - 인터뷰 로그: interview_store.retrieve_interview_context (session_id 기반)
+    - 핵심역량: axes_keys 파라미터로 전달받아 처리
+    
+    Args:
+        session_id: 세션 ID (Vector DB 검색 및 interview_store 조회용)
+        axes_keys: 핵심역량 키 리스트 (state.metrics에서 전달)
+        resume_text: 폴백용 이력서 텍스트
+        jd_text: 폴백용 공고 텍스트
+        log_text: 폴백용 인터뷰 로그
     
     Returns:
         (jd_ctx, resume_ctx, log_ctx, comp_id_list, eid_list, qa_pairs)
     """
-    # 임시: 로컬 임베딩 사용
-    docs, qa_pairs = build_index_report_test(
-        resume_text, jd_text, log_text,
-        chunk_paragraph_report_test,
-        chunk_log_report_test
-    )
-    docs, jid_list, eid_list = assign_ids_report_test(docs, cos_similarity_report_test)
+    print(f"\n{'='*80}")
+    print(f"🔍 [Context Builder] 시작")
+    print(f"   Session ID: {session_id}")
+    print(f"   핵심역량: {axes_keys}")
+    print(f"{'='*80}\n")
     
-    jd_ctx = retrieve_context_report_test(docs, "JD")
-    resume_ctx = retrieve_context_report_test(docs, "이력서")
-    log_ctx = retrieve_context_report_test(docs, "인터뷰로그")
+    # 1. Vector DB에서 이력서 검색 (session_id 기반)
+    resume_query = "경력 프로젝트 기술스택 성과 교육 자격증"
+    try:
+        resume_results = search_similar_chunks(resume_query, session_id=session_id, top_k=10)
+        resume_chunks = [result[0] for result in resume_results if result[1] == 'resume']
+        resume_ctx = "\n\n".join(resume_chunks) if resume_chunks else resume_text
+        print(f"✅ Vector DB에서 이력서 {len(resume_chunks)}개 chunk 검색")
+    except Exception as e:
+        print(f"⚠️ Vector DB 이력서 검색 실패: {e}, 폴백 텍스트 사용")
+        resume_ctx = resume_text
+        resume_results = []
     
-    # 역량 ID는 항상 5개 (핵심역량 개수)
-    comp_id_list = [f"C{i+1:02d}" for i in range(5)]
+    # 2. Vector DB에서 JD 검색 (session_id 기반)
+    jd_query = "요구사항 자격요건 우대사항 담당업무 기술스택"
+    try:
+        jd_results = search_similar_chunks(jd_query, session_id=session_id, top_k=10)
+        jd_chunks = [result[0] for result in jd_results if result[1] == 'jd']
+        jd_ctx = "\n\n".join(jd_chunks) if jd_chunks else jd_text
+        print(f"✅ Vector DB에서 JD {len(jd_chunks)}개 chunk 검색")
+    except Exception as e:
+        print(f"⚠️ Vector DB JD 검색 실패: {e}, 폴백 텍스트 사용")
+        jd_ctx = jd_text
+        jd_results = []
     
+    # 3. interview_store에서 인터뷰 로그 조회 (session_id 기반)
+    try:
+        log_ctx = retrieve_interview_context(session_id)
+        if not log_ctx:
+            print(f"⚠️ interview_store에서 로그 없음, 폴백 텍스트 사용")
+            log_ctx = log_text
+        else:
+            print(f"✅ interview_store에서 로그 조회 완료: {len(log_ctx)} 글자")
+    except Exception as e:
+        print(f"⚠️ interview_store 조회 실패: {e}, 폴백 텍스트 사용")
+        log_ctx = log_text
+    
+    # 4. 질문-답변 쌍 추출
+    qa_pairs = _extract_qa_pairs(log_ctx)
+    print(f"✅ 질문-답변 {len(qa_pairs)}개 추출")
+    
+    # 5. 증거 ID 생성 (Vector DB chunk + 인터뷰 QA 수)
+    total_evidence = len(resume_results) + len(jd_results) + len(qa_pairs)
+    eid_list = [f"E{i:02d}" for i in range(1, max(total_evidence + 1, 10))]  # 최소 10개
+    print(f"✅ 증거 ID {len(eid_list)}개 생성 (이력서:{len(resume_results)}, JD:{len(jd_results)}, QA:{len(qa_pairs)})")
+    
+    # 6. 역량 ID 생성 (axes_keys 기반)
+    comp_id_list = [f"C{i+1:02d}" for i in range(len(axes_keys))]
+    print(f"✅ 핵심역량 {len(comp_id_list)}개: {axes_keys}")
+
+    preview_resume = resume_ctx[:200].replace("\n", " ")
+    print(f"🔍 resume_ctx preview: {preview_resume}...")
+
+    preview_jd = jd_ctx[:200].replace("\n", " ")
+    print(f"🔍 jd_ctx preview: {preview_jd}...")
+    
+    preview_log = log_ctx[:200].replace("\n", " ")
+    print(f"🔍 log_ctx preview: {preview_log}...")
+    
+    print(f"\n{'='*80}")
+    print(f"✅ [Context Builder] 완료")
+    print(f"{'='*80}\n")
+    
+    return jd_ctx, resume_ctx, log_ctx, comp_id_list, eid_list, qa_pairs
+    
+    # 2. Vector DB에서 JD 검색 (모든 JD chunk 가져오기)
+    jd_query = "요구사항 자격요건 우대사항 담당업무 기술스택"
+    try:
+        jd_results = search_similar_chunks(jd_query, top_k=10)
+        jd_chunks = [result[0] for result in jd_results if result[1] == 'jd']
+        jd_ctx = "\n\n".join(jd_chunks) if jd_chunks else jd_text
+        print(f"✅ Vector DB에서 JD {len(jd_chunks)}개 chunk 검색")
+    except Exception as e:
+        print(f"⚠️ Vector DB JD 검색 실패: {e}")
+        jd_ctx = jd_text
+        jd_results = []
+    
+    # 3. 인터뷰 로그 처리 (로컬에서 직접 처리)
+    log_ctx = log_text
+    print(f"✅ 인터뷰 로그 길이: {len(log_text)} 글자")
+    
+    # 4. 질문-답변 쌍 추출
+    qa_pairs = _extract_qa_pairs(log_text)
+    print(f"✅ 질문-답변 {len(qa_pairs)}개 추출")
+    
+    # 5. 증거 ID 생성 (Vector DB chunk + 인터뷰 로그 기반)
+    # 이력서와 JD에서 가져온 chunk 수 + 인터뷰 QA 수
+    total_evidence = len(resume_results) + len(jd_results) + len(qa_pairs)
+    eid_list = [f"E{i:02d}" for i in range(1, max(total_evidence + 1, 10))]  # 최소 10개
+    print(f"✅ 증거 ID {len(eid_list)}개 생성 (이력서:{len(resume_results)}, JD:{len(jd_results)}, QA:{len(qa_pairs)})")
+    
+    # 6. 역량 ID 생성 (axes_keys 기반)
+    comp_id_list = [f"C{i+1:02d}" for i in range(len(axes_keys))]
+    print(f"✅ 핵심역량 {len(comp_id_list)}개: {axes_keys}")
+
+    preview_resume = resume_ctx.replace("\n", " ")
+    print(f"🔍 resume_ctx preview : {preview_resume}")
+
+    preview_jd = jd_ctx.replace("\n", " ")
+    print(f"🔍 jd_ctx preview : {preview_jd}")
     return jd_ctx, resume_ctx, log_ctx, comp_id_list, eid_list, qa_pairs
 
 # ==================== 체인 1: 핵심역량 평가 ====================
@@ -572,18 +713,19 @@ def auto_repair(report: Dict, validation: HeavyValidationOut) -> tuple:
     return report, repairs_applied
 
 # ==================== 메인 생성 함수 ====================
-def create_report_with_validation(resume_text: str, jd_text: str, log_text: str,
-                                  axes_keys: List[str],
+def create_report_with_validation(session_id: str, axes_keys: List[str],
+                                  resume_text: str = "", jd_text: str = "", log_text: str = "",
                                   enable_heavy: bool = False,
                                   auto_fix: bool = False) -> Dict[str, Any]:
     """
-    리포트 생성 - Heavy Validation 포함 버전
+    리포트 생성 - Heavy Validation 포함 버전 (VectorDB 기반)
     
     Args:
-        resume_text: 이력서 텍스트
-        jd_text: 공고 텍스트
-        log_text: 인터뷰 로그 텍스트
-        axes_keys: 핵심역량 키 리스트
+        session_id: 세션 ID (Vector DB 및 interview_store 조회용)
+        axes_keys: 핵심역량 키 리스트 (state.metrics에서 전달)
+        resume_text: 폴백용 이력서 텍스트
+        jd_text: 폴백용 공고 텍스트
+        log_text: 폴백용 인터뷰 로그 텍스트
         enable_heavy: Heavy Validation 활성화 (LLM 품질 검증, 비용↑)
         auto_fix: 자동 수정 활성화
     
@@ -591,9 +733,9 @@ def create_report_with_validation(resume_text: str, jd_text: str, log_text: str,
         리포트 결과 딕셔너리
     """
     try:
-        # 1. VectorDB에서 컨텍스트 가져오기 (TODO: 구현)
+        # 1. VectorDB와 interview_store로 컨텍스트 구성
         jd_ctx, resume_ctx, log_ctx, comp_id_list, eid_list, qa_pairs = \
-            _build_context_from_vectordb(resume_text, jd_text, log_text)
+            _build_context_from_vectordb(session_id, axes_keys, resume_text, jd_text, log_text)
         
         # 2. 체인 실행
         comp_result = evaluate_competency(resume_ctx, log_ctx, axes_keys)
@@ -684,22 +826,23 @@ def create_report_with_validation(resume_text: str, jd_text: str, log_text: str,
         return _error("INTERNAL", f"내부 오류: {type(e).__name__}", 500, {"trace": traceback.format_exc()})
 
 # ==================== 간단한 래퍼 함수 ====================
-def create_report(resume_text: str, jd_text: str, log_text: str,
-                 axes_keys: List[str]) -> Dict[str, Any]:
+def create_report(session_id: str, axes_keys: List[str],
+                 resume_text: str = "", jd_text: str = "", log_text: str = "") -> Dict[str, Any]:
     """
-    리포트 생성 - 기본 버전 (Light Validation만 사용)
+    리포트 생성 - 기본 버전 (Light Validation만 사용, VectorDB 기반)
     
     Args:
-        resume_text: 이력서 텍스트
-        jd_text: 공고 텍스트
-        log_text: 인터뷰 로그 텍스트
-        axes_keys: 핵심역량 키 리스트
+        session_id: 세션 ID (Vector DB 및 interview_store 조회용)
+        axes_keys: 핵심역량 키 리스트 (state.metrics에서 전달)
+        resume_text: 폴백용 이력서 텍스트
+        jd_text: 폴백용 공고 텍스트
+        log_text: 폴백용 인터뷰 로그 텍스트
     
     Returns:
         리포트 결과 딕셔너리
     """
     return create_report_with_validation(
-        resume_text, jd_text, log_text, axes_keys,
+        session_id, axes_keys, resume_text, jd_text, log_text,
         enable_heavy=False,
         auto_fix=False
     )
