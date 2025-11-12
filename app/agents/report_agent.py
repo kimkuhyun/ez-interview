@@ -376,6 +376,7 @@ def _competency_prompt() -> ChatPromptTemplate:
     return ChatPromptTemplate.from_messages([
         ("system",
          "당신은 엄격한 면접 평가 전문가입니다. 이력서와 인터뷰 로그를 바탕으로 후보자의 핵심역량을 **보수적이고 엄격하게** 평가하세요.\n\n"
+         "각 역량은 한글일 수도 있습니다. key는 그대로 JSON에 사용하세요."
          "평가 원칙:\n"
          "1. 실제 증거에 기반한 평가 (추측 금지)\n"
          "2. 구체적인 성과와 수치가 있어야 높은 점수\n"
