@@ -1,0 +1,22 @@
+from pydantic import BaseModel
+from typing import List, Optional
+import uuid
+
+class InterviewState(BaseModel):
+    """
+    면접 프로세스 전체의 상태를 관리하는 객체
+    """
+    session_id: Optional[str] = None  # 전체 서비스 세션 UUID (면접 단위)
+    resume_id: Optional[str] = None   # Resume 문서 UUID (doc_id)
+    jd_id: Optional[str] = None       # JD 문서 UUID (doc_id)
+    resume_len: Optional[int] = None
+    jd_len: Optional[int] = None
+    questions: Optional[List[str]] = None
+    metrics: Optional[List[str]] = None
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        # session_id가 없으면 자동 생성
+        if not self.session_id:
+            self.session_id = str(uuid.uuid4())
+

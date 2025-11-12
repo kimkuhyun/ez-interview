@@ -1,4 +1,3 @@
-# app/utils/retriever.py
 from app.db.db_connection import get_connection
 from app.utils.embedding import get_embedding
 from langchain_text_splitters import RecursiveCharacterTextSplitter
