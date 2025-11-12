@@ -1,151 +1,531 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <title>Interview Assistant</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            height: 100vh;
-            display: flex;
-        }
-        #left-panel {
-            width: 50%;
-            background: #fafafa;
-            border-right: 1px solid #ccc;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            padding: 20px;
-        }
-        #right-panel {
-            width: 50%;
-            padding: 30px;
-            overflow-y: auto;
-        }
-        iframe {
-            width: 90%;
-            height: 300px;
-            border: 1px solid #aaa;
-            margin-top: 10px;
-        }
-        .upload-block {
-            width: 90%;
-            background: #fff;
-            border-radius: 8px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
-            padding: 15px;
-            margin-bottom: 15px;
-        }
-        .upload-label {
-            background-color: #007bff;
-            color: white;
-            padding: 10px 15px;
-            border-radius: 6px;
-            cursor: pointer;
-            display: inline-block;
-            margin-top: 5px;
-        }
-        input[type="file"] { display: none; }
-        #analyzeBtn {
-            background: #28a745;
-            color: white;
-            padding: 10px 18px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-top: 20px;
-        }
-        nav {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-        }
-        nav button {
-            margin-left: 5px;
-            padding: 6px 10px;
-            cursor: pointer;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Interview Assistant</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    /* 상단 네비게이션 바 */
+    #nav-bar {
+      background: #2c3e50;
+      padding: 15px;
+      display: flex;
+      gap: 10px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    #nav-bar button {
+      background: #3498db;
+      color: white;
+      padding: 10px 18px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s;
+    }
+    
+    #nav-bar button:hover {
+      background: #2980b9;
+    }
+
+    /* 메인 컨테이너 */
+    #main-container {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    #left-panel {
+      width: 50%;
+      background: #fafafa;
+      border-right: 1px solid #ccc;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    
+    #right-panel {
+      width: 50%;
+      padding: 30px;
+      overflow-y: auto;
+    }
+
+    .upload-block {
+      width: 90%;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      padding: 15px;
+      margin-bottom: 10px;
+      flex-shrink: 0;
+      transition: all 0.3s ease;
+    }
+
+    .upload-block.hidden {
+      display: none;
+    }
+
+    .upload-block h3 {
+      margin: 0 0 10px 0;
+      font-size: 15px;
+      font-weight: 600;
+      color: #2c3e50;
+    }
+
+    /* 파일 입력 그룹 - 행 레이아웃 */
+    .upload-block-content {
+      display: flex;
+      gap: 12px;
+      align-items: flex-end;
+    }
+
+    .file-input-group {
+      flex: 1;
+      margin: 0;
+    }
+
+    .file-input-group label:first-child {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: 600;
+      color: #555;
+      font-size: 12px;
+    }
+
+    .upload-label {
+      background-color: #3498db;
+      color: white;
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-block;
+      font-size: 12px;
+      font-weight: 500;
+      border: none;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 6px rgba(52, 152, 219, 0.2);
+    }
+
+    .upload-label:hover {
+      background-color: #2980b9;
+      box-shadow: 0 4px 10px rgba(52, 152, 219, 0.3);
+      transform: translateY(-1px);
+    }
+
+    input[type="file"] { display: none; }
+
+    .file-status {
+      font-size: 11px;
+      color: #7f8c8d;
+      margin-top: 3px;
+    }
+
+    .file-status.uploaded {
+      color: #27ae60;
+      font-weight: 500;
+    }
+
+    .action-buttons {
+      width: 90%;
+      display: flex;
+      gap: 10px;
+      margin-top: 8px;
+      flex-shrink: 0;
+    }
+
+    #embedBtn, #questionBtn {
+      flex: 1;
+      background: #3498db;
+      color: white;
+      padding: 11px 16px;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 13px;
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 8px rgba(52, 152, 219, 0.2);
+    }
+
+    #embedBtn:hover {
+      background: #2980b9;
+      box-shadow: 0 4px 12px rgba(52, 152, 219, 0.4);
+      transform: translateY(-1px);
+    }
+
+    #embedBtn:active {
+      transform: translateY(0);
+    }
+
+    #questionBtn {
+      background: #27ae60;
+    }
+
+    #questionBtn:hover:not(:disabled) {
+      background: #229954;
+      box-shadow: 0 4px 12px rgba(39, 174, 96, 0.4);
+      transform: translateY(-1px);
+    }
+
+    #questionBtn:active:not(:disabled) {
+      transform: translateY(0);
+    }
+
+    #questionBtn:disabled {
+      background: #bdc3c7;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    /* 문서 미리보기 영역 */
+    .document-preview-section {
+      width: 90%;
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      padding: 12px;
+      margin-bottom: 8px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      transition: all 0.3s ease;
+    }
+
+    .document-preview-section.hidden {
+      display: none;
+    }
+
+    .document-preview-section h3 {
+      margin: 0 0 8px 0;
+      color: #333;
+      border-bottom: 2px solid #007bff;
+      padding-bottom: 8px;
+      font-size: 14px;
+    }
+
+    /* 탭 스타일 */
+    .tab-buttons {
+      display: flex;
+      gap: 5px;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #ddd;
+    }
+
+    .tab-button {
+      padding: 10px 15px;
+      background: #f0f0f0;
+      border: none;
+      cursor: pointer;
+      border-radius: 4px 4px 0 0;
+      font-weight: 500;
+      color: #666;
+    }
+
+    .tab-button.active {
+      background: #007bff;
+      color: white;
+    }
+
+    .tab-content {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+    }
+
+    .tab-content.active {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .preview-iframe {
+      width: 100%;
+      height: 100%;
+      border: 1px solid #aaa;
+      border-radius: 4px;
+    }
+
+    .empty-preview {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: #999;
+      font-size: 14px;
+    }
+  </style>
 </head>
 <body>
+<div id="nav-bar">
+    <button onclick="loadPanel('question')">❓ Question Agent</button>
+    <button onclick="loadPanel('stream')">🎤 Stream Agent</button>
+    <button onclick="loadPanel('report')">📊 Report Agent</button>
+</div>
+
+<div id="main-container">
 <div id="left-panel">
-    <div class="upload-block">
-        <h3>📄 본인 커리어 문서</h3>
-        <p>이력서 / 자기소개서 등 본인의 경험을 설명하는 문서를 업로드하세요.</p>
-        <label class="upload-label" for="careerFile">업로드</label>
-        <input type="file" id="careerFile" accept=".pdf,.docx,.txt">
-        <iframe id="careerPreview"></iframe>
-    </div>
+  <div class="upload-block">
+    <h3>📄 문서 업로드</h3>
 
-    <div class="upload-block">
-        <h3>🏢 지원 직무 문서</h3>
-        <p>지원하는 회사 또는 직무(JD 등)에 관한 문서를 업로드하세요.</p>
-        <label class="upload-label" for="jobFile">업로드</label>
-        <input type="file" id="jobFile" accept=".pdf,.docx,.txt">
-        <iframe id="jobPreview"></iframe>
-    </div>
+    <div class="upload-block-content">
+      <div class="file-input-group">
+        <label>📋 이력서</label>
+        <label class="upload-label" for="resumeFile">파일 선택</label>
+        <input type="file" id="resumeFile" accept=".pdf,.docx,.txt">
+        <div class="file-status" id="resumeStatus">미선택</div>
+      </div>
 
-    <button id="analyzeBtn" onclick="startAnalysis()">🚀 AI 기반 분석 시작</button>
+      <div class="file-input-group">
+        <label>💼 JD</label>
+        <label class="upload-label" for="jdFile">파일 선택</label>
+        <input type="file" id="jdFile" accept=".pdf,.docx,.txt">
+        <div class="file-status" id="jdStatus">미선택</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 문서 미리보기 -->
+  <div class="document-preview-section hidden">
+    <h3>📄 문서 미리보기</h3>
+    <div class="tab-buttons">
+      <button class="tab-button active" onclick="switchPreviewTab('resume')">이력서</button>
+      <button class="tab-button" onclick="switchPreviewTab('jd')">JD</button>
+    </div>
+    
+    <div id="resume-tab" class="tab-content active">
+      <iframe id="resumePreview" class="preview-iframe"></iframe>
+    </div>
+    
+    <div id="jd-tab" class="tab-content">
+      <iframe id="jdPreview" class="preview-iframe"></iframe>
+    </div>
+  </div>
+
+  <div class="action-buttons">
+    <button id="embedBtn" onclick="runEmbedding()">📚 임베딩 실행</button>
+    <button id="questionBtn" onclick="loadQuestionPanel()" disabled>🤖 질문 생성</button>
+  </div>
 </div>
 
 <div id="right-panel">
-    <h2>🧠 오른쪽 패널</h2>
-    <p>Agent별 템플릿이 여기에 로드됩니다.</p>
+  <h2>🧠 오른쪽 패널</h2>
+  <p>Agent별 템플릿이 여기에 로드됩니다.</p>
+</div>
 </div>
 
-<nav>
-    <button onclick="loadPanel('question')">Question Agent</button>
-    <button onclick="loadPanel('stream')">Stream Agent</button>
-    <button onclick="loadPanel('report')">Report Agent</button>
-</nav>
 
 <script>
-    const careerInput = document.getElementById("careerFile");
-    const jobInput = document.getElementById("jobFile");
-    const careerPreview = document.getElementById("careerPreview");
-    const jobPreview = document.getElementById("jobPreview");
-    const rightPanel = document.getElementById("right-panel");
+  const resumeInput = document.getElementById("resumeFile");
+  const jdInput = document.getElementById("jdFile");
+  const resumePreview = document.getElementById("resumePreview");
+  const jdPreview = document.getElementById("jdPreview");
+  const embedBtn = document.getElementById("embedBtn");
+  const questionBtn = document.getElementById("questionBtn");
+  const rightPanel = document.getElementById("right-panel");
+  const uploadBlock = document.querySelector(".upload-block");
+  const previewSection = document.querySelector(".document-preview-section");
+  const actionButtons = document.querySelector(".action-buttons");
 
-    // 파일 미리보기 (PDF만)
-    function previewFile(input, viewer) {
-        const file = input.files[0];
-        if (!file) return;
-        const url = URL.createObjectURL(file);
-        viewer.src = url;
+  let resumeFile = null;
+  let jdFile = null;
+
+  // UI 상태 업데이트 함수
+  function updateUIState() {
+    if (resumeFile && jdFile) {
+      // 업로드 완료: 업로드 블록 숨기고 미리보기만 표시
+      uploadBlock.classList.add("hidden");
+      previewSection.classList.remove("hidden");
+      actionButtons.style.width = "90%";
+    } else {
+      // 미선택 상태: 업로드 블록만 표시
+      uploadBlock.classList.remove("hidden");
+      previewSection.classList.add("hidden");
+    }
+  }
+
+  // 이력서 파일 미리보기
+  resumeInput.addEventListener("change", () => {
+    const file = resumeInput.files[0];
+    if (!file) {
+      document.getElementById("resumeStatus").textContent = "미선택";
+      resumeFile = null;
+      resumePreview.src = "";
+    } else {
+      resumeFile = file;
+      document.getElementById("resumeStatus").textContent = `✅ ${file.name}`;
+      document.getElementById("resumeStatus").classList.add("uploaded");
+      const url = URL.createObjectURL(file);
+      resumePreview.src = url;
+    }
+    updateUIState();
+  });
+
+  // JD 파일 미리보기
+  jdInput.addEventListener("change", () => {
+    const file = jdInput.files[0];
+    if (!file) {
+      document.getElementById("jdStatus").textContent = "미선택";
+      jdFile = null;
+      jdPreview.src = "";
+    } else {
+      jdFile = file;
+      document.getElementById("jdStatus").textContent = `✅ ${file.name}`;
+      document.getElementById("jdStatus").classList.add("uploaded");
+      const url = URL.createObjectURL(file);
+      jdPreview.src = url;
+    }
+    updateUIState();
+  });
+
+  // 미리보기 탭 전환
+  function switchPreviewTab(tab) {
+    document.querySelectorAll(".tab-content").forEach(el => el.classList.remove("active"));
+    document.querySelectorAll(".tab-button").forEach(el => el.classList.remove("active"));
+    
+    document.getElementById(tab + "-tab").classList.add("active");
+    event.target.classList.add("active");
+  }
+
+  // 문서 임베딩 실행
+  async function runEmbedding() {
+    if (!resumeFile || !jdFile) {
+      return alert("이력서와 JD 문서를 모두 업로드해야 합니다.");
     }
 
-    careerInput.addEventListener("change", () => previewFile(careerInput, careerPreview));
-    jobInput.addEventListener("change", () => previewFile(jobInput, jobPreview));
+    const formData = new FormData();
+    formData.append("resume", resumeFile);
+    formData.append("jd", jdFile);
 
-    // 오른쪽 패널 로딩
-    async function loadPanel(agent) {
-        const res = await fetch(`/panel/${agent}`);
-        const html = await res.text();
-        rightPanel.innerHTML = html;
+    embedBtn.disabled = true;
+    embedBtn.innerText = "⏳ 임베딩 중...";
 
+    try {
+      const res = await fetch("/api/interview-embed", { method: "POST", body: formData });
+      const data = await res.json();
 
-		// 삽입된 <script> 실행
-		const scripts = rightPanel.querySelectorAll("script");
-		for (const old of scripts) {
-		const s = document.createElement("script");
-		if (old.src) s.src = old.src; else s.textContent = old.textContent;
-		document.body.appendChild(s);
-		old.remove();
-		}
+      if (!res.ok) {
+        throw new Error(data.error || "임베딩 실패");
+      }
+      
+      embedBtn.innerText = "✅ 임베딩 완료!";
+      questionBtn.disabled = false; // 질문 버튼 활성화
+    } catch (error) {
+      alert("❌ " + error.message);
+      embedBtn.disabled = false;
+      embedBtn.innerText = "📚 임베딩 실행";
     }
+  }
 
-    // AI 분석 시작 → Question Agent 패널 로드 + 인터뷰 요청 실행
-    async function startAnalysis() {
-        await loadPanel('question');
-        // 패널 로딩 후 question.html 내부의 generateQuestions()를 자동 실행
-        setTimeout(() => {
-            if (typeof generateQuestions === "function") {
-                generateQuestions();
-            }
-        }, 500);
+  // 질문 패널 로드
+  async function loadQuestionPanel() {
+    console.log("🔄 Question 패널 로드 시작");
+    
+    try {
+      const res = await fetch("/panel/question");
+      console.log(`📥 /panel/question 응답: ${res.status}`);
+      
+      if (!res.ok) {
+        throw new Error(`패널 로드 실패: ${res.status}`);
+      }
+      
+      const html = await res.text();
+      console.log(`📄 HTML 길이: ${html.length}자`);
+      
+      rightPanel.innerHTML = html;
+      console.log("✅ HTML 삽입 완료");
+
+      // 삽입된 스크립트 실행 (question.html 내부 JS 작동)
+      const scripts = rightPanel.querySelectorAll("script");
+      console.log(`🔍 발견된 script 태그: ${scripts.length}개`);
+      
+      scripts.forEach((old, idx) => {
+        try {
+          console.log(`   [${idx+1}] script 재실행 중...`);
+          const s = document.createElement("script");
+          if (old.src) {
+            s.src = old.src;
+            console.log(`      - 외부 스크립트: ${old.src}`);
+          } else {
+            s.textContent = old.textContent;
+            console.log(`      - 인라인 스크립트: ${old.textContent.length}자`);
+          }
+          document.body.appendChild(s);
+          old.remove();
+          console.log(`      ✅ 완료`);
+        } catch (e) {
+          console.error(`      ❌ 에러: ${e.message}`);
+        }
+      });
+      
+      console.log("✅ Question 패널 로드 완료");
+      
+    } catch (error) {
+      console.error("❌ 패널 로드 에러:", error);
+      alert("❌ 패널 로드 실패: " + error.message);
     }
+  }
+
+  // 패널 로드 함수 (네비게이션 버튼용)
+  async function loadPanel(panelType) {
+    console.log(`🔄 ${panelType} 패널 로드 시작`);
+    
+    try {
+      const res = await fetch("/panel/" + panelType);
+      console.log(`📥 /panel/${panelType} 응답: ${res.status}`);
+      
+      if (!res.ok) {
+        throw new Error(`패널 로드 실패: ${res.status}`);
+      }
+      
+      const html = await res.text();
+      console.log(`📄 HTML 길이: ${html.length}자`);
+      
+      rightPanel.innerHTML = html;
+      console.log("✅ HTML 삽입 완료");
+
+      // 삽입된 스크립트 실행
+      const scripts = rightPanel.querySelectorAll("script");
+      console.log(`🔍 발견된 script 태그: ${scripts.length}개`);
+      
+      scripts.forEach((old, idx) => {
+        try {
+          console.log(`   [${idx+1}] script 재실행 중...`);
+          const s = document.createElement("script");
+          if (old.src) {
+            s.src = old.src;
+            console.log(`      - 외부 스크립트: ${old.src}`);
+          } else {
+            s.textContent = old.textContent;
+            console.log(`      - 인라인 스크립트: ${old.textContent.length}자`);
+          }
+          document.body.appendChild(s);
+          old.remove();
+          console.log(`      ✅ 완료`);
+        } catch (e) {
+          console.error(`      ❌ 에러: ${e.message}`);
+        }
+      });
+      
+      console.log(`✅ ${panelType} 패널 로드 완료`);
+      
+    } catch (error) {
+      console.error(`❌ 패널 로드 에러:`, error);
+      alert(`❌ 패널 로드 실패: ` + error.message);
+    }
+  }
+
+  // 초기 상태 설정
+  updateUIState();
 </script>
 </body>
 </html>

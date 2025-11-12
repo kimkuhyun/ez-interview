@@ -27,3 +27,11 @@ class InterviewPlan(BaseModel):
     parsed_docs: List[ParsedDoc]
     jd_analysis: Optional[JDAnalysis] = None
     interview_questions: Optional[InterviewQuestions] = None
+
+
+class InterviewQuestionsAndMetrics(BaseModel):
+    """
+    QuestionAgent 출력용 데이터 구조
+    """
+    questions: List[str]
+    metrics: List[str]  # 예: ["문제해결력", "논리적 사고", "협업능력", ...]

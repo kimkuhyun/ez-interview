@@ -11,6 +11,7 @@ from flask import Flask, render_template
 from app.routes.question_routes import question_bp
 from app.routes.stream_routes import stream_bp
 from app.routes.report_routes import report_bp,reports_bp
+from app.routes.state_routes import state_bp
 from app.routes.stt_socket import register_stt_events
 
 import os
@@ -36,6 +37,7 @@ app.register_blueprint(question_bp)
 app.register_blueprint(stream_bp)
 app.register_blueprint(report_bp)
 app.register_blueprint(reports_bp, url_prefix="/reports")
+app.register_blueprint(state_bp)
 
 socketio = SocketIO(app, cors_allowed_origins="*")
 
