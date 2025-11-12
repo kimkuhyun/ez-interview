@@ -17,8 +17,9 @@
       </div>
       <div class="header-actions">
         <span id="genStatus" class="pill" style="display:none;">생성중…</span>
-        <button id="genBtn" class="btn btn-primary no-print" onclick="generateReport()">리포트 생성</button>
-        <button id="dlBtn" class="btn btn-success no-print" style="display:none;" onclick="downloadHTML()">HTML 다운로드</button>
+        <button id="genBtn" class="btn btn-primary no-print">리포트 생성</button>
+        <button id="newWindowBtn" type="button" class="btn btn-secondary no-print" style="display:none;">새 창에서 열기</button>
+        <button id="dlBtn" class="btn btn-success no-print" style="display:none;">HTML 다운로드</button>
       </div>
     </div>
     <div class="header-line"></div>
@@ -94,30 +95,89 @@
   const $ = (id)=>document.getElementById(id);
   const esc = (s)=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
 
-  // 버튼 바인딩
-  $("genBtn").onclick = generateReport;
+  // 전역 리포트 데이터
+  let currentReportData = null;
 
-  // HTML 다운로드 함수
-  function downloadHTML() {
-    // 현재 페이지의 HTML을 복제
+  // ==== 새 창 복제 열기(Blob URL 방식) ====
+  function openInNewWindow(){
+    if (!currentReportData) {
+      alert('리포트 데이터가 없습니다. 먼저 리포트를 생성하세요.');
+      return;
+    }
+
+    // 1) HTML 복제 및 정리
     const htmlDoc = document.documentElement.cloneNode(true);
-    
-    // 버튼들과 상태 표시 제거
+    const emptyBox = htmlDoc.querySelector('#emptyBox');
+    if (emptyBox) emptyBox.style.display='none';
+    const reportRoot = htmlDoc.querySelector('#reportRoot');
+    if (reportRoot) reportRoot.style.display='block';
+    const genBtn = htmlDoc.querySelector('#genBtn');
+    if (genBtn) genBtn.style.display='none';
+    const newBtn = htmlDoc.querySelector('#newWindowBtn');
+    if (newBtn) newBtn.style.display='none';
+    const dlBtn = htmlDoc.querySelector('#dlBtn');
+    if (dlBtn) dlBtn.style.display='inline-block';
+
+    // 2) 리포트 데이터 주입 스크립트
+    const reportDataBase64 = btoa(unescape(encodeURIComponent(JSON.stringify(currentReportData))));
+    const injector = document.createElement('script');
+    injector.textContent = `
+      (function(){
+        const block=(u)=> typeof u==='string' && /^\\/(api|reports)\\//.test(u);
+        const of=window.fetch?window.fetch.bind(window):null;
+        if(of) window.fetch=(u,o)=> block(u)?Promise.reject(new Error('API disabled')):of(u,o);
+        if(window.XMLHttpRequest){
+          const ox=XMLHttpRequest.prototype.open;
+          XMLHttpRequest.prototype.open=function(m,u){
+            if(block(u)) throw new Error('API disabled');
+            return ox.apply(this,arguments);
+          };
+        }
+      })();
+      (function wait(){
+        if(!(window.Chart && typeof renderReport==='function'))
+          return setTimeout(wait,30);
+        const data = JSON.parse(decodeURIComponent(escape(atob('${reportDataBase64}'))));
+        window.currentReportData = data;
+        const t=document.getElementById('reportTitle');
+        if(t && data?.candidate_name)
+          t.textContent = data.candidate_name+'의 면접 리포트';
+        renderReport(data);
+      })();`;
+    htmlDoc.body.appendChild(injector);
+
+    // 3) Blob URL 생성 및 새 창 열기
+    const htmlStr = '<!DOCTYPE html>\n' + htmlDoc.outerHTML;
+    const blob = new Blob([htmlStr], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    // 4) 사용자 제스처와 직접 연결된 window.open 호출
+    const w = window.open(blobUrl, '_blank', 'width=1200,height=800');
+    if (!w) {
+      alert('팝업이 차단되었습니다. 브라우저 설정에서 팝업을 허용하세요.');
+      URL.revokeObjectURL(blobUrl);
+      return;
+    }
+
+    // 5) Blob URL 정리 (새 창이 로드된 후)
+    setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+  }
+
+
+
+  // ==== HTML 다운로드 ====
+  function downloadHTML() {
+    const htmlDoc = document.documentElement.cloneNode(true);
+
+    // 상태 및 버튼 영역 정리
     const headerActions = htmlDoc.querySelector('.header-actions');
     if (headerActions) headerActions.remove();
-    
-    // 에러 박스 제거
     const errBox = htmlDoc.querySelector('#errBox');
     if (errBox) errBox.remove();
-    
-    // emptyBox 제거
     const emptyBox = htmlDoc.querySelector('#emptyBox');
     if (emptyBox) emptyBox.remove();
-    
-    // HTML 문자열 생성
+
     const htmlStr = '<!DOCTYPE html>\n' + htmlDoc.outerHTML;
-    
-    // Blob 생성 및 다운로드
     const blob = new Blob([htmlStr], { type: 'text/html;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -127,102 +187,52 @@
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
-    
-    console.log('✅ HTML 파일 다운로드 완료');
   }
 
+  // ==== 리포트 생성(원 페이지에서만 사용) ====
   async function generateReport() {
     const btn = $("genBtn"), pill = $("genStatus"), err = $("errBox");
     err.style.display="none"; err.textContent="";
     pill.style.display="inline-block"; btn.disabled=true; btn.textContent="생성중…";
 
     const payload = new URLSearchParams();
-    
-    // ✅ 1. GLOBAL_STATE에서 session_id와 metrics 가져오기
-    let sessionId = null;
-    let axesKeys = null;
-    
+
+    // 1) 상태 조회
+    let sessionId = null, axesKeys = null, resumeId = null, jdId = null;
     try {
-      console.log('📡 /api/state에서 session_id와 metrics 가져오는 중...');
       const stateRes = await fetch('/api/state', { method: 'GET' });
       if (stateRes.ok) {
         const stateData = await stateRes.json();
-        console.log('📦 State 응답 전체:', stateData);
-        
-        // state 객체 안에 실제 데이터가 중첩되어 있음
-        const actualState = stateData.state || stateData;
-        sessionId = actualState.session_id;
-        
-        // selected_metrics 사용 (5개 선택된 지표)
-        if (actualState.selected_metrics && actualState.selected_metrics.length > 0) {
-          axesKeys = actualState.selected_metrics.join(',');
-        }
-        
-        console.log('✅ State에서 가져온 데이터:', { sessionId, axesKeys });
-      } else {
-        console.warn('⚠️ /api/state 호출 실패:', stateRes.status);
+        const st = stateData.state || stateData;
+        sessionId = st.session_id;
+        resumeId = st.resume_id;
+        jdId = st.jd_id;
+        if (st.metrics && st.metrics.length > 0) axesKeys = st.metrics.join(',');
       }
-    } catch (e) {
-      console.error('❌ State 가져오기 에러:', e);
-    }
-    
-    // ✅ 2. 폴백: session_id가 없으면 에러 표시
-    if (!sessionId) {
-      console.error('❌ session_id를 찾을 수 없습니다. 면접을 먼저 진행하세요.');
-      pill.style.display="none"; btn.disabled=false; btn.textContent="리포트 생성";
-      return showError({
-        status: 'failed',
-        code: 'missing_session_id',
-        message: '면접 데이터를 찾을 수 없습니다. 면접을 먼저 진행하세요.'
-      });
-    }
-    
-    if (!axesKeys) {
-      console.warn('⚠️ 선택된 평가지표가 없습니다. 기본값 사용.');
-      axesKeys = 'problem_solving,communication,self_driven_initiative,collaboration,professional_expertise';
-    }
-    
-    console.log(`📋 session_id: ${sessionId}`);
-    console.log(`📋 axes_keys: ${axesKeys}`);
-    
-    payload.set('session_id', sessionId);
-    payload.set('axes_keys', axesKeys);
-    
-    // 기본: 전체 페이지 렌더 모드 (format=html)
-    payload.set('format','html');    try {
+    } catch(e){ console.warn('state 조회 실패:', e); }
+
+    if (sessionId) payload.set('session_id', sessionId);
+    if (axesKeys) payload.set('axes_keys', axesKeys);
+
+    try {
       const res = await fetch('/reports/generate', {
         method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json,text/html'},
+        headers:{
+          'Content-Type':'application/x-www-form-urlencoded',
+          'Accept':'application/json'
+        },
         body:payload
       });
-      const ct = res.headers.get('content-type') || '';
-      console.log('✅ 응답 도착 - Content-Type:', ct, 'Status:', res.status);
+      const j = await res.json();
 
-      if (ct.includes('application/json')) {
-        const j = await res.json();
-        console.log('📦 JSON 모드 응답:', j);
-        if (j.status === 'failed') return showError(j);
-        renderReport(j);
-        return;
-      }
+      if (j.status === 'failed') { showError(j); return; }
 
-      // 백엔드가 HTML을 주는 경우 새 창에서 표시
-      console.log('📄 HTML 모드 - 새 창 열기');
-      const html = await res.text();
-      console.log('📏 HTML 길이:', html.length);
-      
-      // Blob URL 방식으로 새 탭에서 열기
-      const blob = new Blob([html], {type: 'text/html'});
-      const url = URL.createObjectURL(blob);
-      const newWin = window.open(url, '_blank');
-      if(newWin) {
-        // 새 창이 로드되면 URL 정리
-        newWin.addEventListener('load', () => URL.revokeObjectURL(url));
-        console.log('✅ 새 창에서 리포트 표시됨');
-      } else {
-        console.error('❌ 팝업 차단됨 - 브라우저 설정을 확인하세요');
-        alert('팝업이 차단되었습니다. 브라우저 설정에서 팝업을 허용해주세요.');
-      }
+      currentReportData = j;
+      renderReport(j);
+
+      $("genBtn").style.display = "none";
+      $("newWindowBtn").style.display = "inline-block";
+      $("dlBtn").style.display = "inline-block";
     } catch(e){
       showError({code:'NETWORK', message:'네트워크 오류', details:{why:String(e)}});
     } finally {
@@ -239,47 +249,39 @@
        ${err.trace_id?`<div class="alert-trace">trace_id: <code>${esc(err.trace_id)}</code></div>`:''}`;
     box.style.display="block";
   }
+
   function normalizeFulfill(v){
-  const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'');
-  if (/^(충족|만족|ok|pass|full)$/.test(s)) return 'full';
-  if (/^(부분|부분충족|부분만족|partial)$/.test(s)) return 'partial';
-  return 'none';
+    const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'');
+    if (/^(충족|만족|ok|pass|full)$/.test(s)) return 'full';
+    if (/^(부분|부분충족|부분만족|partial)$/.test(s)) return 'partial';
+    return 'none';
   }
 
-  // JSON 렌더
+  // ==== 렌더러 ====
   let radar;
   function renderReport(r){
     $("emptyBox").style.display="none";
     $("reportRoot").style.display="block";
     $("dlBtn").style.display="inline-block";
 
-    // 타이틀 업데이트 - 지원자 이름 추가
     const candidateName = r?.candidate_name || "지원자";
     $("reportTitle").textContent = `${candidateName}의 면접 리포트`;
 
-    // 헤드라인 - 짧은 요약 + 해시태그 붙여서 표시
     $("headlineSummary").textContent = r?.headline?.summary || "";
     const keywords = (r?.headline?.tag || '').split(',').map(k => k.trim()).filter(Boolean);
-    $("headlineKeywords").innerHTML = keywords.map(kw => 
+    $("headlineKeywords").innerHTML = keywords.map(kw =>
       `<span class="headline-keyword">#${esc(kw)}</span>`
     ).join('');
 
-    // 차트
     const labels = (r.axes||[]).map(a=>a.label||a.key);
     const keys   = (r.axes||[]).map(a=>a.key);
-    
-    // scores가 배열 형식인 경우 [{key, value}] → 객체로 변환
+
     let scoresObj = {};
-    if (Array.isArray(r.scores)) {
-      r.scores.forEach(s => { scoresObj[s.key] = s.value; });
-    } else {
-      scoresObj = r.scores || {};
-    }
-    
+    if (Array.isArray(r.scores)) r.scores.forEach(s => { scoresObj[s.key] = s.value; });
+    else scoresObj = r.scores || {};
+
     const values = keys.map(k => (typeof scoresObj[k]==="number") ? scoresObj[k] : 0);
-    
-    console.log('[DEBUG] 차트 데이터:', { labels, keys, values, scoresObj });
-    
+
     if (radar) radar.destroy();
     radar = new Chart($("radarChart"), {
       type:'radar',
@@ -291,27 +293,20 @@
         plugins:{ legend:{ display:false } } }
     });
 
-    // 인터뷰 요약 - 간단한 한 줄 요약
     const items = (r.talkSummary && r.talkSummary.items) ? r.talkSummary.items : [];
-    console.log('[DEBUG] talkSummary.items:', items.length, items);
-    
     const overall = items.find(x=>x.주제==='인터뷰 요약');
     const pos = items.find(x=>x.주제==='긍정 의견');
     const neg = items.find(x=>x.주제==='부정 의견');
     const flows = items.filter(x=>x.주제!=='인터뷰 요약' && x.주제!=='긍정 의견' && x.주제!=='부정 의견');
-    
-    // 인터뷰 요약 표시 (overall이 있으면 맨 위에 표시)
+
     let flowHTML = '';
     if (overall && overall.발언요약) {
       flowHTML += `
-        <div class="qa-simple" style="border-left: 3px solid #10b981; background: #f0fdf4;">
-          <div class="qa-topic" style="font-weight: 600; color: #059669;">전체 요약</div>
+        <div class="qa-simple" style="border-left:3px solid #10b981;background:#f0fdf4;">
+          <div class="qa-topic" style="font-weight:600;color:#059669;">전체 요약</div>
           <div class="qa-summary">${esc(overall.발언요약)}</div>
-        </div>
-      `;
+        </div>`;
     }
-    
-    // Q&A 요약들
     flowHTML += flows.map(it=>{
       const topic = it.주제 || '';
       const content = it.발언요약 || '';
@@ -319,31 +314,18 @@
         <div class="qa-simple">
           <div class="qa-topic">${esc(topic)}</div>
           <div class="qa-summary">${esc(content)}</div>
-        </div>
-      `;
+        </div>`;
     }).join("");
-    
-    // 비어있으면 메시지 표시
-    if (!flowHTML) {
-      flowHTML = '<div class="empty"><p>인터뷰 요약이 없습니다</p></div>';
-    }
-    
+    if (!flowHTML) flowHTML = '<div class="empty"><p>인터뷰 요약이 없습니다</p></div>';
     $("flowList").innerHTML = flowHTML;
 
-    // 긍/부정
     $("posBox").innerHTML = pos ? `<p>${esc(pos.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
     $("negBox").innerHTML = neg ? `<p>${esc(neg.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
 
-    // 핵심역량 테이블 - 점수와 충족도 함께 표시
     const jdBody = document.querySelector("#jdTable tbody");
-    
-    // axes와 scores를 매핑 (C01 → key → score)
-    const axesMap = {};  // {C01: {key: "problem_solving", label: "Problem Solving"}}
-    (r.axes||[]).forEach((ax, idx) => {
-      axesMap[`C${String(idx+1).padStart(2, '0')}`] = ax;
-    });
-    
-    // 한글 역량명 매핑
+    const axesMap = {};
+    (r.axes||[]).forEach((ax, idx) => { axesMap[`C${String(idx+1).padStart(2,'0')}`] = ax; });
+
     const competencyNames = {
       "problem_solving": "문제해결능력",
       "communication": "커뮤니케이션",
@@ -351,106 +333,109 @@
       "collaboration": "협업능력",
       "professional_expertise": "전문성"
     };
-    
+
     jdBody.innerHTML = (r.jdCoverage||[]).map(row=>{
-      const chips = (row.근거||[]).map(e=>
+      const chips = (row.근거||[]).map(e =>
         `<span class="badge badge-indigo eid-link" data-eid="${esc(e)}" onclick="scrollToEvidence('${esc(e)}')">${esc(e)}</span>`
       ).join(" ");
-      
-      // 해당 역량의 점수 찾기
+
       const axInfo = axesMap[row.jid];
-      let score = 0;
-      let competencyName = row.jid;  // 폴백
-      
+      let score = 0, competencyName = row.jid;
       if (axInfo && scoresObj[axInfo.key] !== undefined) {
         score = scoresObj[axInfo.key];
         competencyName = competencyNames[axInfo.key] || axInfo.label || axInfo.key;
       }
-      
-      // 충족도 배지
-      const f = normalizeFulfill(row.충족도);
-      let label = '부족', cls = 'badge-red';
-      if (f === 'full')      { label = '적합'; cls = 'badge-emerald'; }
-      else if (f === 'partial') { label = '보통'; cls = 'badge-amber'; }
 
-      const fulfillBadge = `
-        <div class="fulfillment-badge">
-          <span class="fulfillment-score">${score}점</span>
-        </div>`;
       const expect = String(row.기대치 || '').replace(/^\s*(기준[:\s-]*)?/,'').trim();
+      const fulfillBadge = `<div class="fulfillment-badge"><span class="fulfillment-score">${score}점</span></div>`;
+
       return `<tr>
         <td><strong style="color:#7c3aed;">${esc(competencyName)}</strong></td>
-        <td>
-          ${esc(row.요구사항)}
-          <div class="jd-expectation">기준: ${esc(expect)}</div>
-        </td>
+        <td>${esc(row.요구사항)}<div class="jd-expectation">기준: ${esc(expect)}</div></td>
         <td>${fulfillBadge}</td>
         <td>${chips||'<span style="color:#9ca3af;">-</span>'}</td>
       </tr>`;
     }).join("");
 
-    // 증거 맵
     const evBody = document.querySelector("#evTable tbody");
     evBody.innerHTML = (r.evidence||[]).map(ev=>{
-      // jid를 한글 역량명으로 변환
       const axInfo = axesMap[ev.jid];
-      let competencyName = ev.jid;  // 폴백
-      if (axInfo) {
-        competencyName = competencyNames[axInfo.key] || axInfo.label || axInfo.key;
-      }
-      
+      let competencyName = ev.jid;
+      if (axInfo) competencyName = competencyNames[axInfo.key] || axInfo.label || axInfo.key;
+
       return `<tr id="ev-${esc(ev.eid)}" class="evidence-row">
         <td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td>
-        <td style="color:#6b7280; font-size:0.75rem;">${esc(ev.출처)}</td>
+        <td style="color:#6b7280;font-size:0.75rem;">${esc(ev.출처)}</td>
         <td>${esc(ev.내용)}</td>
         <td><span class="badge badge-purple">${esc(competencyName)}</span></td>
       </tr>`;
     }).join("");
 
-    // 통계
     $("stats").innerHTML = (r.convStats||[]).map(kv =>
       `<div class="stats-item"><span class="stats-label">${esc(kv.k)}</span><span>:</span><span class="stats-value">${esc(kv.v)}</span></div>`
     ).join("");
   }
 
-  // 서버가 초기 렌더 시 report 데이터를 넣어준 경우만 처리 (format=html이 아닌 경우)
+  // 서버가 초기 렌더 시 report 데이터를 넣어준 경우만 처리
   {% if report and report.axes %}
-    window.addEventListener('DOMContentLoaded', ()=>{
-      const data = {{ report|tojson }};
-      if (data && data.status === 'failed') { showError(data); }
-      else { renderReport(data); }
-    });
+  window.addEventListener('DOMContentLoaded', function() {
+    try {
+      const data = {{ report|tojson|safe }};
+      if (data && data.status === 'failed') showError(data);
+      else renderReport(data);
+    } catch (e) { console.error('초기 렌더링 실패:', e); }
+  });
   {% endif %}
 
-  // EID 클릭 시 증거 맵으로 스크롤 및 하이라이트
+  // EID 클릭 시 증거 맵 하이라이트
   function scrollToEvidence(eid) {
     const targetRow = document.getElementById(`ev-${eid}`);
-    if (!targetRow) {
-      console.warn(`증거 항목 ${eid}를 찾을 수 없습니다.`);
-      return;
-    }
-
-    // 기존 하이라이트 제거
-    document.querySelectorAll('.evidence-row').forEach(row => {
-      row.classList.remove('evidence-highlight');
-    });
-
-    // 부드러운 스크롤 이동
-    targetRow.scrollIntoView({ 
-      behavior: 'smooth', 
-      block: 'center' 
-    });
-
-    // 약간의 지연 후 하이라이트 추가 (스크롤 애니메이션과 타이밍 맞춤)
+    if (!targetRow) return;
+    document.querySelectorAll('.evidence-row').forEach(row => row.classList.remove('evidence-highlight'));
+    targetRow.scrollIntoView({ behavior:'smooth', block:'center' });
     setTimeout(() => {
       targetRow.classList.add('evidence-highlight');
-      
-      // 3초 후 하이라이트 제거
-      setTimeout(() => {
-        targetRow.classList.remove('evidence-highlight');
-      }, 3000);
+      setTimeout(() => targetRow.classList.remove('evidence-highlight'), 3000);
     }, 500);
   }
+
+  // ==== 초기화: 버튼 이벤트 바인딩 ====
+  (function initButtons() {
+    console.log('=== 버튼 초기화 시작 ===');
+
+    const genBtn = $("genBtn");
+    console.log('genBtn:', genBtn);
+    if (genBtn) {
+      genBtn.onclick = function(e) {
+        console.log('리포트 생성 버튼 클릭됨');
+        generateReport();
+      };
+      console.log('리포트 생성 버튼 바인딩 완료');
+    }
+
+    const newWindowBtn = $("newWindowBtn");
+    console.log('newWindowBtn:', newWindowBtn);
+    if (newWindowBtn) {
+      newWindowBtn.onclick = function(e) {
+        console.log('새 창 버튼 클릭됨');
+        console.log('currentReportData:', currentReportData);
+        openInNewWindow();
+      };
+      console.log('새 창 버튼 바인딩 완료');
+    }
+
+    const dlBtn = $("dlBtn");
+    console.log('dlBtn:', dlBtn);
+    if (dlBtn) {
+      dlBtn.onclick = function(e) {
+        console.log('다운로드 버튼 클릭됨');
+        downloadHTML();
+      };
+      console.log('다운로드 버튼 바인딩 완료');
+    }
+
+    console.log('=== 버튼 초기화 완료 ===');
+  })();
   </script>
 </body>
 </html>

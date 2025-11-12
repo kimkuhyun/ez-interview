@@ -50,6 +50,11 @@ def update_state():
             for idx, q in enumerate(GLOBAL_STATE.questions[:3], 1):
                 print(f"      [{idx}] {q[:60]}{'...' if len(q) > 60 else ''}")
         
+        # 1-1. session_id 업데이트 (면접 진행 시 전달)
+        if "session_id" in data:
+            GLOBAL_STATE.session_id = data.get("session_id")
+            print(f"   ✅ session_id 업데이트: {GLOBAL_STATE.session_id}")
+        
         # 2. 선택된 평가지표 저장 (최종 선택 지표: 5개)
         if "selected_metrics" in data:
             selected_metrics_data = data.get("selected_metrics", [])
@@ -62,9 +67,10 @@ def update_state():
                     "message": f"평가지표는 정확히 5개를 선택해야 합니다 (현재: {len(selected_metrics_data)}개)"
                 }), 400
             
-            GLOBAL_STATE.metrics = selected_metrics_data
-            print(f"   ✅ 선택된 평가지표 저장: {len(GLOBAL_STATE.metrics)}개")
-            for idx, m in enumerate(GLOBAL_STATE.metrics, 1):
+            GLOBAL_STATE.selected_metrics = selected_metrics_data
+            GLOBAL_STATE.metrics = selected_metrics_data  # 호환성 유지
+            print(f"   ✅ 선택된 평가지표 저장: {len(GLOBAL_STATE.selected_metrics)}개")
+            for idx, m in enumerate(GLOBAL_STATE.selected_metrics, 1):
                 print(f"      [{idx}] {m}")
         
         # 3. 전체 평가지표 저장 (참고용, 선택된 지표가 없을 때만)
