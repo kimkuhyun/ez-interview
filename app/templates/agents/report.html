@@ -138,22 +138,47 @@
 
     const payload = new URLSearchParams();
     
-    // ✅ 1. InterviewState에서 session_id와 metrics 가져오기 시도
+    // ✅ 1. GLOBAL_STATE에서 session_id와 metrics 가져오기
     let sessionId = null;
     let axesKeys = null;
     
-    // TODO: 실제 구현 시 InterviewState에서 가져오기
-    // 예: sessionId = window.interviewState?.session_id;
-    //     axesKeys = window.interviewState?.metrics?.join(',');
+    try {
+      console.log('📡 /api/state에서 session_id와 metrics 가져오는 중...');
+      const stateRes = await fetch('/api/state', { method: 'GET' });
+      if (stateRes.ok) {
+        const stateData = await stateRes.json();
+        console.log('📦 State 응답 전체:', stateData);
+        
+        // state 객체 안에 실제 데이터가 중첩되어 있음
+        const actualState = stateData.state || stateData;
+        sessionId = actualState.session_id;
+        
+        // selected_metrics 사용 (5개 선택된 지표)
+        if (actualState.selected_metrics && actualState.selected_metrics.length > 0) {
+          axesKeys = actualState.selected_metrics.join(',');
+        }
+        
+        console.log('✅ State에서 가져온 데이터:', { sessionId, axesKeys });
+      } else {
+        console.warn('⚠️ /api/state 호출 실패:', stateRes.status);
+      }
+    } catch (e) {
+      console.error('❌ State 가져오기 에러:', e);
+    }
     
-    // ✅ 2. 폴백: 테스트용 하드코딩 값 (State에서 못 가져왔을 때만)
+    // ✅ 2. 폴백: session_id가 없으면 에러 표시
     if (!sessionId) {
-      console.warn('⚠️ InterviewState에서 session_id를 찾을 수 없습니다. 테스트용 폴백 사용.');
-      sessionId = 'b2c43042-f53c-4e16-ad56-ea615322dac3';  // 폴백 UUID
+      console.error('❌ session_id를 찾을 수 없습니다. 면접을 먼저 진행하세요.');
+      pill.style.display="none"; btn.disabled=false; btn.textContent="리포트 생성";
+      return showError({
+        status: 'failed',
+        code: 'missing_session_id',
+        message: '면접 데이터를 찾을 수 없습니다. 면접을 먼저 진행하세요.'
+      });
     }
     
     if (!axesKeys) {
-      console.warn('⚠️ InterviewState에서 metrics를 찾을 수 없습니다. 기본값 사용.');
+      console.warn('⚠️ 선택된 평가지표가 없습니다. 기본값 사용.');
       axesKeys = 'problem_solving,communication,self_driven_initiative,collaboration,professional_expertise';
     }
     

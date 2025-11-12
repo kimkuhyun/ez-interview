@@ -110,7 +110,7 @@ def save_interview_logs(interview_logs: list, session_id: str = None) -> str:
     except Exception as e:
         if conn:
             conn.rollback()
-        print(f"❌ 세션 삭제 실패: {e}")
+        print(f"❌ 면접 로그 저장 실패: {e}")
         raise
         
     finally:
