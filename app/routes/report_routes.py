@@ -77,6 +77,12 @@ def report_panel():
     return render_template("agents/report.html", report={})
 
 
+@report_bp.route("/panel/report/view")
+def report_view():
+    """리포트 전용 뷰 (사이드바 없이 리포트만 표시)"""
+    return render_template("agents/report_view.html")
+
+
 @reports_bp.post("/generate")
 def generate_from_txt():
     from app.routes.state_routes import GLOBAL_STATE

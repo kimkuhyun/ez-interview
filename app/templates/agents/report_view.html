@@ -6,20 +6,65 @@
   <title>면접 리포트</title>
   <style>{% include 'css/report.css' %}</style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <style>
+    /* 리포트 전용 뷰 스타일 */
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f9fafb;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    /* 로딩 화면 */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.95);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+    }
+    .loading-spinner {
+      width: 50px;
+      height: 50px;
+      border: 4px solid #e5e7eb;
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-text {
+      margin-top: 20px;
+      font-size: 16px;
+      color: #6b7280;
+    }
+  </style>
 </head>
 <body>
+  <!-- 로딩 화면 -->
+  <div id="loadingOverlay" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">리포트를 불러오는 중...</div>
+  </div>
+
   <div class="container">
-    <!-- 헤더 -->
+    <!-- 헤더 (간소화) -->
     <div class="header">
       <div>
         <h1 id="reportTitle">면접 리포트</h1>
         <p>AI 기반 면접 평가 및 분석 결과</p>
       </div>
       <div class="header-actions">
-        <span id="genStatus" class="pill" style="display:none;">생성중…</span>
-        <button id="genBtn" class="btn btn-primary no-print">리포트 생성</button>
-        <button id="newWindowBtn" type="button" class="btn btn-secondary no-print" style="display:none;">새 창에서 열기</button>
-        <button id="dlBtn" class="btn btn-success no-print" style="display:none;">HTML 다운로드</button>
+        <button id="dlBtn" class="btn btn-success no-print">HTML 다운로드</button>
       </div>
     </div>
     <div class="header-line"></div>
@@ -27,10 +72,8 @@
     <!-- 실패 배너 -->
     <div id="errBox" class="alert alert-error" style="display:none;"></div>
 
-    <!-- 본문(초기에는 안내만 보임) -->
-    <div id="emptyBox" class="empty"><p>리포트를 생성하려면 “리포트 생성”을 클릭하세요.</p></div>
-
-    <div id="reportRoot" style="display:none;">
+    <!-- 리포트 본문 -->
+    <div id="reportRoot">
       <!-- 헤드라인 -->
       <div class="headline">
         <div id="headlineSummary" class="headline-summary"></div>
@@ -98,64 +141,17 @@
   // 전역 리포트 데이터
   let currentReportData = null;
 
-  // ==== 새 창에서 리포트 열기 (데이터 전달 방식) ====
-  function openInNewWindow(){
-    console.log('=== openInNewWindow 시작 ===');
-
-    if (!currentReportData) {
-      alert('리포트 데이터가 없습니다. 먼저 리포트를 생성하세요.');
-      console.error('currentReportData가 없음');
-      return;
-    }
-
-    try {
-      // 1) 전용 템플릿 URL로 빈 창 열기
-      const reportViewUrl = '/panel/report/view';
-      const windowFeatures = 'width=1200,height=800,menubar=yes,toolbar=yes,location=yes,status=yes,scrollbars=yes,resizable=yes';
-      const newWindow = window.open(reportViewUrl, '_blank', windowFeatures);
-
-      if (!newWindow) {
-        console.error('팝업이 차단됨');
-        alert('팝업이 차단되었습니다.\n\n브라우저 설정에서 팝업을 허용해주세요.');
-        return;
-      }
-
-      console.log('새 창 열기 성공');
-
-      // 2) 새 창이 로드된 후 데이터 전달
-      newWindow.addEventListener('load', function() {
-        console.log('새 창 로드 완료, 데이터 전달 중...');
-
-        // 새 창의 전역 함수 호출하여 데이터 전달
-        if (newWindow.loadReportData && typeof newWindow.loadReportData === 'function') {
-          newWindow.loadReportData(currentReportData);
-          console.log('데이터 전달 완료');
-        } else {
-          console.error('새 창에 loadReportData 함수가 없습니다');
-        }
-      });
-
-    } catch (error) {
-      console.error('openInNewWindow 오류:', error);
-      alert('새 창 열기 중 오류가 발생했습니다:\n' + error.message);
-    }
-
-    console.log('=== openInNewWindow 완료 ===');
-  }
-
-
-
   // ==== HTML 다운로드 ====
   function downloadHTML() {
     const htmlDoc = document.documentElement.cloneNode(true);
 
-    // 상태 및 버튼 영역 정리
+    // 로딩 오버레이 및 버튼 제거
+    const loadingOverlay = htmlDoc.querySelector('#loadingOverlay');
+    if (loadingOverlay) loadingOverlay.remove();
     const headerActions = htmlDoc.querySelector('.header-actions');
     if (headerActions) headerActions.remove();
     const errBox = htmlDoc.querySelector('#errBox');
     if (errBox) errBox.remove();
-    const emptyBox = htmlDoc.querySelector('#emptyBox');
-    if (emptyBox) emptyBox.remove();
 
     const htmlStr = '<!DOCTYPE html>\n' + htmlDoc.outerHTML;
     const blob = new Blob([htmlStr], { type: 'text/html;charset=utf-8' });
@@ -169,82 +165,23 @@
     URL.revokeObjectURL(url);
   }
 
-  // ==== 리포트 생성(원 페이지에서만 사용) ====
-  async function generateReport() {
-    const btn = $("genBtn"), pill = $("genStatus"), err = $("errBox");
-    err.style.display="none"; err.textContent="";
-    pill.style.display="inline-block"; btn.disabled=true; btn.textContent="생성중…";
-
-    const payload = new URLSearchParams();
-
-    // 1) 상태 조회
-    let sessionId = null, axesKeys = null, resumeId = null, jdId = null;
-    try {
-      const stateRes = await fetch('/api/state', { method: 'GET' });
-      if (stateRes.ok) {
-        const stateData = await stateRes.json();
-        const st = stateData.state || stateData;
-        sessionId = st.session_id;
-        resumeId = st.resume_id;
-        jdId = st.jd_id;
-        if (st.metrics && st.metrics.length > 0) axesKeys = st.metrics.join(',');
-      }
-    } catch(e){ console.warn('state 조회 실패:', e); }
-
-    if (sessionId) payload.set('session_id', sessionId);
-    if (axesKeys) payload.set('axes_keys', axesKeys);
-
-    try {
-      const res = await fetch('/reports/generate', {
-        method:'POST',
-        headers:{
-          'Content-Type':'application/x-www-form-urlencoded',
-          'Accept':'application/json'
-        },
-        body:payload
-      });
-      const j = await res.json();
-
-      if (j.status === 'failed') { showError(j); return; }
-
-      currentReportData = j;
-      renderReport(j);
-
-      $("genBtn").style.display = "none";
-      $("newWindowBtn").style.display = "inline-block";
-      $("dlBtn").style.display = "inline-block";
-    } catch(e){
-      showError({code:'NETWORK', message:'네트워크 오류', details:{why:String(e)}});
-    } finally {
-      pill.style.display="none"; btn.disabled=false; btn.textContent="리포트 생성";
-    }
-  }
-
   function showError(err){
     const box=$("errBox");
     box.innerHTML =
-      `<div class="alert-title">리포트 생성 실패</div>
+      `<div class="alert-title">리포트 로드 실패</div>
        <div class="alert-body"><span class="code">${esc(err.code||'ERROR')}</span> ${esc(err.message||'오류')}</div>
-       ${err.details?`<details class="alert-details"><summary>진단 정보</summary><pre>${esc(JSON.stringify(err.details,null,2))}</pre></details>`:''}
-       ${err.trace_id?`<div class="alert-trace">trace_id: <code>${esc(err.trace_id)}</code></div>`:''}`;
+       ${err.details?`<details class="alert-details"><summary>진단 정보</summary><pre>${esc(JSON.stringify(err.details,null,2))}</pre></details>`:''}`;
     box.style.display="block";
-  }
 
-  function normalizeFulfill(v){
-    const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'');
-    if (/^(충족|만족|ok|pass|full)$/.test(s)) return 'full';
-    if (/^(부분|부분충족|부분만족|partial)$/.test(s)) return 'partial';
-    return 'none';
+    // 로딩 오버레이 숨김
+    const loadingOverlay = $("loadingOverlay");
+    if (loadingOverlay) loadingOverlay.style.display = "none";
   }
 
   // ==== 렌더러 ====
   let radar;
   function renderReport(r){
     console.log('renderReport 시작, 데이터:', r);
-
-    // 안전한 요소 접근 및 스타일 변경
-    const emptyBox = $("emptyBox");
-    if (emptyBox) emptyBox.style.display="none";
 
     const reportRoot = $("reportRoot");
     if (reportRoot) reportRoot.style.display="block";
@@ -288,7 +225,7 @@
       return (typeof score === "number") ? score : 0;
     });
 
-    console.log('=== 차트 디버깅 ===');
+    console.log('=== 차트 디버깅 (새 창) ===');
     console.log('axes:', axes);
     console.log('keys:', keys);
     console.log('labels:', labels);
@@ -339,8 +276,6 @@
           }
         }
       });
-    } else {
-      console.warn('radarChart 요소를 찾을 수 없습니다');
     }
 
     const items = (r.talkSummary && r.talkSummary.items) ? r.talkSummary.items : [];
@@ -385,6 +320,14 @@
     const axesMap = {};
     (r.axes||[]).forEach((ax, idx) => { axesMap[`C${String(idx+1).padStart(2,'0')}`] = ax; });
 
+    const competencyNames = {
+      "problem_solving": "문제해결능력",
+      "communication": "커뮤니케이션",
+      "self_driven_initiative": "자기주도성",
+      "collaboration": "협업능력",
+      "professional_expertise": "전문성"
+    };
+
     jdBody.innerHTML = (r.jdCoverage||[]).map(row=>{
       const chips = (row.근거||[]).map(e =>
         `<span class="badge badge-indigo eid-link" data-eid="${esc(e)}" onclick="scrollToEvidence('${esc(e)}')">${esc(e)}</span>`
@@ -394,7 +337,7 @@
       let score = 0, competencyName = row.jid;
       if (axInfo && scoresObj[axInfo.key] !== undefined) {
         score = scoresObj[axInfo.key];
-        competencyName = axInfo.label || axInfo.key;
+        competencyName = competencyNames[axInfo.key] || axInfo.label || axInfo.key;
       }
 
       const expect = String(row.기대치 || '').replace(/^\s*(기준[:\s-]*)?/,'').trim();
@@ -413,7 +356,7 @@
       evBody.innerHTML = (r.evidence||[]).map(ev=>{
         const axInfo = axesMap[ev.jid];
         let competencyName = ev.jid;
-        if (axInfo) competencyName = axInfo.label || axInfo.key;
+        if (axInfo) competencyName = competencyNames[axInfo.key] || axInfo.label || axInfo.key;
 
         return `<tr id="ev-${esc(ev.eid)}" class="evidence-row">
           <td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td>
@@ -422,8 +365,6 @@
           <td><span class="badge badge-purple">${esc(competencyName)}</span></td>
         </tr>`;
       }).join("");
-    } else {
-      console.warn('evTable tbody를 찾을 수 없습니다');
     }
 
     const statsElem = $("stats");
@@ -433,19 +374,12 @@
       ).join("");
     }
 
+    // 로딩 오버레이 숨김
+    const loadingOverlay = $("loadingOverlay");
+    if (loadingOverlay) loadingOverlay.style.display = "none";
+
     console.log('renderReport 완료');
   }
-
-  // 서버가 초기 렌더 시 report 데이터를 넣어준 경우만 처리
-  {% if report and report.axes %}
-  window.addEventListener('DOMContentLoaded', function() {
-    try {
-      const data = {{ report|tojson|safe }};
-      if (data && data.status === 'failed') showError(data);
-      else renderReport(data);
-    } catch (e) { console.error('초기 렌더링 실패:', e); }
-  });
-  {% endif %}
 
   // EID 클릭 시 증거 맵 하이라이트
   function scrollToEvidence(eid) {
@@ -459,42 +393,37 @@
     }, 500);
   }
 
-  // ==== 초기화: 버튼 이벤트 바인딩 ====
-  (function initButtons() {
-    console.log('=== 버튼 초기화 시작 ===');
+  // ==== 외부에서 데이터를 전달받는 함수 (부모 창에서 호출) ====
+  window.loadReportData = function(data) {
+    console.log('loadReportData 호출됨, 데이터:', data);
 
-    const genBtn = $("genBtn");
-    console.log('genBtn:', genBtn);
-    if (genBtn) {
-      genBtn.onclick = function(e) {
-        console.log('리포트 생성 버튼 클릭됨');
-        generateReport();
-      };
-      console.log('리포트 생성 버튼 바인딩 완료');
+    if (!data) {
+      showError({
+        code: 'NO_DATA',
+        message: '전달받은 리포트 데이터가 없습니다'
+      });
+      return;
     }
 
-    const newWindowBtn = $("newWindowBtn");
-    console.log('newWindowBtn:', newWindowBtn);
-    if (newWindowBtn) {
-      newWindowBtn.onclick = function(e) {
-        console.log('새 창 버튼 클릭됨');
-        console.log('currentReportData:', currentReportData);
-        openInNewWindow();
-      };
-      console.log('새 창 버튼 바인딩 완료');
+    if (data.status === 'failed') {
+      showError(data);
+      return;
     }
 
+    currentReportData = data;
+    renderReport(data);
+  };
+
+  // ==== 초기화 ====
+  (function init() {
+    console.log('리포트 뷰 초기화');
+
+    // 다운로드 버튼 이벤트 바인딩
     const dlBtn = $("dlBtn");
-    console.log('dlBtn:', dlBtn);
-    if (dlBtn) {
-      dlBtn.onclick = function(e) {
-        console.log('다운로드 버튼 클릭됨');
-        downloadHTML();
-      };
-      console.log('다운로드 버튼 바인딩 완료');
-    }
+    if (dlBtn) dlBtn.onclick = downloadHTML;
 
-    console.log('=== 버튼 초기화 완료 ===');
+    // 로딩 메시지 표시
+    console.log('부모 창으로부터 데이터 전달 대기 중...');
   })();
   </script>
 </body>
