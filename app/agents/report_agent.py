@@ -62,7 +62,7 @@ def _llm() -> ChatOpenAI:
     return ChatOpenAI(model_name=OPENAI_MODEL, temperature=0.1, timeout=90)
 
 # ==================== 스키마 정의 ====================
-KeyStr = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^[a-z][a-z0-9_]{1,32}$")]
+KeyStr = Annotated[str, StringConstraints(strip_whitespace=True)]
 NonEmpty = Annotated[str, StringConstraints(min_length=1)]
 E_ID = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^E\d{2,3}$")]
 COMP_ID = Annotated[str, StringConstraints(strip_whitespace=True, pattern=r"^C\d{2,3}$")]

@@ -67,10 +67,10 @@ def update_state():
                     "message": f"평가지표는 정확히 5개를 선택해야 합니다 (현재: {len(selected_metrics_data)}개)"
                 }), 400
             
-            GLOBAL_STATE.selected_metrics = selected_metrics_data
-            GLOBAL_STATE.metrics = selected_metrics_data  # 호환성 유지
-            print(f"   ✅ 선택된 평가지표 저장: {len(GLOBAL_STATE.selected_metrics)}개")
-            for idx, m in enumerate(GLOBAL_STATE.selected_metrics, 1):
+            # metrics 필드에 저장
+            GLOBAL_STATE.metrics = selected_metrics_data
+            print(f"   ✅ 선택된 평가지표 저장: {len(GLOBAL_STATE.metrics)}개")
+            for idx, m in enumerate(GLOBAL_STATE.metrics, 1):
                 print(f"      [{idx}] {m}")
         
         # 3. 전체 평가지표 저장 (참고용, 선택된 지표가 없을 때만)
