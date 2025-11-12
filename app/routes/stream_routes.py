@@ -182,11 +182,12 @@ def ai_followup():
     if not conversation:
         return error_response(f"{data.get('question_id')} 대화가 없습니다", 404)
 
-    # AI 에이전트 호출
+    # AI 에이전트 호출 (session_id 전달하여 RAG 활성화)
     questions = stream_agent.generate_followups(
         text=data.get("text", ""),
         question_id=data.get("question_id"),
         history=conversation.get("followups", []),
+        session_id=GLOBAL_STATE.session_id,  # RAG 검색을 위한 session_id 전달
         regen=data.get("regen", False),
     )
     
