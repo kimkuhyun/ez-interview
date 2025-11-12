@@ -12,7 +12,7 @@
     <!-- 헤더 -->
     <div class="header">
       <div>
-        <h1>면접 리포트</h1>
+        <h1 id="reportTitle">면접 리포트</h1>
         <p>AI 기반 면접 평가 및 분석 결과</p>
       </div>
       <div class="header-actions">
@@ -253,6 +253,10 @@
     $("reportRoot").style.display="block";
     $("dlBtn").style.display="inline-block";
 
+    // 타이틀 업데이트 - 지원자 이름 추가
+    const candidateName = r?.candidate_name || "지원자";
+    $("reportTitle").textContent = `${candidateName}의 면접 리포트`;
+
     // 헤드라인 - 짧은 요약 + 해시태그 붙여서 표시
     $("headlineSummary").textContent = r?.headline?.summary || "";
     const keywords = (r?.headline?.tag || '').split(',').map(k => k.trim()).filter(Boolean);
@@ -387,14 +391,21 @@
 
     // 증거 맵
     const evBody = document.querySelector("#evTable tbody");
-    evBody.innerHTML = (r.evidence||[]).map(ev=>
-      `<tr id="ev-${esc(ev.eid)}" class="evidence-row">
+    evBody.innerHTML = (r.evidence||[]).map(ev=>{
+      // jid를 한글 역량명으로 변환
+      const axInfo = axesMap[ev.jid];
+      let competencyName = ev.jid;  // 폴백
+      if (axInfo) {
+        competencyName = competencyNames[axInfo.key] || axInfo.label || axInfo.key;
+      }
+      
+      return `<tr id="ev-${esc(ev.eid)}" class="evidence-row">
         <td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td>
         <td style="color:#6b7280; font-size:0.75rem;">${esc(ev.출처)}</td>
         <td>${esc(ev.내용)}</td>
-        <td><span class="badge badge-purple">${esc(ev.jid)}</span></td>
-      </tr>`
-    ).join("");
+        <td><span class="badge badge-purple">${esc(competencyName)}</span></td>
+      </tr>`;
+    }).join("");
 
     // 통계
     $("stats").innerHTML = (r.convStats||[]).map(kv =>
