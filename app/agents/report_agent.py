@@ -1,43 +1,42 @@
 """
-리포트 생성 에이전트
+리포트 생성 에이전트 - LangGraph 기반
+
+LangGraph 워크플로우:
+1. 리트리버 노드: VectorDB에서 이력서/JD/로그 검색
+2. 인터뷰로그분석 노드: 모순/대화깊이/신뢰도 분석 (에이전트 A/B 디베이트)
+3. 핵심역량 노드: 역량별 점수 평가
+4. 증거매핑 노드: 역량-증거 매핑
+5. 요약 노드: 인터뷰 요약 생성
+6. 검증 노드: 라이트 검증 및 최종 검증
+
+사용 모델:
+- GPT-4o: 리트리버, 검증, 핵심역량, 증거매핑, 요약, 디베이트 통합 (structured output 필요)
+- Solar-Pro2: 에이전트 A/B 디베이트 (일반 텍스트 생성)
+
+참고:
+- Solar API는 function calling의 parallel_tool_calls 파라미터를 지원하지 않음
+- Structured output이 필요한 작업은 GPT-4o 사용
+- 일반 텍스트 생성은 Solar-Pro2 사용으로 비용 절감
 
 필요한 입력:
-- resume_text: str (이력서 텍스트 - 또는 Vector DB에서 자동 검색)
-- jd_text: str (공고 텍스트 - 또는 Vector DB에서 자동 검색)
-- log_text: str (인터뷰 로그 텍스트)
+- session_id: str (VectorDB 조회용)
 - axes_keys: List[str] (핵심역량 키 리스트)
-  예: ["problem_solving", "communication", "self_driven_initiative", "collaboration", "professional_expertise"]
-
-반환:
-- Dict[str, Any]: 리포트 결과
-  - status: "ok" | "failed"
-  - report_id: str (성공 시)
-  - 기타 리포트 데이터
-
-VectorDB 통합 완료:
-- app/utils/retriever.py의 search_similar_chunks 함수 사용
-- Vector DB에서 이력서, 공고 문서 검색하여 컨텍스트 구성
+- user_prompt: Optional[str] (사용자 커스텀 프롬프트)
 
 사용 예시:
 ```python
 from app.agents.report_agent import create_report
 
-result = create_report(
-    resume_text="",  # Vector DB에서 자동 검색됨
-    jd_text="",      # Vector DB에서 자동 검색됨
-    log_text="...",
-    axes_keys=["problem_solving", "communication", "self_driven_initiative", 
-               "collaboration", "professional_expertise"]
-)
-
-if result["status"] == "ok":
-    print("리포트 생성 성공:", result["report_id"])
-else:
-    print("리포트 생성 실패:", result["message"])
+async for event in create_report(
+    session_id="...",
+    axes_keys=["problem_solving", "communication", ...],
+    user_prompt="특히 기술적 깊이를 중점적으로 평가해주세요"
+):
+    print(event)  # 에이전트 대화 스트리밍
 ```
 """
 from __future__ import annotations
-from typing import List, Dict, Optional, Any
+from typing import List, Dict, Optional, Any, AsyncGenerator
 from uuid import uuid4
 from datetime import datetime
 import os
@@ -45,21 +44,44 @@ import re
 from collections import defaultdict
 
 from pydantic import BaseModel, Field, ValidationError, StringConstraints
-from typing_extensions import Annotated
+from typing_extensions import Annotated, TypedDict
 from annotated_types import Ge, Le
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_openai import ChatOpenAI
+
+# LangGraph 임포트
+from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 
 # Vector DB 리트리버 임포트
 from app.utils.rag_retriever import search_similar_chunks
 from app.utils.interview_store import retrieve_interview_context
 
 # ==================== 환경 설정 ====================
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+SOLAR_API_KEY = os.getenv("SOLAR_API_KEY")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o")
+SOLAR_MODEL = "solar-pro2"
 
-def _llm() -> ChatOpenAI:
-    return ChatOpenAI(model_name=OPENAI_MODEL, temperature=0.1, timeout=90)
+def _llm_gpt() -> ChatOpenAI:
+    """GPT-4o 모델 (리트리버, 검증용)"""
+    return ChatOpenAI(
+        model_name=OPENAI_MODEL,
+        temperature=0.1,
+        timeout=90,
+        api_key=OPENAI_API_KEY
+    )
+
+def _llm_solar() -> ChatOpenAI:
+    """Solar-Pro 모델 (일반 텍스트 생성용)"""
+    return ChatOpenAI(
+        model_name=SOLAR_MODEL,
+        temperature=0.1,
+        timeout=90,
+        api_key=SOLAR_API_KEY,
+        base_url="https://api.upstage.ai/v1"
+    )
 
 # ==================== 스키마 정의 ====================
 KeyStr = Annotated[str, StringConstraints(strip_whitespace=True)]
@@ -424,7 +446,7 @@ def _competency_prompt() -> ChatPromptTemplate:
     ])
 
 def evaluate_competency(resume: str, log: str, axes_keys: List[str]) -> CompetencyEvalOut:
-    chain = _competency_prompt() | _llm().with_structured_output(CompetencyEvalOut, method="function_calling")
+    chain = _competency_prompt() | _llm_gpt().with_structured_output(CompetencyEvalOut, method="function_calling")
     
     result = chain.invoke({
         "axes_str": ", ".join(axes_keys),
@@ -492,8 +514,8 @@ def map_competency_evidence(axes_keys: List[str], resume: str, log: str,
         f"{competency_names.get(key, key)}: {key.replace('_', ' ')}"
         for key in axes_keys
     ])
-    
-    chain = _competency_evidence_prompt() | _llm().with_structured_output(CompetencyEvidenceOut, method="function_calling")
+
+    chain = _competency_evidence_prompt() | _llm_gpt().with_structured_output(CompetencyEvidenceOut, method="function_calling")
     
     result = chain.invoke({
         "competencies": competencies_text,
@@ -548,7 +570,7 @@ def _interview_summary_prompt() -> ChatPromptTemplate:
     ])
 
 def summarize_interview(log: str, qa_pairs: List[Dict]) -> InterviewSummaryOut:
-    chain = _interview_summary_prompt() | _llm().with_structured_output(InterviewSummaryOut, method="function_calling")
+    chain = _interview_summary_prompt() | _llm_gpt().with_structured_output(InterviewSummaryOut, method="function_calling")
     
     qa_str = "\n\n".join([
         f"Q{qa['q_num']}: {qa['question'][:100]}...\n"
@@ -659,11 +681,11 @@ def _heavy_validation_prompt() -> ChatPromptTemplate:
          "위 리포트의 품질을 엄격하게 평가하세요.")
     ])
 
-def validate_heavy(report: Dict, jd_text: str, resume_text: str, 
+def validate_heavy(report: Dict, jd_text: str, resume_text: str,
                    log_text: str) -> HeavyValidationOut:
     """LLM 기반 품질 검증"""
     import json
-    chain = _heavy_validation_prompt() | _llm().with_structured_output(HeavyValidationOut, method="function_calling")
+    chain = _heavy_validation_prompt() | _llm_gpt().with_structured_output(HeavyValidationOut, method="function_calling")
     
     # 텍스트 길이 제한 (컨텍스트 윈도우 고려)
     max_len = 3000
@@ -713,7 +735,502 @@ def auto_repair(report: Dict, validation: HeavyValidationOut) -> tuple:
     
     return report, repairs_applied
 
-# ==================== 메인 생성 함수 ====================
+# ==================== LangGraph State 정의 ====================
+class ReportState(TypedDict):
+    """리포트 생성 워크플로우 상태"""
+    # 입력
+    session_id: str
+    axes_keys: List[str]
+    user_prompt: Optional[str]
+
+    # 리트리버 결과
+    jd_ctx: Optional[str]
+    resume_ctx: Optional[str]
+    log_ctx: Optional[str]
+    comp_id_list: Optional[List[str]]
+    eid_list: Optional[List[str]]
+    qa_pairs: Optional[List[Dict]]
+
+    # 인터뷰로그 분석 결과
+    interview_analysis: Optional[Dict[str, Any]]  # 모순도, 대화깊이, 신뢰도
+
+    # 핵심역량 평가 결과
+    competency_eval: Optional[Dict[str, Any]]
+
+    # 증거매핑 결과
+    evidence_mapping: Optional[Dict[str, Any]]
+
+    # 요약 결과
+    interview_summary: Optional[Dict[str, Any]]
+
+    # 검증 결과
+    validation_result: Optional[Dict[str, Any]]
+
+    # 최종 리포트
+    report: Optional[Dict[str, Any]]
+
+    # 에이전트 대화 로그 (스트리밍용)
+    agent_logs: List[Dict[str, str]]
+
+    # 에러
+    error: Optional[str]
+
+# ==================== 인터뷰로그 분석 스키마 ====================
+class InterviewAnalysisOut(BaseModel):
+    """인터뷰 로그 분석 결과 (A/B 디베이트 기반)"""
+    contradiction_score: Annotated[int, Ge(0), Le(100)]  # 모순 점수 (0: 일관적, 100: 매우 모순적)
+    depth_score: Annotated[int, Ge(0), Le(100)]  # 대화 깊이 점수
+    reliability_score: Annotated[int, Ge(0), Le(100)]  # 리포트 신뢰도 점수
+
+    agent_a_opinion: NonEmpty  # 에이전트 A 의견
+    agent_b_opinion: NonEmpty  # 에이전트 B 의견
+    debate_summary: NonEmpty  # 디베이트 요약
+    final_comment: NonEmpty  # 최종 코멘트 (리포트에 표시될 내용)
+
+# ==================== LangGraph 노드 구현 ====================
+def retriever_node(state: ReportState) -> ReportState:
+    """노드 1: 리트리버 - VectorDB에서 데이터 검색"""
+    state["agent_logs"].append({
+        "agent": "리트리버",
+        "message": f"VectorDB에서 세션 {state['session_id']} 데이터를 검색 중..."
+    })
+
+    try:
+        jd_ctx, resume_ctx, log_ctx, comp_id_list, eid_list, qa_pairs = \
+            _build_context_from_vectordb(
+                state["session_id"],
+                state["axes_keys"],
+                "", "", ""
+            )
+
+        state["jd_ctx"] = jd_ctx
+        state["resume_ctx"] = resume_ctx
+        state["log_ctx"] = log_ctx
+        state["comp_id_list"] = comp_id_list
+        state["eid_list"] = eid_list
+        state["qa_pairs"] = qa_pairs
+
+        state["agent_logs"].append({
+            "agent": "리트리버",
+            "message": f"✅ 이력서 {len(resume_ctx)}자, JD {len(jd_ctx)}자, 로그 {len(log_ctx)}자, QA {len(qa_pairs)}개 검색 완료"
+        })
+    except Exception as e:
+        state["error"] = f"리트리버 오류: {str(e)}"
+        state["agent_logs"].append({
+            "agent": "리트리버",
+            "message": f"❌ 오류: {str(e)}"
+        })
+
+    return state
+
+def interview_log_analysis_node(state: ReportState) -> ReportState:
+    """노드 2: 인터뷰로그 분석 - A/B 디베이트 기반"""
+    state["agent_logs"].append({
+        "agent": "인터뷰로그분석",
+        "message": "에이전트 A/B 디베이트를 시작합니다..."
+    })
+
+    try:
+        # 에이전트 A: 긍정적 관점
+        agent_a_prompt = ChatPromptTemplate.from_messages([
+            ("system",
+             "당신은 에이전트 A입니다. 인터뷰 로그를 긍정적으로 분석하세요.\n"
+             "- 후보자의 답변 일관성과 진실성을 평가\n"
+             "- 답변의 깊이와 전문성을 평가\n"
+             "- 이 리포트가 얼마나 신뢰할 수 있는지 평가"),
+            ("human", "[인터뷰 로그]\n{log}\n\n긍정적 관점에서 분석하세요.")
+        ])
+
+        # 에이전트 B: 비판적 관점
+        agent_b_prompt = ChatPromptTemplate.from_messages([
+            ("system",
+             "당신은 에이전트 B입니다. 인터뷰 로그를 비판적으로 분석하세요.\n"
+             "- 답변 간 모순이나 과장된 표현 찾기\n"
+             "- 답변의 구체성 부족이나 회피성 답변 찾기\n"
+             "- 리포트 신뢰도에 영향을 줄 수 있는 요소 평가"),
+            ("human", "[인터뷰 로그]\n{log}\n\n비판적 관점에서 분석하세요.")
+        ])
+
+        llm_gpt = _llm_gpt()
+
+        # 에이전트 A 실행 (Solar 사용)
+        agent_a_result = (agent_a_prompt | _llm_solar()).invoke({"log": state["log_ctx"]})
+        state["agent_logs"].append({
+            "agent": "에이전트 A",
+            "message": f"{agent_a_result.content[:200]}..."
+        })
+
+        # 에이전트 B 실행 (Solar 사용)
+        agent_b_result = (agent_b_prompt | _llm_solar()).invoke({"log": state["log_ctx"]})
+        state["agent_logs"].append({
+            "agent": "에이전트 B",
+            "message": f"{agent_b_result.content[:200]}..."
+        })
+
+        # 디베이트 통합 (GPT 사용 - structured output 필요)
+        debate_prompt = ChatPromptTemplate.from_messages([
+            ("system",
+             "두 에이전트의 의견을 종합하여 최종 분석을 제공하세요.\n"
+             "출력 필드:\n"
+             "- contradiction_score: 0-100 (0: 일관적, 100: 매우 모순적)\n"
+             "- depth_score: 0-100 (답변 깊이)\n"
+             "- reliability_score: 0-100 (리포트 신뢰도)\n"
+             "- agent_a_opinion: 에이전트 A 의견 요약\n"
+             "- agent_b_opinion: 에이전트 B 의견 요약\n"
+             "- debate_summary: 디베이트 요약\n"
+             "- final_comment: 최종 코멘트 (리포트에 표시)"),
+            ("human",
+             "[에이전트 A 의견]\n{agent_a}\n\n"
+             "[에이전트 B 의견]\n{agent_b}\n\n"
+             "종합 분석을 제공하세요.")
+        ])
+
+        chain = debate_prompt | llm_gpt.with_structured_output(InterviewAnalysisOut, method="function_calling")
+        analysis = chain.invoke({
+            "agent_a": agent_a_result.content,
+            "agent_b": agent_b_result.content
+        })
+
+        state["interview_analysis"] = analysis.model_dump()
+        state["agent_logs"].append({
+            "agent": "인터뷰로그분석",
+            "message": f"✅ 분석 완료 - 모순도: {analysis.contradiction_score}%, "
+                      f"깊이: {analysis.depth_score}%, 신뢰도: {analysis.reliability_score}%"
+        })
+
+    except Exception as e:
+        state["error"] = f"인터뷰로그 분석 오류: {str(e)}"
+        state["agent_logs"].append({
+            "agent": "인터뷰로그분석",
+            "message": f"❌ 오류: {str(e)}"
+        })
+
+    return state
+
+def competency_evaluation_node(state: ReportState) -> ReportState:
+    """노드 3: 핵심역량 평가"""
+    state["agent_logs"].append({
+        "agent": "핵심역량평가",
+        "message": f"{len(state['axes_keys'])}개 역량 평가 중..."
+    })
+
+    try:
+        result = evaluate_competency(
+            state["resume_ctx"],
+            state["log_ctx"],
+            state["axes_keys"]
+        )
+
+        state["competency_eval"] = result.model_dump()
+
+        scores_str = ", ".join([f"{s.key}: {s.value}점" for s in result.scores])
+        state["agent_logs"].append({
+            "agent": "핵심역량평가",
+            "message": f"✅ 평가 완료 - {scores_str}"
+        })
+
+    except Exception as e:
+        state["error"] = f"핵심역량 평가 오류: {str(e)}"
+        state["agent_logs"].append({
+            "agent": "핵심역량평가",
+            "message": f"❌ 오류: {str(e)}"
+        })
+
+    return state
+
+def evidence_mapping_node(state: ReportState) -> ReportState:
+    """노드 4: 증거 매핑"""
+    state["agent_logs"].append({
+        "agent": "증거매핑",
+        "message": "역량별 증거 매핑 중..."
+    })
+
+    try:
+        result = map_competency_evidence(
+            state["axes_keys"],
+            state["resume_ctx"],
+            state["log_ctx"],
+            state["eid_list"]
+        )
+
+        state["evidence_mapping"] = result.model_dump()
+        state["agent_logs"].append({
+            "agent": "증거매핑",
+            "message": f"✅ 매핑 완료 - 역량 {len(result.competencyCoverage)}개, 증거 {len(result.evidence)}개"
+        })
+
+    except Exception as e:
+        state["error"] = f"증거 매핑 오류: {str(e)}"
+        state["agent_logs"].append({
+            "agent": "증거매핑",
+            "message": f"❌ 오류: {str(e)}"
+        })
+
+    return state
+
+def summary_node(state: ReportState) -> ReportState:
+    """노드 5: 인터뷰 요약"""
+    state["agent_logs"].append({
+        "agent": "요약생성",
+        "message": "인터뷰 요약 생성 중..."
+    })
+
+    try:
+        result = summarize_interview(
+            state["log_ctx"],
+            state["qa_pairs"]
+        )
+
+        state["interview_summary"] = result.model_dump()
+        state["agent_logs"].append({
+            "agent": "요약생성",
+            "message": f"✅ 요약 완료 - QA {len(result.qa_summaries)}개 요약"
+        })
+
+    except Exception as e:
+        state["error"] = f"요약 생성 오류: {str(e)}"
+        state["agent_logs"].append({
+            "agent": "요약생성",
+            "message": f"❌ 오류: {str(e)}"
+        })
+
+    return state
+
+def validation_node(state: ReportState) -> ReportState:
+    """노드 6: 검증 및 최종 리포트 조립"""
+    state["agent_logs"].append({
+        "agent": "검증",
+        "message": "리포트 검증 및 조립 중..."
+    })
+
+    try:
+        # 리포트 조립
+        comp_eval = state["competency_eval"]
+        evidence_map = state["evidence_mapping"]
+        interview_sum = state["interview_summary"]
+        interview_analysis = state["interview_analysis"]
+
+        # 인터뷰 분석 결과를 talkSummary에 추가
+        talk_summary_items = [
+            {"주제": "인터뷰 요약", "발언요약": interview_sum["overall"]}
+        ] + [
+            {
+                "주제": qa["question_short"],
+                "발언요약": qa["answer_summary"]
+            }
+            for qa in interview_sum["qa_summaries"]
+        ] + [
+            {"주제": "긍정 의견", "발언요약": interview_sum["positive"]},
+            {"주제": "부정 의견", "발언요약": interview_sum["negative"]},
+            {"주제": "🤖 에이전트 코멘트", "발언요약": interview_analysis["final_comment"]}
+        ]
+
+        report = {
+            "axes": [{"key": k, "label": k.replace("_", " ").title()} for k in state["axes_keys"]],
+            "scores": comp_eval["scores"],
+            "weights": comp_eval["weights"],
+            "headline": {
+                **comp_eval["headline"],
+                "contradiction_score": interview_analysis["contradiction_score"],
+                "depth_score": interview_analysis["depth_score"],
+                "reliability_score": interview_analysis["reliability_score"]
+            },
+            "talkSummary": {
+                "items": talk_summary_items
+            },
+            "convStats": [{"k": k, "v": str(v)} for k, v in interview_sum["stats"].items()],
+            "jdCoverage": evidence_map["competencyCoverage"],
+            "evidence": evidence_map["evidence"]
+        }
+
+        # Light Validation
+        light_validation = validate_light(
+            report,
+            state["comp_id_list"],
+            state["eid_list"],
+            state["qa_pairs"]
+        )
+
+        errors = [i for i in light_validation.issues if i.severity == "error"]
+        if errors:
+            state["error"] = "라이트 검증 실패"
+            state["agent_logs"].append({
+                "agent": "검증",
+                "message": f"❌ 라이트 검증 실패: {len(errors)}개 오류"
+            })
+            state["validation_result"] = {
+                "light": light_validation.model_dump(),
+                "errors": [i.model_dump() for i in errors]
+            }
+            return state
+
+        # 최종 스키마 검증
+        try:
+            ReportOut(**report)
+        except ValidationError as ve:
+            state["error"] = f"스키마 검증 실패: {str(ve)}"
+            state["agent_logs"].append({
+                "agent": "검증",
+                "message": f"❌ 스키마 검증 실패"
+            })
+            return state
+
+        # 성공
+        report.update({
+            "status": "ok",
+            "report_id": uuid4().hex,
+            "created_at": datetime.utcnow().isoformat() + "Z",
+            "validation": {
+                "light": light_validation.model_dump(),
+                "warnings": len([i for i in light_validation.issues if i.severity == "warning"])
+            }
+        })
+
+        state["report"] = report
+        state["validation_result"] = {"ok": True}
+        state["agent_logs"].append({
+            "agent": "검증",
+            "message": f"✅ 검증 완료 - 리포트 생성 성공!"
+        })
+
+    except Exception as e:
+        state["error"] = f"검증 오류: {str(e)}"
+        state["agent_logs"].append({
+            "agent": "검증",
+            "message": f"❌ 오류: {str(e)}"
+        })
+
+    return state
+
+# ==================== LangGraph 워크플로우 구성 ====================
+def build_report_graph() -> StateGraph:
+    """리포트 생성 LangGraph 구성"""
+    workflow = StateGraph(ReportState)
+
+    # 노드 추가
+    workflow.add_node("retriever", retriever_node)
+    workflow.add_node("interview_analysis", interview_log_analysis_node)
+    workflow.add_node("competency_eval", competency_evaluation_node)
+    workflow.add_node("evidence_mapping", evidence_mapping_node)
+    workflow.add_node("summary", summary_node)
+    workflow.add_node("validation", validation_node)
+
+    # 엣지 정의 (순차 실행)
+    workflow.set_entry_point("retriever")
+    workflow.add_edge("retriever", "interview_analysis")
+    workflow.add_edge("interview_analysis", "competency_eval")
+    workflow.add_edge("competency_eval", "evidence_mapping")
+    workflow.add_edge("evidence_mapping", "summary")
+    workflow.add_edge("summary", "validation")
+    workflow.add_edge("validation", END)
+
+    return workflow.compile()
+
+# ==================== 메인 생성 함수 (LangGraph 기반) ====================
+async def create_report_async(session_id: str, axes_keys: List[str],
+                               user_prompt: Optional[str] = None) -> AsyncGenerator[Dict[str, Any], None]:
+    """
+    리포트 생성 - LangGraph 기반 (비동기 스트리밍)
+
+    Args:
+        session_id: 세션 ID
+        axes_keys: 핵심역량 키 리스트
+        user_prompt: 사용자 커스텀 프롬프트
+
+    Yields:
+        에이전트 대화 로그 및 최종 리포트
+    """
+    graph = build_report_graph()
+
+    initial_state: ReportState = {
+        "session_id": session_id,
+        "axes_keys": axes_keys,
+        "user_prompt": user_prompt,
+        "jd_ctx": None,
+        "resume_ctx": None,
+        "log_ctx": None,
+        "comp_id_list": None,
+        "eid_list": None,
+        "qa_pairs": None,
+        "interview_analysis": None,
+        "competency_eval": None,
+        "evidence_mapping": None,
+        "interview_summary": None,
+        "validation_result": None,
+        "report": None,
+        "agent_logs": [],
+        "error": None
+    }
+
+    # 그래프 실행 및 스트리밍
+    async for event in graph.astream(initial_state):
+        # 각 노드 실행 후 로그 스트리밍
+        for _, state in event.items():
+            if "agent_logs" in state and len(state["agent_logs"]) > 0:
+                # 새로운 로그만 전송
+                new_logs = state["agent_logs"][-1:]
+                for log in new_logs:
+                    yield {
+                        "type": "log",
+                        "agent": log["agent"],
+                        "message": log["message"]
+                    }
+
+            # 에러 발생 시
+            if state.get("error"):
+                yield {
+                    "type": "error",
+                    "message": state["error"]
+                }
+                return
+
+            # 최종 리포트
+            if state.get("report"):
+                yield {
+                    "type": "report",
+                    "data": state["report"]
+                }
+
+# ==================== 동기 래퍼 (기존 호환성) ====================
+def create_report(session_id: str, axes_keys: List[str],
+                 resume_text: str = "", jd_text: str = "", log_text: str = "",
+                 user_prompt: Optional[str] = None) -> Dict[str, Any]:
+    """
+    리포트 생성 - 동기 버전 (기존 호환성 유지)
+
+    Args:
+        session_id: 세션 ID
+        axes_keys: 핵심역량 키 리스트
+        resume_text: 폴백용 (사용 안 함)
+        jd_text: 폴백용 (사용 안 함)
+        log_text: 폴백용 (사용 안 함)
+        user_prompt: 사용자 커스텀 프롬프트
+
+    Returns:
+        리포트 결과 딕셔너리
+    """
+    import asyncio
+
+    # 비동기 함수를 동기로 실행
+    async def _run():
+        final_report = None
+        async for event in create_report_async(session_id, axes_keys, user_prompt):
+            if event["type"] == "error":
+                return _error("AGENT_ERROR", event["message"])
+            elif event["type"] == "report":
+                final_report = event["data"]
+
+        return final_report or _error("NO_REPORT", "리포트 생성 실패")
+
+    try:
+        loop = asyncio.get_event_loop()
+    except RuntimeError:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+    return loop.run_until_complete(_run())
+
+# ==================== 기존 함수 (폴백용) ====================
 def create_report_with_validation(session_id: str, axes_keys: List[str],
                                   resume_text: str = "", jd_text: str = "", log_text: str = "",
                                   enable_heavy: bool = False,
