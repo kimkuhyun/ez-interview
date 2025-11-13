@@ -39,7 +39,7 @@ class STTWorker:
             use_itn=True,           # ✅ ITN: "일이삼" → "123" 변환
             use_disfluency_filter=False,  # ✅ 더듬거림 필터 OFF (자연스러운 대화 유지)
             use_profanity_filter=False,   # ✅ 욕설 필터 OFF (면접에선 불필요)
-            domain="GENERAL",       # ✅ GENERAL: 일반 대화 / CALL: 전화 통화
+            domain="MEETING",       # ✅ GENERAL: 일반 대화 / CALL: 전화 통화
         )
 
         p = pyaudio.PyAudio()

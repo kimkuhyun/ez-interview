@@ -7,6 +7,58 @@ from app.utils.embedding import get_embedding, get_embeddings_batch
 import time
 from collections import defaultdict
 
+
+# ---------- 세션별 전체 문서 조회 ----------
+def get_all_documents_by_session(session_id: str, doc_type: str) -> str:
+    """
+    세션의 특정 문서 타입 전체 텍스트 가져오기
+    
+    Args:
+        session_id: 세션 ID
+        doc_type: "resume" or "jd"
+    
+    Returns:
+        str: 전체 문서 텍스트 (청크들을 합친 것)
+    """
+    conn = None
+    cur = None
+    
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        
+        # rag.documents 테이블에서 session_id + doc_type으로 모든 청크 가져오기
+        cur.execute("""
+            SELECT content
+            FROM rag.documents
+            WHERE session_id = %s AND doc_type = %s
+            ORDER BY chunk_index
+        """, (session_id, doc_type))
+        
+        chunks = [row[0] for row in cur.fetchall()]
+        
+        if not chunks:
+            print(f"⚠️  세션 {session_id}의 {doc_type} 문서가 없습니다.")
+            return ""
+        
+        # 모든 청크를 합쳐서 반환
+        full_text = "\n\n".join(chunks)
+        
+        print(f"✅ {doc_type} 전체 조회 완료: {len(chunks)}개 청크, {len(full_text)}자")
+        
+        return full_text
+        
+    except Exception as e:
+        print(f"❌ 문서 조회 실패 ({doc_type}, {session_id}): {e}")
+        return ""
+        
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+
+
 # 면접 로그를 interview_logs 테이블에 저장
 def save_interview_logs(interview_logs: list, session_id: str = None) -> str:
     """
