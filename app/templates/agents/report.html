@@ -27,14 +27,61 @@
     <!-- 실패 배너 -->
     <div id="errBox" class="alert alert-error" style="display:none;"></div>
 
+    <!-- 프롬프트 입력 섹션 -->
+    <div id="promptSection" class="card" style="margin-bottom: 1.5rem;">
+      <div class="card-header" style="color: #4f46e5;">💬 리포트 생성 프롬프트</div>
+      <div style="margin-bottom: 1rem;">
+        <label for="userPrompt" style="display: block; font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;">
+          리포트 생성 시 반영할 추가 요구사항을 입력하세요 (선택사항)
+        </label>
+        <textarea
+          id="userPrompt"
+          rows="4"
+          placeholder="예시:&#10;- 기술적 깊이를 중점적으로 평가해주세요&#10;- 리더십 역량을 자세히 분석해주세요&#10;- 답변의 구체성에 초점을 맞춰주세요"
+          style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 0.875rem; font-family: inherit; resize: vertical;"
+        ></textarea>
+      </div>
+      <div style="display: flex; gap: 0.5rem; align-items: center;">
+        <button
+          id="useExampleBtn"
+          class="btn"
+          style="background: #6b7280; color: white; font-size: 0.75rem; padding: 0.5rem 0.75rem;"
+          onclick="fillExamplePrompt()"
+        >
+          예시 프롬프트 사용
+        </button>
+        <span style="font-size: 0.75rem; color: #9ca3af;">
+          * 비워두면 기본 분석이 수행됩니다
+        </span>
+      </div>
+    </div>
+
     <!-- 본문(초기에는 안내만 보임) -->
-    <div id="emptyBox" class="empty"><p>리포트를 생성하려면 “리포트 생성”을 클릭하세요.</p></div>
+    <div id="emptyBox" class="empty" style="display:none;"><p>리포트를 생성하려면 "리포트 생성"을 클릭하세요.</p></div>
 
     <div id="reportRoot" style="display:none;">
-      <!-- 헤드라인 -->
+      <!-- 헤드라인 (신뢰도 지표 추가) -->
       <div class="headline">
-        <div id="headlineSummary" class="headline-summary"></div>
-        <div id="headlineKeywords" class="headline-keywords"></div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+          <div style="flex: 1;">
+            <div id="headlineSummary" class="headline-summary"></div>
+            <div id="headlineKeywords" class="headline-keywords"></div>
+          </div>
+          <div id="reliabilityScores" class="reliability-scores" style="display: none;">
+            <div class="reliability-item">
+              <div class="reliability-label">모순 정도</div>
+              <div id="contradictionScore" class="reliability-value">-</div>
+            </div>
+            <div class="reliability-item">
+              <div class="reliability-label">대화 깊이</div>
+              <div id="depthScore" class="reliability-value">-</div>
+            </div>
+            <div class="reliability-item">
+              <div class="reliability-label">신뢰도</div>
+              <div id="reliabilityScore" class="reliability-value">-</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 차트 + 인터뷰 요약 -->
@@ -169,54 +216,68 @@
     URL.revokeObjectURL(url);
   }
 
-  // ==== 리포트 생성(원 페이지에서만 사용) ====
-  async function generateReport() {
-    const btn = $("genBtn"), pill = $("genStatus"), err = $("errBox");
-    err.style.display="none"; err.textContent="";
-    pill.style.display="inline-block"; btn.disabled=true; btn.textContent="생성중…";
+  // ==== 에이전트 대화 메시지 추가 ====
+  function addAgentMessage(agent, message) {
+    const chatContent = $("agentChatContent");
+    if (!chatContent) return;
 
-    const payload = new URLSearchParams();
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'agent-message';
+    msgDiv.innerHTML = `
+      <div class="agent-message-agent-name">${esc(agent)}</div>
+      <div class="agent-message-content">${esc(message)}</div>
+    `;
+
+    chatContent.appendChild(msgDiv);
+
+    // 자동 스크롤
+    chatContent.scrollTop = chatContent.scrollHeight;
+  }
+
+  // ==== 예시 프롬프트 채우기 ====
+  function fillExamplePrompt() {
+    const userPrompt = $("userPrompt");
+    if (!userPrompt) return;
+
+    const examples = [
+      "기술적 깊이와 전문성을 중점적으로 평가해주세요. 특히 기술 스택 활용 경험과 문제 해결 능력에 주목해주세요.",
+      "리더십과 협업 역량을 자세히 분석해주세요. 팀 내 역할과 커뮤니케이션 능력을 중심으로 평가해주세요.",
+      "답변의 구체성과 신뢰도에 초점을 맞춰주세요. STAR 기법 활용 여부와 정량적 지표 제시 여부를 확인해주세요."
+    ];
+
+    const randomExample = examples[Math.floor(Math.random() * examples.length)];
+    userPrompt.value = randomExample;
+  }
+
+  // ==== 리포트 생성 - 새 창에서 스트리밍 ====
+  async function generateReport() {
+    // 프롬프트 가져오기
+    const userPromptInput = $("userPrompt");
+    const userPrompt = userPromptInput ? userPromptInput.value.trim() : "";
 
     // 1) 상태 조회
-    let sessionId = null, axesKeys = null, resumeId = null, jdId = null;
+    let sessionId = null, axesKeys = null;
     try {
       const stateRes = await fetch('/api/state', { method: 'GET' });
       if (stateRes.ok) {
         const stateData = await stateRes.json();
         const st = stateData.state || stateData;
         sessionId = st.session_id;
-        resumeId = st.resume_id;
-        jdId = st.jd_id;
         if (st.metrics && st.metrics.length > 0) axesKeys = st.metrics.join(',');
       }
     } catch(e){ console.warn('state 조회 실패:', e); }
 
+    const payload = new URLSearchParams();
     if (sessionId) payload.set('session_id', sessionId);
     if (axesKeys) payload.set('axes_keys', axesKeys);
+    if (userPrompt) payload.set('user_prompt', userPrompt);
 
-    try {
-      const res = await fetch('/reports/generate', {
-        method:'POST',
-        headers:{
-          'Content-Type':'application/x-www-form-urlencoded',
-          'Accept':'application/json'
-        },
-        body:payload
-      });
-      const j = await res.json();
+    // 2) 새 창으로 리포트 뷰 열기 (스트리밍은 새 창에서 처리)
+    const reportUrl = '/panel/report/view?' + payload.toString();
+    const newWindow = window.open(reportUrl, '_blank', 'width=1400,height=900');
 
-      if (j.status === 'failed') { showError(j); return; }
-
-      currentReportData = j;
-      renderReport(j);
-
-      $("genBtn").style.display = "none";
-      $("newWindowBtn").style.display = "inline-block";
-      $("dlBtn").style.display = "inline-block";
-    } catch(e){
-      showError({code:'NETWORK', message:'네트워크 오류', details:{why:String(e)}});
-    } finally {
-      pill.style.display="none"; btn.disabled=false; btn.textContent="리포트 생성";
+    if (!newWindow) {
+      alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.');
     }
   }
 
@@ -265,6 +326,35 @@
       headlineKeywords.innerHTML = keywords.map(kw =>
         `<span class="headline-keyword">#${esc(kw)}</span>`
       ).join('');
+    }
+
+    // 신뢰도 점수 렌더링 (headline에 포함된 경우)
+    if (r?.headline?.contradiction_score !== undefined) {
+      const reliabilityScores = $("reliabilityScores");
+      if (reliabilityScores) {
+        reliabilityScores.style.display = "flex";
+
+        const contradictionScore = $("contradictionScore");
+        if (contradictionScore) {
+          const score = r.headline.contradiction_score;
+          contradictionScore.textContent = `${score}%`;
+          contradictionScore.style.color = score > 50 ? "#dc2626" : score > 30 ? "#f59e0b" : "#10b981";
+        }
+
+        const depthScore = $("depthScore");
+        if (depthScore) {
+          const score = r.headline.depth_score;
+          depthScore.textContent = `${score}%`;
+          depthScore.style.color = score > 70 ? "#10b981" : score > 50 ? "#f59e0b" : "#dc2626";
+        }
+
+        const reliabilityScore = $("reliabilityScore");
+        if (reliabilityScore) {
+          const score = r.headline.reliability_score;
+          reliabilityScore.textContent = `${score}%`;
+          reliabilityScore.style.color = score > 70 ? "#10b981" : score > 50 ? "#f59e0b" : "#dc2626";
+        }
+      }
     }
 
     // axes에서 key와 label 추출 (State에서 한글 label 직접 제공)

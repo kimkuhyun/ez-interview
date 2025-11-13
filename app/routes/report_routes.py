@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+import json
+import asyncio
+from typing import AsyncGenerator
 
-from flask import Blueprint, render_template, request, jsonify
+from flask import Blueprint, render_template, request, jsonify, Response, stream_with_context
 from pydantic import ValidationError
 
-# report_agent_test에서 create_report_from_files만 가져오기
-from app.agents.report_agent import create_report
+# report_agent에서 create_report, create_report_async 가져오기
+from app.agents.report_agent import create_report, create_report_async
 
 # 나머지는 기존 report_agent에서 가져오기
 """
@@ -217,4 +220,113 @@ def generate_from_txt():
         traceback.print_exc()
         err = {"status": "failed", "code": "failed", "message": str(e)}
         return (render_template("agents/report.html", report=err), 200) if _wants_html(data) else (jsonify(err), 200)
+
+
+@reports_bp.route("/generate/stream", methods=["GET"])
+def generate_stream():
+    """
+    리포트 생성 - 스트리밍 버전 (Server-Sent Events)
+    에이전트 대화를 실시간으로 전송
+    """
+    from app.routes.state_routes import GLOBAL_STATE
+
+    # GET 요청이므로 query parameter에서 가져옴
+    print(f"\n[reports/generate/stream] 스트리밍 요청 시작")
+    print(f"   - Query 파라미터: {dict(request.args)}")
+
+    # session_id, axes_keys 파싱
+    session_id = request.args.get('session_id') or GLOBAL_STATE.session_id
+    metrics = GLOBAL_STATE.metrics
+    user_prompt = request.args.get('user_prompt', '')
+
+    # 폴백 session_id 처리
+    FALLBACK_SESSION_ID = "09f4963c-f8a3-4f08-9b77-6ac6406de47b"
+    if not session_id:
+        print(f"⚠️  session_id가 없음 → 폴백 사용: {FALLBACK_SESSION_ID}")
+        session_id = FALLBACK_SESSION_ID
+    else:
+        # DB에서 데이터 확인
+        try:
+            from app.db.db_connection import get_connection
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute('SELECT COUNT(*) FROM rag.documents WHERE session_id = %s', (session_id,))
+            doc_count = cur.fetchone()[0]
+            cur.execute('SELECT COUNT(*) FROM rag.interview_logs WHERE session_id = %s', (session_id,))
+            log_count = cur.fetchone()[0]
+            cur.close()
+            conn.close()
+
+            if doc_count == 0 and log_count == 0:
+                print(f"⚠️  DB에 데이터가 없음 → 폴백 사용: {FALLBACK_SESSION_ID}")
+                session_id = FALLBACK_SESSION_ID
+        except Exception as e:
+            print(f"⚠️  DB 확인 실패: {e} → 폴백 사용: {FALLBACK_SESSION_ID}")
+            session_id = FALLBACK_SESSION_ID
+
+    if metrics:
+        axes_keys = metrics
+    else:
+        axes_keys_raw = request.args.get('axes_keys')
+        if axes_keys_raw:
+            # Query parameter는 문자열이므로 쉼표로 split
+            axes_keys = [k.strip() for k in axes_keys_raw.split(',') if k.strip()]
+        else:
+            axes_keys = _DEFAULT_AXES_KEYS.copy()
+
+    if not axes_keys or len(axes_keys) != 5:
+        axes_keys = _DEFAULT_AXES_KEYS.copy()
+
+    print(f"\n[스트리밍 파라미터]")
+    print(f"   - session_id: {session_id}")
+    print(f"   - axes_keys: {axes_keys}")
+    print(f"   - user_prompt: {user_prompt[:100] if user_prompt else '(없음)'}")
+
+    def generate():
+        """SSE 이벤트 생성기"""
+        try:
+            # 비동기 함수를 동기 컨텍스트에서 실행
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            async def run_async():
+                async for event in create_report_async(session_id, axes_keys, user_prompt):
+                    # SSE 포맷으로 전송
+                    if event["type"] == "log":
+                        yield f"event: log\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    elif event["type"] == "error":
+                        yield f"event: error\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                    elif event["type"] == "report":
+                        yield f"event: report\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                        yield f"event: done\ndata: {json.dumps({'status': 'completed'})}\n\n"
+
+            # 비동기 제너레이터를 동기로 실행
+            async_gen = run_async()
+            while True:
+                try:
+                    result = loop.run_until_complete(async_gen.__anext__())
+                    yield result
+                except StopAsyncIteration:
+                    break
+
+        except Exception as e:
+            print(f"\n❌ [스트리밍 오류] {e}")
+            import traceback
+            traceback.print_exc()
+            error_event = {
+                "type": "error",
+                "message": f"스트리밍 오류: {str(e)}"
+            }
+            yield f"event: error\ndata: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+        finally:
+            loop.close()
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'X-Accel-Buffering': 'no'
+        }
+    )
 

@@ -50,10 +50,18 @@
   </style>
 </head>
 <body>
-  <!-- 로딩 화면 -->
+  <!-- 로딩 화면 + 에이전트 대화 -->
   <div id="loadingOverlay" class="loading-overlay">
-    <div class="loading-spinner"></div>
-    <div class="loading-text">리포트를 불러오는 중...</div>
+    <div style="max-width: 800px; width: 90%; background: white; border-radius: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 2rem;">
+      <div class="loading-spinner" style="margin: 0 auto 1rem;"></div>
+      <div class="loading-text" style="text-align: center; margin-bottom: 1.5rem;">리포트를 생성하는 중...</div>
+
+      <!-- 에이전트 대화 로그 (로딩 중에만 표시) -->
+      <div id="agentChatBox" class="card agent-chat-card" style="display:none; margin: 0;">
+        <div class="card-header"></div>
+        <div id="agentChatContent" class="agent-chat-content"></div>
+      </div>
+    </div>
   </div>
 
   <div class="container">
@@ -74,10 +82,28 @@
 
     <!-- 리포트 본문 -->
     <div id="reportRoot">
-      <!-- 헤드라인 -->
+      <!-- 헤드라인 (신뢰도 지표 추가) -->
       <div class="headline">
-        <div id="headlineSummary" class="headline-summary"></div>
-        <div id="headlineKeywords" class="headline-keywords"></div>
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
+          <div style="flex: 1;">
+            <div id="headlineSummary" class="headline-summary"></div>
+            <div id="headlineKeywords" class="headline-keywords"></div>
+          </div>
+          <div id="reliabilityScores" class="reliability-scores" style="display: none;">
+            <div class="reliability-item">
+              <div class="reliability-label">모순 정도</div>
+              <div id="contradictionScore" class="reliability-value">-</div>
+            </div>
+            <div class="reliability-item">
+              <div class="reliability-label">대화 깊이</div>
+              <div id="depthScore" class="reliability-value">-</div>
+            </div>
+            <div class="reliability-item">
+              <div class="reliability-label">신뢰도</div>
+              <div id="reliabilityScore" class="reliability-value">-</div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- 차트 + 인터뷰 요약 -->
@@ -180,6 +206,24 @@
 
   // ==== 렌더러 ====
   let radar;
+  // ==== 에이전트 대화 메시지 추가 ====
+  function addAgentMessage(agent, message) {
+    const chatContent = $("agentChatContent");
+    if (!chatContent) return;
+
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'agent-message';
+    msgDiv.innerHTML = `
+      <div class="agent-message-agent-name">${esc(agent)}</div>
+      <div class="agent-message-content">${esc(message)}</div>
+    `;
+
+    chatContent.appendChild(msgDiv);
+
+    // 자동 스크롤
+    chatContent.scrollTop = chatContent.scrollHeight;
+  }
+
   function renderReport(r){
     console.log('renderReport 시작, 데이터:', r);
 
@@ -202,6 +246,35 @@
       headlineKeywords.innerHTML = keywords.map(kw =>
         `<span class="headline-keyword">#${esc(kw)}</span>`
       ).join('');
+    }
+
+    // 신뢰도 점수 렌더링
+    if (r?.headline?.contradiction_score !== undefined) {
+      const reliabilityScores = $("reliabilityScores");
+      if (reliabilityScores) {
+        reliabilityScores.style.display = "flex";
+
+        const contradictionScore = $("contradictionScore");
+        if (contradictionScore) {
+          const score = r.headline.contradiction_score;
+          contradictionScore.textContent = `${score}%`;
+          contradictionScore.style.color = score > 50 ? "#dc2626" : score > 30 ? "#f59e0b" : "#10b981";
+        }
+
+        const depthScore = $("depthScore");
+        if (depthScore) {
+          const score = r.headline.depth_score;
+          depthScore.textContent = `${score}%`;
+          depthScore.style.color = score > 70 ? "#10b981" : score > 50 ? "#f59e0b" : "#dc2626";
+        }
+
+        const reliabilityScore = $("reliabilityScore");
+        if (reliabilityScore) {
+          const score = r.headline.reliability_score;
+          reliabilityScore.textContent = `${score}%`;
+          reliabilityScore.style.color = score > 70 ? "#10b981" : score > 50 ? "#f59e0b" : "#dc2626";
+        }
+      }
     }
 
     // axes에서 key와 label 추출 (State에서 한글 label 직접 제공)
@@ -414,6 +487,86 @@
     renderReport(data);
   };
 
+  // ==== 쿼리 파라미터 파싱 ====
+  function getQueryParams() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      session_id: params.get('session_id'),
+      axes_keys: params.get('axes_keys'),
+      user_prompt: params.get('user_prompt')
+    };
+  }
+
+  // ==== 스트리밍 시작 ====
+  async function startStreaming() {
+    const params = getQueryParams();
+
+    if (!params.session_id) {
+      showError({
+        code: 'NO_SESSION',
+        message: 'session_id가 제공되지 않았습니다'
+      });
+      return;
+    }
+
+    const agentChatBox = $("agentChatBox");
+    const agentChatContent = $("agentChatContent");
+
+    // 에이전트 대화 박스 표시 및 초기화
+    if (agentChatBox) agentChatBox.style.display = "block";
+    if (agentChatContent) agentChatContent.innerHTML = "";
+
+    const payload = new URLSearchParams();
+    if (params.session_id) payload.set('session_id', params.session_id);
+    if (params.axes_keys) payload.set('axes_keys', params.axes_keys);
+    if (params.user_prompt) payload.set('user_prompt', params.user_prompt);
+
+    try {
+      // EventSource로 스트리밍 연결
+      const eventSource = new EventSource('/reports/generate/stream?' + payload.toString());
+
+      eventSource.addEventListener('log', (e) => {
+        const data = JSON.parse(e.data);
+        console.log('[LOG]', data.agent, ':', data.message);
+        addAgentMessage(data.agent, data.message);
+      });
+
+      eventSource.addEventListener('error', (e) => {
+        const data = JSON.parse(e.data);
+        console.error('[ERROR]', data.message);
+        showError({code:'AGENT_ERROR', message:data.message});
+        eventSource.close();
+      });
+
+      eventSource.addEventListener('report', (e) => {
+        const data = JSON.parse(e.data);
+        console.log('[REPORT] 리포트 생성 완료');
+
+        currentReportData = data.data;
+        renderReport(data.data);
+      });
+
+      eventSource.addEventListener('done', (e) => {
+        console.log('[DONE] 스트리밍 완료');
+        eventSource.close();
+      });
+
+      eventSource.onerror = (e) => {
+        console.error('[EventSource Error]', e);
+        if (eventSource.readyState === EventSource.CLOSED) {
+          console.log('EventSource 연결 종료');
+        } else {
+          showError({code:'STREAM_ERROR', message:'스트리밍 연결 오류'});
+        }
+        eventSource.close();
+      };
+
+    } catch(e){
+      console.error('[Exception]', e);
+      showError({code:'NETWORK', message:'네트워크 오류', details:{why:String(e)}});
+    }
+  }
+
   // ==== 초기화 ====
   (function init() {
     console.log('리포트 뷰 초기화');
@@ -422,8 +575,16 @@
     const dlBtn = $("dlBtn");
     if (dlBtn) dlBtn.onclick = downloadHTML;
 
-    // 로딩 메시지 표시
-    console.log('부모 창으로부터 데이터 전달 대기 중...');
+    // 쿼리 파라미터 확인 후 자동 스트리밍 시작
+    const params = getQueryParams();
+    console.log('쿼리 파라미터:', params);
+
+    if (params.session_id) {
+      console.log('자동 스트리밍 시작...');
+      startStreaming();
+    } else {
+      console.log('session_id가 없어 부모 창으로부터 데이터 전달 대기 중...');
+    }
   })();
   </script>
 </body>
