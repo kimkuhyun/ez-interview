@@ -12,6 +12,7 @@
       margin: 0;
       padding: 20px;
       background: #f9fafb;
+      font-family: 'Malgun Gothic', sans-serif;
     }
     .container {
       max-width: 1400px;
@@ -47,19 +48,43 @@
       font-size: 16px;
       color: #6b7280;
     }
+
+    /* 슬롯머신 스타일 문구 */
+    .slot-wrapper {
+      margin-top: 0.5rem;
+      height: 1.6em;
+      overflow: hidden;
+      position: relative;
+      text-align: center;
+      font-size: 1rem;
+      color: #4b5563;
+      font-weight: 600;
+    }
+    .slot-text {
+      display: inline-block;
+      min-width: 100%;
+      animation: slotFadeUp 0.35s ease-out;
+    }
+    @keyframes slotFadeUp {
+      from {
+        opacity: 0;
+        transform: translateY(100%);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
   </style>
 </head>
 <body>
-  <!-- 로딩 화면 + 에이전트 대화 -->
+  <!-- 로딩 화면 (슬롯머신 문구) -->
   <div id="loadingOverlay" class="loading-overlay">
-    <div style="max-width: 800px; width: 90%; background: white; border-radius: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 2rem;">
+    <div style="max-width: 800px; width: 90%; background: white; border-radius: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 2rem; text-align: center;">
       <div class="loading-spinner" style="margin: 0 auto 1rem;"></div>
-      <div class="loading-text" style="text-align: center; margin-bottom: 1.5rem;">리포트를 생성하는 중...</div>
-
-      <!-- 에이전트 대화 로그 (로딩 중에만 표시) -->
-      <div id="agentChatBox" class="card agent-chat-card" style="display:none; margin: 0;">
-        <div class="card-header"></div>
-        <div id="agentChatContent" class="agent-chat-content"></div>
+      <div class="loading-text" style="margin-bottom: 0.5rem;"> </div>
+      <div class="slot-wrapper">
+        <span id="slotText" class="slot-text">시작 준비 중...</span>
       </div>
     </div>
   </div>
@@ -109,11 +134,11 @@
       <!-- 차트 + 인터뷰 요약 -->
       <div class="grid-2">
         <div class="card card-indigo card-highlight">
-          <div class="card-header">📊 핵심 평가</div>
+          <div class="card-header">핵심 평가</div>
           <div class="chart-container"><canvas id="radarChart"></canvas></div>
         </div>
         <div class="card card-emerald card-highlight">
-          <div class="card-header">💬 인터뷰 요약</div>
+          <div class="card-header">인터뷰 요약</div>
           <div id="flowList" class="summary-scroll"></div>
         </div>
       </div>
@@ -121,18 +146,18 @@
       <!-- 긍/부정 의견 -->
       <div class="grid-2">
         <div class="card" style="border-color:#22d3ee">
-          <div class="card-header">✅ 긍정 의견</div>
+          <div class="card-header">긍정 의견</div>
           <div id="posBox" class="prose"></div>
         </div>
         <div class="card" style="border-color:#fb7185">
-          <div class="card-header">⚠️ 부정 의견</div>
+          <div class="card-header">부정 의견</div>
           <div id="negBox" class="prose"></div>
         </div>
       </div>
 
       <!-- 핵심역량 -->
       <div class="card">
-        <div class="card-header" style="color:#7c3aed;">📋 핵심역량</div>
+        <div class="card-header" style="color:#7c3aed;">핵심역량</div>
         <div style="overflow-x:auto;">
           <table id="jdTable">
             <thead><tr><th>역량</th><th>요구사항 / 기대치</th><th>점수</th><th>근거</th></tr></thead>
@@ -143,7 +168,7 @@
 
       <!-- 증거 맵 -->
       <div class="card">
-        <div class="card-header" style="color:#d97706;">🔍 증거 맵</div>
+        <div class="card-header" style="color:#d97706;">증거 맵</div>
         <div style="overflow-x:auto;">
           <table id="evTable">
             <thead><tr><th>EID</th><th>출처</th><th>내용</th><th>연결 JD</th></tr></thead>
@@ -154,7 +179,7 @@
 
       <!-- 대화 통계 -->
       <div class="card">
-        <div class="card-header" style="color:#0891b2;">📈 대화 통계</div>
+        <div class="card-header" style="color:#0891b2;">대화 통계</div>
         <div id="stats" class="stats"></div>
       </div>
     </div>
@@ -163,6 +188,61 @@
   <script>
   const $ = (id)=>document.getElementById(id);
   const esc = (s)=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+
+  // 슬롯머신 로딩 문구 리스트
+  const SLOT_MESSAGES = [
+    "이력서를 확인하는 중...",
+    "JD를 스캔하는 중...",
+    "인터뷰 로그를 정규화하는 중...",
+    "대화 타임라인을 분석하는 중...",
+    "핵심 역량을 비교하는 중...",
+    "JD 기준을 매칭하는 중...",
+    "근거 데이터를 정리하는 중...",
+    "점수 분포를 계산하는 중...",
+    "요약 후보를 생성하는 중...",
+    "표현을 간결하게 다듬는 중...",
+    "중복된 문장을 제거하는 중...",
+    "의미적 유사도를 평가하는 중...",
+    "JD 가중치를 반영하는 중...",
+    "사용자의 답변을 재해석하는 중...",
+    "면접 흐름을 복원하는 중...",
+    "의도 파악 정확도를 높이는 중...",
+    "모순 가능성을 탐지하는 중...",
+    "대화 깊이를 측정하는 중...",
+    "대화 신뢰도를 산출하는 중...",
+    "관찰 포인트를 추출하는 중...",
+    "핵심 문장을 정렬하는 중...",
+    "증거-요구사항 연결을 확인하는 중...",
+    "노이즈 문장을 제거하는 중...",
+    "답변 분포를 구조화하는 중...",
+    "리포트 구조를 정비하는 중...",
+    "문맥을 통합하는 중...",
+    "전반적 인상을 계산하는 중...",
+    "태그를 분류하는 중...",
+    "가중 점수 반영 중...",
+    "최적의 설명을 선택하는 중...",
+    "부정·긍정 포인트를 분리하는 중...",
+    "근거들을 재배열하는 중...",
+    "요약 품질을 검증하는 중...",
+    "최종 형태로 포맷팅 중...",
+    "PDF 가능 여부를 확인하는 중...",
+    "차트 데이터를 구성하는 중...",
+    "결과물 정합성을 확인하는 중...",
+    "에러를 점검하는 중...",
+    "최종 결과를 조립하는 중..."
+  ];
+
+  function startSlotAnimation() {
+    const el = document.getElementById("slotText");
+    if (!el) return;
+    setInterval(() => {
+      const msg = SLOT_MESSAGES[Math.floor(Math.random() * SLOT_MESSAGES.length)];
+      el.textContent = msg;
+      el.classList.remove("slot-text");
+      void el.offsetWidth; // reflow
+      el.classList.add("slot-text");
+    }, 900);
+  }
 
   // 전역 리포트 데이터
   let currentReportData = null;
@@ -206,21 +286,18 @@
 
   // ==== 렌더러 ====
   let radar;
-  // ==== 에이전트 대화 메시지 추가 ====
+
+  // (에이전트 로그는 더 이상 화면에 표시하지 않음. DOM이 없으면 조용히 종료.)
   function addAgentMessage(agent, message) {
     const chatContent = $("agentChatContent");
     if (!chatContent) return;
-
     const msgDiv = document.createElement('div');
     msgDiv.className = 'agent-message';
     msgDiv.innerHTML = `
       <div class="agent-message-agent-name">${esc(agent)}</div>
       <div class="agent-message-content">${esc(message)}</div>
     `;
-
     chatContent.appendChild(msgDiv);
-
-    // 자동 스크롤
     chatContent.scrollTop = chatContent.scrollHeight;
   }
 
@@ -277,11 +354,9 @@
       }
     }
 
-    // axes에서 key와 label 추출 (State에서 한글 label 직접 제공)
+    // axes에서 key와 label 추출
     const axes = r.axes || [];
     const keys = axes.map(a => a.key);
-
-    // 차트 레이블: axes의 label 사용, 없으면 key 사용
     const labels = axes.map(a => a.label || a.key);
 
     // scores 객체 생성
@@ -292,7 +367,6 @@
       scoresObj = r.scores || {};
     }
 
-    // key 순서대로 values 배열 생성
     const values = keys.map(k => {
       const score = scoresObj[k];
       return (typeof score === "number") ? score : 0;
@@ -305,7 +379,7 @@
     console.log('scoresObj:', scoresObj);
     console.log('values:', values);
 
-    // 차트 렌더링 (안전하게)
+    // 차트 렌더링
     const radarCanvas = $("radarChart");
     if (radarCanvas) {
       if (radar) radar.destroy();
@@ -512,7 +586,7 @@
     const agentChatBox = $("agentChatBox");
     const agentChatContent = $("agentChatContent");
 
-    // 에이전트 대화 박스 표시 및 초기화
+    // (에이전트 박스는 이제 DOM에 없으므로, null이면 아무 것도 안 함)
     if (agentChatBox) agentChatBox.style.display = "block";
     if (agentChatContent) agentChatContent.innerHTML = "";
 
@@ -570,6 +644,9 @@
   // ==== 초기화 ====
   (function init() {
     console.log('리포트 뷰 초기화');
+
+    // 슬롯머신 로딩 애니메이션 시작
+    startSlotAnimation();
 
     // 다운로드 버튼 이벤트 바인딩
     const dlBtn = $("dlBtn");
