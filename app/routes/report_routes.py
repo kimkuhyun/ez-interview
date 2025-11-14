@@ -9,7 +9,7 @@ from flask import Blueprint, render_template, request, jsonify, Response, stream
 from pydantic import ValidationError
 
 # report_agent에서 create_report, create_report_async 가져오기
-from app.agents.report_agent import create_report, create_report_async
+from app.agents.report_agent_v2 import create_report, create_report_async
 
 # 나머지는 기존 report_agent에서 가져오기
 """
@@ -32,11 +32,11 @@ reports_bp = Blueprint("reports", __name__)
 
 _AXES_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,32}$")
 _DEFAULT_AXES_KEYS = [
-    "problem_solving",
-    "communication",
-    "self_driven_initiative",
-    "collaboration",
-    "professional_expertise",
+    "문제해결",
+    "커뮤니케이션",
+    "학습능력",
+    "협업능력",
+    "전문성",
 ]
 
 
@@ -110,7 +110,7 @@ def generate_from_txt():
         
         # ===== 2. 폴백: 하드코딩된 세션 ID 사용 (DB에 실제 데이터가 있는 UUID) =====
         # DB 확인 결과: 09f4963c-f8a3-4f08-9b77-6ac6406de47b에 documents(13개) + interview_logs(12개) 존재
-        FALLBACK_SESSION_ID = "09f4963c-f8a3-4f08-9b77-6ac6406de47b"
+        FALLBACK_SESSION_ID = "7ac7d019-0c29-4af8-abd3-8bf18f4544bf"
 
         # session_id가 있으면 DB에서 데이터 존재 여부 확인
         use_fallback = False
@@ -240,7 +240,7 @@ def generate_stream():
     user_prompt = request.args.get('user_prompt', '')
 
     # 폴백 session_id 처리
-    FALLBACK_SESSION_ID = "09f4963c-f8a3-4f08-9b77-6ac6406de47b"
+    FALLBACK_SESSION_ID = "7ac7d019-0c29-4af8-abd3-8bf18f4544bf"
     if not session_id:
         print(f"⚠️  session_id가 없음 → 폴백 사용: {FALLBACK_SESSION_ID}")
         session_id = FALLBACK_SESSION_ID
@@ -282,32 +282,34 @@ def generate_stream():
     print(f"   - axes_keys: {axes_keys}")
     print(f"   - user_prompt: {user_prompt[:100] if user_prompt else '(없음)'}")
 
-    def generate():
-        """SSE 이벤트 생성기"""
+    async def async_generate():
+        """비동기 SSE 이벤트 생성기"""
         try:
-            # 비동기 함수를 동기 컨텍스트에서 실행
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
+            print(f"\n[SSE 스트림 시작]")
+            event_count = 0
 
-            async def run_async():
-                async for event in create_report_async(session_id, axes_keys, user_prompt):
-                    # SSE 포맷으로 전송
-                    if event["type"] == "log":
-                        yield f"event: log\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
-                    elif event["type"] == "error":
-                        yield f"event: error\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
-                    elif event["type"] == "report":
-                        yield f"event: report\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
-                        yield f"event: done\ndata: {json.dumps({'status': 'completed'})}\n\n"
+            # create_report_async를 실시간으로 스트리밍
+            async for event in create_report_async(session_id, axes_keys, user_prompt):
+                event_count += 1
+                print(f"[SSE] 이벤트 #{event_count} 전송 - type: {event.get('type')}, agent: {event.get('agent', 'N/A')}")
 
-            # 비동기 제너레이터를 동기로 실행
-            async_gen = run_async()
-            while True:
-                try:
-                    result = loop.run_until_complete(async_gen.__anext__())
-                    yield result
-                except StopAsyncIteration:
-                    break
+                if event["type"] == "log":
+                    yield f"event: log\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                elif event["type"] == "debate":
+                    # 디베이트 로그 스트리밍 (인터뷰 분석 A/B 토론)
+                    print(f"[SSE] 디베이트 로그 전송 - {len(event.get('turns', []))}개 턴")
+                    yield f"event: debate\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                elif event["type"] == "error":
+                    print(f"[SSE] 에러 이벤트 전송 - {event.get('message', '')[:100]}")
+                    yield f"event: error\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                elif event["type"] == "report":
+                    print(f"[SSE] 최종 리포트 전송 중...")
+                    yield f"event: report\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+            # 완료 이벤트 전송
+            print(f"[SSE] 완료 이벤트 전송 (총 {event_count}개 이벤트)")
+            yield f"event: done\ndata: {json.dumps({'status': 'completed'})}\n\n"
+            print(f"[SSE 스트림 정상 종료]")
 
         except Exception as e:
             print(f"\n❌ [스트리밍 오류] {e}")
@@ -318,8 +320,42 @@ def generate_stream():
                 "message": f"스트리밍 오류: {str(e)}"
             }
             yield f"event: error\ndata: {json.dumps(error_event, ensure_ascii=False)}\n\n"
+
+    def generate():
+        """동기 래퍼 - 비동기 제너레이터를 동기로 변환"""
+        loop = None
+        try:
+            # 새 이벤트 루프 생성
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            # 비동기 제너레이터 생성
+            async_gen = async_generate()
+
+            # 이벤트를 하나씩 실시간으로 yield
+            while True:
+                try:
+                    # 다음 이벤트를 기다림
+                    event_data = loop.run_until_complete(async_gen.__anext__())
+                    # 즉시 클라이언트로 전송
+                    yield event_data
+                except StopAsyncIteration:
+                    # 제너레이터 종료
+                    break
+
+        except Exception as e:
+            print(f"\n❌ [동기 래퍼 오류] {e}")
+            import traceback
+            traceback.print_exc()
+            error_event = {
+                "type": "error",
+                "message": f"래퍼 오류: {str(e)}"
+            }
+            yield f"event: error\ndata: {json.dumps(error_event, ensure_ascii=False)}\n\n"
         finally:
-            loop.close()
+            if loop and not loop.is_closed():
+                loop.close()
+                print(f"[SSE] 이벤트 루프 종료")
 
     return Response(
         stream_with_context(generate()),

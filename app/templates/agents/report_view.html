@@ -75,16 +75,69 @@
         transform: translateY(0);
       }
     }
+
+    /* 디베이트 로그 스타일 */
+    .debate-container {
+      margin-top: 1rem;
+      max-height: 300px;
+      overflow-y: auto;
+      padding: 1rem;
+      background: #f9fafb;
+      border-radius: 0.5rem;
+      border: 1px solid #e5e7eb;
+    }
+    .debate-turn {
+      margin-bottom: 0.75rem;
+      padding: 0.75rem;
+      border-radius: 0.5rem;
+      animation: fadeIn 0.3s ease-out;
+    }
+    .debate-turn.agent-a {
+      background: #eff6ff;
+      border-left: 3px solid #3b82f6;
+    }
+    .debate-turn.agent-b {
+      background: #fef3c7;
+      border-left: 3px solid #f59e0b;
+    }
+    .debate-speaker {
+      font-weight: 600;
+      font-size: 0.875rem;
+      margin-bottom: 0.25rem;
+    }
+    .debate-turn.agent-a .debate-speaker {
+      color: #3b82f6;
+    }
+    .debate-turn.agent-b .debate-speaker {
+      color: #f59e0b;
+    }
+    .debate-content {
+      font-size: 0.875rem;
+      line-height: 1.5;
+      color: #374151;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
   </style>
 </head>
 <body>
-  <!-- 로딩 화면 (슬롯머신 문구) -->
+  <!-- 로딩 화면 (슬롯머신 문구 + 디베이트 로그) -->
   <div id="loadingOverlay" class="loading-overlay">
-    <div style="max-width: 800px; width: 90%; background: white; border-radius: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 2rem; text-align: center;">
+    <div style="max-width: 900px; width: 90%; background: white; border-radius: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 2rem; text-align: center;">
       <div class="loading-spinner" style="margin: 0 auto 1rem;"></div>
-      <div class="loading-text" style="margin-bottom: 0.5rem;"> </div>
+      <div class="loading-text" style="margin-bottom: 0.5rem;">AI 에이전트가 분석 중입니다...</div>
       <div class="slot-wrapper">
         <span id="slotText" class="slot-text">시작 준비 중...</span>
+      </div>
+
+      <!-- 디베이트 로그 (AgentA vs AgentB 토론) -->
+      <div id="debateLog" class="debate-container" style="display: none; text-align: left;">
+        <h3 style="font-size: 0.95rem; font-weight: 700; color: #374151; margin-bottom: 0.75rem;">
+          🎭 AI 에이전트 디베이트 (Hiring Manager vs HR)
+        </h3>
+        <div id="debateContent"></div>
       </div>
     </div>
   </div>
@@ -232,16 +285,31 @@
     "최종 결과를 조립하는 중..."
   ];
 
+  let slotAnimationInterval = null;
+
   function startSlotAnimation() {
     const el = document.getElementById("slotText");
     if (!el) return;
-    setInterval(() => {
+
+    // 기존 인터벌이 있으면 정리
+    if (slotAnimationInterval) {
+      clearInterval(slotAnimationInterval);
+    }
+
+    slotAnimationInterval = setInterval(() => {
       const msg = SLOT_MESSAGES[Math.floor(Math.random() * SLOT_MESSAGES.length)];
       el.textContent = msg;
       el.classList.remove("slot-text");
       void el.offsetWidth; // reflow
       el.classList.add("slot-text");
-    }, 900);
+    }, 2000);
+  }
+
+  function stopSlotAnimation() {
+    if (slotAnimationInterval) {
+      clearInterval(slotAnimationInterval);
+      slotAnimationInterval = null;
+    }
   }
 
   // 전역 리포트 데이터
@@ -287,18 +355,57 @@
   // ==== 렌더러 ====
   let radar;
 
-  // (에이전트 로그는 더 이상 화면에 표시하지 않음. DOM이 없으면 조용히 종료.)
+  // 에이전트 로그를 슬롯 텍스트로 표시
   function addAgentMessage(agent, message) {
-    const chatContent = $("agentChatContent");
-    if (!chatContent) return;
-    const msgDiv = document.createElement('div');
-    msgDiv.className = 'agent-message';
-    msgDiv.innerHTML = `
-      <div class="agent-message-agent-name">${esc(agent)}</div>
-      <div class="agent-message-content">${esc(message)}</div>
-    `;
-    chatContent.appendChild(msgDiv);
-    chatContent.scrollTop = chatContent.scrollHeight;
+    const slotText = $("slotText");
+    if (!slotText) return;
+
+    // 에이전트 이름 + 메시지를 슬롯에 표시
+    const displayText = `[${agent}] ${message}`;
+    slotText.textContent = displayText;
+
+    // 애니메이션 리셋
+    slotText.classList.remove("slot-text");
+    void slotText.offsetWidth; // reflow
+    slotText.classList.add("slot-text");
+
+    console.log('[에이전트 로그]', agent, ':', message);
+  }
+
+  // 디베이트 로그 표시
+  function showDebateLog(turns) {
+    const debateLog = $("debateLog");
+    const debateContent = $("debateContent");
+
+    if (!debateLog || !debateContent || !turns || turns.length === 0) return;
+
+    console.log('[디베이트 로그] 표시 시작, 총', turns.length, '턴');
+
+    // 디베이트 컨테이너 표시
+    debateLog.style.display = "block";
+
+    // 각 턴을 순차적으로 표시 (애니메이션 효과)
+    debateContent.innerHTML = "";
+    turns.forEach((turn, index) => {
+      setTimeout(() => {
+        const turnDiv = document.createElement('div');
+        const speakerClass = turn.speaker.toLowerCase().includes('agenta') ? 'agent-a' : 'agent-b';
+        const speakerName = speakerClass === 'agent-a'
+          ? '👔 Hiring Manager'
+          : '📋 HR Evaluator';
+
+        turnDiv.className = `debate-turn ${speakerClass}`;
+        turnDiv.innerHTML = `
+          <div class="debate-speaker">${esc(speakerName)}</div>
+          <div class="debate-content">${esc(turn.content)}</div>
+        `;
+
+        debateContent.appendChild(turnDiv);
+
+        // 스크롤을 맨 아래로
+        debateContent.scrollTop = debateContent.scrollHeight;
+      }, index * 400); // 각 턴마다 0.4초 간격
+    });
   }
 
   function renderReport(r){
@@ -317,7 +424,15 @@
     const headlineSummary = $("headlineSummary");
     if (headlineSummary) headlineSummary.textContent = r?.headline?.summary || "";
 
-    const keywords = (r?.headline?.tag || '').split(',').map(k => k.trim()).filter(Boolean);
+    // tag는 배열 또는 쉼표 구분 문자열일 수 있음
+    let keywords = [];
+    if (r?.headline?.tag) {
+      if (Array.isArray(r.headline.tag)) {
+        keywords = r.headline.tag.filter(Boolean);
+      } else {
+        keywords = String(r.headline.tag).split(',').map(k => k.trim()).filter(Boolean);
+      }
+    }
     const headlineKeywords = $("headlineKeywords");
     if (headlineKeywords) {
       headlineKeywords.innerHTML = keywords.map(kw =>
@@ -602,7 +717,29 @@
       eventSource.addEventListener('log', (e) => {
         const data = JSON.parse(e.data);
         console.log('[LOG]', data.agent, ':', data.message);
+
+        // 슬롯 애니메이션 중지하고 실제 에이전트 메시지 표시
+        stopSlotAnimation();
         addAgentMessage(data.agent, data.message);
+      });
+
+      eventSource.addEventListener('debate', (e) => {
+        const data = JSON.parse(e.data);
+        console.log('[DEBATE] 디베이트 로그 수신, 턴 수:', data.turns?.length);
+
+        // 슬롯 애니메이션 중지하고 디베이트 로그 표시
+        stopSlotAnimation();
+
+        // 슬롯 텍스트 업데이트
+        const slotText = $("slotText");
+        if (slotText) {
+          slotText.textContent = "🎭 AI 에이전트 디베이트 진행 중...";
+        }
+
+        // 디베이트 로그 표시
+        if (data.turns && data.turns.length > 0) {
+          showDebateLog(data.turns);
+        }
       });
 
       eventSource.addEventListener('error', (e) => {
@@ -613,11 +750,15 @@
       });
 
       eventSource.addEventListener('report', (e) => {
-        const data = JSON.parse(e.data);
-        console.log('[REPORT] 리포트 생성 완료');
+        const eventData = JSON.parse(e.data);
+        console.log('[REPORT] 리포트 생성 완료, 데이터:', eventData);
 
-        currentReportData = data.data;
-        renderReport(data.data);
+        // eventData = {type: "report", data: {...실제 리포트...}}
+        const reportData = eventData.data || eventData;
+        console.log('[REPORT] 리포트 데이터 추출:', reportData);
+
+        currentReportData = reportData;
+        renderReport(reportData);
       });
 
       eventSource.addEventListener('done', (e) => {
