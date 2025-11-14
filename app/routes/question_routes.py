@@ -45,7 +45,7 @@ def embed_docs():
         print(f"      - resume_len: {embed_result['resume_len']} 자")
         print(f"      - jd_len: {embed_result['jd_len']} 자")
 
-        # 3️⃣ State 객체 생성 및 반환
+        # 3️⃣ State 객체 생성
         print("\n3️⃣ State 객체 생성")
         state = InterviewState(
             session_id=embed_result["session_id"],
@@ -53,6 +53,8 @@ def embed_docs():
             jd_id=embed_result["jd_id"],
             resume_len=embed_result["resume_len"],
             jd_len=embed_result["jd_len"],
+            resume_text=embed_result.get("resume_text"),
+            jd_text=embed_result.get("jd_text")
         )
         print(f"   ✅ State 객체 생성 완료")
         
@@ -64,6 +66,8 @@ def embed_docs():
         GLOBAL_STATE.jd_id = state.jd_id
         GLOBAL_STATE.resume_len = state.resume_len
         GLOBAL_STATE.jd_len = state.jd_len
+        GLOBAL_STATE.resume_text = state.resume_text
+        GLOBAL_STATE.jd_text = state.jd_text
         print(f"   ✅ GLOBAL_STATE 업데이트 완료")
 
         end_time = time.perf_counter()
