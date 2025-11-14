@@ -92,7 +92,7 @@
       border-radius: 0.5rem;
       animation: fadeIn 0.3s ease-out;
     }
-    .debate-turn.agent-a {
+   /* .debate-turn.agent-a {
       background: #eff6ff;
       border-left: 3px solid #3b82f6;
     }
@@ -110,7 +110,7 @@
     }
     .debate-turn.agent-b .debate-speaker {
       color: #f59e0b;
-    }
+    }*/
     .debate-content {
       font-size: 0.875rem;
       line-height: 1.5;
@@ -127,7 +127,7 @@
   <div id="loadingOverlay" class="loading-overlay">
     <div style="max-width: 900px; width: 90%; background: white; border-radius: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 2rem; text-align: center;">
       <div class="loading-spinner" style="margin: 0 auto 1rem;"></div>
-      <div class="loading-text" style="margin-bottom: 0.5rem;">AI 에이전트가 분석 중입니다...</div>
+      <div class="loading-text" style="margin-bottom: 0.5rem;"></div>
       <div class="slot-wrapper">
         <span id="slotText" class="slot-text">시작 준비 중...</span>
       </div>
@@ -135,7 +135,7 @@
       <!-- 디베이트 로그 (AgentA vs AgentB 토론) -->
       <div id="debateLog" class="debate-container" style="display: none; text-align: left;">
         <h3 style="font-size: 0.95rem; font-weight: 700; color: #374151; margin-bottom: 0.75rem;">
-          🎭 AI 에이전트 디베이트 (Hiring Manager vs HR)
+          
         </h3>
         <div id="debateContent"></div>
       </div>
@@ -317,28 +317,83 @@
 
   // ==== HTML 다운로드 ====
   function downloadHTML() {
-    const htmlDoc = document.documentElement.cloneNode(true);
+    try {
+      // 1) 현재 화면에 렌더된 차트를 이미지로 캡처
+      const radarCanvas = document.getElementById('radarChart');
+      let chartDataURL = null;
 
-    // 로딩 오버레이 및 버튼 제거
-    const loadingOverlay = htmlDoc.querySelector('#loadingOverlay');
-    if (loadingOverlay) loadingOverlay.remove();
-    const headerActions = htmlDoc.querySelector('.header-actions');
-    if (headerActions) headerActions.remove();
-    const errBox = htmlDoc.querySelector('#errBox');
-    if (errBox) errBox.remove();
+      if (radarCanvas && radarCanvas.toDataURL) {
+        try {
+          chartDataURL = radarCanvas.toDataURL('image/png');
+        } catch (e) {
+          console.warn('차트 캡처 실패:', e);
+        }
+      }
 
-    const htmlStr = '<!DOCTYPE html>\n' + htmlDoc.outerHTML;
-    const blob = new Blob([htmlStr], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `interview_report_${new Date().toISOString().slice(0,10)}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+      // 2) DOM 전체 클론 (<html> 엘리먼트 기준)
+      const htmlEl = document.documentElement.cloneNode(true);
+
+      // 3) 캔버스를 이미지로 교체
+      if (chartDataURL) {
+        const clonedCanvas = htmlEl.querySelector('#radarChart');
+        if (clonedCanvas && clonedCanvas.parentNode) {
+          const img = document.createElement('img');
+          img.id = 'radarChartImage';
+          img.src = chartDataURL;
+          img.alt = '면접 핵심 평가 차트';
+
+          // 캔버스와 동일한 박스에 맞추도록
+          img.style.display = 'block';
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = 'contain';
+
+          clonedCanvas.parentNode.replaceChild(img, clonedCanvas);
+        }
+      }
+
+      // 3-1) 혹시 report.css에 canvas 전용 규칙만 있을 경우를 대비해
+      //       다운로드용 HTML에 img용 규칙을 하나 더 주입
+      const head = htmlEl.querySelector('head');
+      if (head) {
+        const extraStyle = document.createElement('style');
+        extraStyle.textContent = `
+          .chart-container img#radarChartImage {
+            width: 100% !important;
+            height: 100% !important;
+            object-fit: contain;
+            display: block;
+          }
+        `;
+        head.appendChild(extraStyle);
+      }
+
+      // 4) 로딩 오버레이 / 버튼 제거
+      const loadingOverlay = htmlEl.querySelector('#loadingOverlay');
+      if (loadingOverlay) loadingOverlay.remove();
+
+      const headerActions = htmlEl.querySelector('.header-actions');
+      if (headerActions) headerActions.remove();
+
+      const errBox = htmlEl.querySelector('#errBox');
+      if (errBox) errBox.remove();
+
+      // 5) HTML 파일로 다운로드
+      const htmlStr = '<!DOCTYPE html>\n' + htmlEl.outerHTML;
+      const blob = new Blob([htmlStr], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `interview_report_${new Date().toISOString().slice(0,10)}.html`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('downloadHTML 오류', e);
+      alert('HTML 다운로드 중 오류가 발생했습니다. (콘솔 확인)');
+    }
   }
-
   function showError(err){
     const box=$("errBox");
     box.innerHTML =
@@ -377,35 +432,74 @@
     const debateLog = $("debateLog");
     const debateContent = $("debateContent");
 
-    if (!debateLog || !debateContent || !turns || turns.length === 0) return;
+    if (!debateLog || !debateContent || !turns || !turns.length) return;
 
-    console.log('[디베이트 로그] 표시 시작, 총', turns.length, '턴');
+    console.log("[디베이트 로그] 표시 시작, 총", turns.length, "턴");
 
-    // 디베이트 컨테이너 표시
+    // 컨테이너 보이기
     debateLog.style.display = "block";
-
-    // 각 턴을 순차적으로 표시 (애니메이션 효과)
     debateContent.innerHTML = "";
-    turns.forEach((turn, index) => {
-      setTimeout(() => {
-        const turnDiv = document.createElement('div');
-        const speakerClass = turn.speaker.toLowerCase().includes('agenta') ? 'agent-a' : 'agent-b';
-        const speakerName = speakerClass === 'agent-a'
-          ? '👔 Hiring Manager'
-          : '📋 HR Evaluator';
 
-        turnDiv.className = `debate-turn ${speakerClass}`;
-        turnDiv.innerHTML = `
-          <div class="debate-speaker">${esc(speakerName)}</div>
-          <div class="debate-content">${esc(turn.content)}</div>
-        `;
+    // 타이핑/턴 간 속도 설정
+    const TYPING_INTERVAL = 35;   // 글자당 ms (숫자 키우면 더 느리게)
+    const TURN_DELAY = 700;       // 한 턴이 끝난 뒤 다음 턴까지 대기 시간(ms)
+    function typeText(element, text, onDone) {
+      let idx = 0;
 
-        debateContent.appendChild(turnDiv);
+      function step() {
+        if (idx < text.length) {
+          element.textContent += text.charAt(idx++);
+          // 매 글자마다 스크롤 맨 아래 유지
+          debateContent.scrollTop = debateContent.scrollHeight;
+          setTimeout(step, TYPING_INTERVAL);
+        } else {
+          if (typeof onDone === "function") {
+            setTimeout(onDone, TURN_DELAY);
+          }
+        }
+      }
 
-        // 스크롤을 맨 아래로
-        debateContent.scrollTop = debateContent.scrollHeight;
-      }, index * 400); // 각 턴마다 0.4초 간격
-    });
+      step();
+    }
+
+    // 턴 순차 렌더링
+    function renderTurn(index) {
+      if (index >= turns.length) return;
+
+      const turn = turns[index];
+
+      const speakerClass = (turn.speaker || "")
+        .toLowerCase()
+        .includes("agenta")
+        ? "agent-a"
+        : "agent-b";
+
+      const speakerName =
+        speakerClass === "agent-a" ? "열정적인 채용 담당자" : "냉철한 인사 담당자";
+
+      const turnDiv = document.createElement("div");
+      turnDiv.className = `debate-turn ${speakerClass}`;
+
+      const speakerDiv = document.createElement("div");
+      speakerDiv.className = "debate-speaker";
+      speakerDiv.textContent = speakerName;
+
+      const contentDiv = document.createElement("div");
+      contentDiv.className = "debate-content";
+      contentDiv.textContent = ""; // 타이핑으로 채울 것
+
+      turnDiv.appendChild(speakerDiv);
+      turnDiv.appendChild(contentDiv);
+      debateContent.appendChild(turnDiv);
+
+      // 현재 턴 타이핑 후 다음 턴으로
+      typeText(contentDiv, String(turn.content || ""), () => {
+        renderTurn(index + 1);
+      });
+    }
+
+    // 첫 턴부터 시작
+    renderTurn(0);
   }
 
   function renderReport(r){
@@ -733,7 +827,7 @@
         // 슬롯 텍스트 업데이트
         const slotText = $("slotText");
         if (slotText) {
-          slotText.textContent = "🎭 AI 에이전트 디베이트 진행 중...";
+          slotText.textContent = "인터뷰 로그 분석 진행 중...";
         }
 
         // 디베이트 로그 표시

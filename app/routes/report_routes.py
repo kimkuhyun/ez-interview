@@ -109,8 +109,8 @@ def generate_from_txt():
         print(f"   - metrics: {metrics}")
         
         # ===== 2. 폴백: 하드코딩된 세션 ID 사용 (DB에 실제 데이터가 있는 UUID) =====
-        # DB 확인 결과: 09f4963c-f8a3-4f08-9b77-6ac6406de47b에 documents(13개) + interview_logs(12개) 존재
-        FALLBACK_SESSION_ID = "7ac7d019-0c29-4af8-abd3-8bf18f4544bf"
+        # DB 확인 결과: 7ac7d019-0c29-4af8-abd3-8bf18f4544bf
+        FALLBACK_SESSION_ID = "09f4963c-f8a3-4f08-9b77-6ac6406de47b"
 
         # session_id가 있으면 DB에서 데이터 존재 여부 확인
         use_fallback = False
@@ -240,7 +240,7 @@ def generate_stream():
     user_prompt = request.args.get('user_prompt', '')
 
     # 폴백 session_id 처리
-    FALLBACK_SESSION_ID = "7ac7d019-0c29-4af8-abd3-8bf18f4544bf"
+    FALLBACK_SESSION_ID = "09f4963c-f8a3-4f08-9b77-6ac6406de47b"
     if not session_id:
         print(f"⚠️  session_id가 없음 → 폴백 사용: {FALLBACK_SESSION_ID}")
         session_id = FALLBACK_SESSION_ID

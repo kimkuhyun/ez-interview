@@ -116,7 +116,7 @@ def _llm_solar_reasoning() -> ChatOpenAI:
         timeout=60,  # 240 → 60초로 대폭 감소 (1분) - 성능 개선
         api_key=SOLAR_API_KEY,
         base_url=SOLAR_BASE_URL,
-        reasoning_effort="low",  # "medium" → "low"로 변경 (속도 2-3배 개선)
+        reasoning_effort="high",  # "medium" → "low"로 변경 (속도 2-3배 개선)
     )
 
 
@@ -583,8 +583,8 @@ def _interview_analysis_prompt() -> ChatPromptTemplate:
                 "- final_comment: 종합 코멘트 (2-3문장)\n"
                 "- debate_log: AgentA/AgentB 디베이트 로그 배열\n"
                 "  예: [\n"
-                "    {{\"speaker\": \"AgentA\", \"content\": \"로그 전반에서 깊이 있는 기술 설명이 많다.\"}},\n"
-                "    {{\"speaker\": \"AgentB\", \"content\": \"일부 답변은 구체적인 수치와 사례가 부족하다.\"}}\n"
+                "    {{\"speaker\": \"AgentA\", \"content\": \"로그 전반에서 깊이 있는 기술 설명이 부족한 것 같습니다.\"}},\n"
+                "    {{\"speaker\": \"AgentB\", \"content\": \"일부 답변은 구체적인 수치와 사례가 부족합니다.\"}}\n"
                 "  ]",
             ),
             (
@@ -671,7 +671,7 @@ async def evaluate_competency(
     resume: str, log: str, axes_keys: List[str], user_prompt: Optional[str]
 ) -> CompetencyEvalOut:
     """핵심역량 평가 (Solar Chat, async)"""
-    chain = _competency_prompt() | _llm_solar_chat().with_structured_output(
+    chain = _competency_prompt() | _llm_solar_reasoning().with_structured_output(
         CompetencyEvalOut, method="json_mode"
     )
 
@@ -769,7 +769,7 @@ async def map_competency_evidence(
         ]
     )
 
-    chain = _competency_evidence_prompt() | _llm_solar_chat().with_structured_output(
+    chain = _competency_evidence_prompt() | _llm_solar_reasoning().with_structured_output(
         CompetencyEvidenceOut, method="json_mode"
     )
 
@@ -836,8 +836,8 @@ def _interview_summary_prompt() -> ChatPromptTemplate:
 async def summarize_interview(
     log: str, qa_pairs: List[Dict]
 ) -> InterviewSummaryOut:
-    """인터뷰 요약 (Solar Chat, async)"""
-    chain = _interview_summary_prompt() | _llm_solar_chat().with_structured_output(
+    """인터뷰 요약 (Solar Reasoning, async)"""
+    chain = _interview_summary_prompt() | _llm_solar_reasoning().with_structured_output(
         InterviewSummaryOut, method="json_mode"
     )
 
@@ -885,7 +885,7 @@ def _validation_prompt() -> ChatPromptTemplate:
                 "5. 증거 매핑 적절성\n\n"
                 "**품질 기준:**\n"
                 "- quality_score: 0.0~1.0\n"
-                "- is_sufficient: 0.7 이상이면 True\n"
+                "- is_sufficient: 0.70 이상이면 True\n"
                 "- grade: A+ (0.95+), A (0.85+), B+ (0.75+), B (0.65+), C (0.55+), D/F (0.55 미만)\n"
                 "- issues, suggestions, missing_aspects, query_hint 포함",
             ),
@@ -1059,7 +1059,7 @@ def retriever_node(state: ReportState) -> ReportState:
 
         state["agent_logs"].append(
             {
-                "agent": "리트리버",
+                "agent": "검색 에이전트",
                 "message": (
                     "✅ 검색 완료 - "
                     f"이력서 {len(resume_ctx)}자, JD {len(jd_ctx)}자, 로그 {len(log_ctx)}자"
@@ -1070,7 +1070,7 @@ def retriever_node(state: ReportState) -> ReportState:
         state["error"] = f"리트리버 오류: {str(e)}"
         state["agent_logs"].append(
             {
-                "agent": "리트리버",
+                "agent": "검색 에이전트",
                 "message": f"❌ 오류: {str(e)}",
             }
         )
@@ -1094,7 +1094,7 @@ def analysis_parallel_node(state: ReportState) -> ReportState:
     """
     state["agent_logs"].append(
         {
-            "agent": "병렬분석",
+            "agent": "리포트 분석 에이전트",
             "message": "인터뷰 분석/역량 평가/증거 매핑/요약 병렬 실행 중...",
         }
     )
@@ -1147,7 +1147,7 @@ def analysis_parallel_node(state: ReportState) -> ReportState:
             # --- 로그 ---
             state["agent_logs"].append(
                 {
-                    "agent": "인터뷰분석",
+                    "agent": "인터뷰 분석 에이전트",
                     "message": (
                         "✅ 인터뷰 분석 완료 - "
                         f"모순도 {analysis.contradiction_score}%, "
@@ -1162,14 +1162,14 @@ def analysis_parallel_node(state: ReportState) -> ReportState:
             )
             state["agent_logs"].append(
                 {
-                    "agent": "핵심역량평가",
+                    "agent": "핵심역량평가 에이전트",
                     "message": f"✅ 평가 완료 - {scores_str}",
                 }
             )
 
             state["agent_logs"].append(
                 {
-                    "agent": "증거매핑",
+                    "agent": "증거매핑 에이전트",
                     "message": (
                         "✅ 매핑 완료 - "
                         f"역량 {len(evidence_map.competencyCoverage)}개, "
@@ -1220,7 +1220,7 @@ def analysis_parallel_node(state: ReportState) -> ReportState:
             state["error"] = f"병렬 분석 타임아웃: {PARALLEL_ANALYSIS_TIMEOUT_SEC}초 안에 분석을 완료하지 못했습니다."
             state["agent_logs"].append(
                 {
-                    "agent": "병렬분석",
+                    "agent": "병렬 분석 에이전트",
                     "message": f"❌ 오류: {state['error']}",
                 }
             )
@@ -1244,7 +1244,7 @@ def analysis_parallel_node(state: ReportState) -> ReportState:
             state["error"] = f"병렬 분석 노드 오류: {error_msg}"
             state["agent_logs"].append(
                 {
-                    "agent": "병렬분석",
+                    "agent": "병렬 분석 에이전트",
                     "message": f"❌ 오류: {state['error']}",
                 }
             )
@@ -1283,7 +1283,7 @@ def validation_node(state: ReportState) -> ReportState:
     """노드 4: 검증 및 리포트 조립"""
     state["agent_logs"].append(
         {
-            "agent": "검증",
+            "agent": "검증 에이전트",
             "message": "리포트 조립 및 품질 검증 중 (Solar Reasoning)...",
         }
     )
@@ -1334,7 +1334,7 @@ def validation_node(state: ReportState) -> ReportState:
         final_comment_raw = interview_analysis.get("final_comment") or ""
         final_comment = _to_text(final_comment_raw)
         if final_comment.strip():
-            talk_items.append({"주제": "🤖 AI 분석", "발언요약": final_comment})
+            talk_items.append({"주제": "AI 분석", "발언요약": final_comment})
 
         if not talk_items:
             talk_items.append(
@@ -1386,7 +1386,7 @@ def validation_node(state: ReportState) -> ReportState:
 
         state["agent_logs"].append(
             {
-                "agent": "검증",
+                "agent": "검증 에이전트",
                 "message": (
                     f"품질: {validation.quality_score:.2f} | 등급: {validation.grade} | "
                     f"{'✅ 통과' if validation.is_sufficient else '⚠️ 재시도 필요'}"
@@ -1399,7 +1399,7 @@ def validation_node(state: ReportState) -> ReportState:
             hint = validation.query_hint or {}
             state["query_hint"] = hint.get("resume_query") if isinstance(hint, dict) else str(hint)
             state["agent_logs"].append(
-                {"agent": "검증", "message": f"재시도 {state['retry_count'] + 1}/2"}
+                {"agent": "검증 에이전트", "message": f"재시도 {state['retry_count'] + 1}/2"}
             )
         else:
             # 최종 스키마 검증 (완화된 ReportOut 기준)
@@ -1409,7 +1409,7 @@ def validation_node(state: ReportState) -> ReportState:
                 state["error"] = f"스키마 검증 실패: {str(ve)}"
                 state["agent_logs"].append(
                     {
-                        "agent": "검증",
+                        "agent": "검증 에이전트",
                         "message": "❌ 스키마 검증 실패",
                     }
                 )
@@ -1434,7 +1434,7 @@ def validation_node(state: ReportState) -> ReportState:
             state["report"] = report
             state["agent_logs"].append(
                 {
-                    "agent": "검증",
+                    "agent": "검증 에이전트",
                     "message": "✅ 리포트 생성 완료!",
                 }
             )
@@ -1449,7 +1449,7 @@ def validation_node(state: ReportState) -> ReportState:
             state["error"] = f"검증 오류: {error_msg}"
         state["agent_logs"].append(
             {
-                "agent": "검증",
+                "agent": "검증 에이전트",
                 "message": f"❌ 오류: {state['error']}",
             }
         )
