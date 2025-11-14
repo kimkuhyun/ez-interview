@@ -11,6 +11,8 @@ class InterviewState(BaseModel):
     jd_id: Optional[str] = None       # JD 문서 UUID (doc_id)
     resume_len: Optional[int] = None
     jd_len: Optional[int] = None
+    resume_text: Optional[str] = None  # 이력서 전체 텍스트 (질문 생성용)
+    jd_text: Optional[str] = None      # JD 전체 텍스트 (질문 생성용)
     questions: Optional[List[str]] = None
     metrics: Optional[List[str]] = None
     interview_logs: Optional[List[Any]] = None  # 면접 대화 로그
