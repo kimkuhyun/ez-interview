@@ -76,7 +76,7 @@ class InterviewState(TypedDict):
 # LLM 초기화
 # ========================================
 llm = ChatOpenAI(
-    model="gpt-4",
+    model="gpt-4o-mini",
     temperature=0.7,
     openai_api_key=Config.OPENAI_API_KEY,
 )
@@ -304,7 +304,7 @@ def validate_questions_node(state: InterviewState) -> InterviewState:
     asked = state.get("asked_questions", [])
     
     # 최근 20개만 비교 (성능 최적화)
-    recent_asked = asked[-20:] if len(asked) > 20 else asked
+    recent_asked = asked[-10:] if len(asked) > 10 else asked
     
     is_duplicate = False
     
@@ -312,7 +312,7 @@ def validate_questions_node(state: InterviewState) -> InterviewState:
         for prev in recent_asked:
             similarity = string_similarity(q, prev)
             
-            if similarity > 0.85:  # 85% 이상 유사하면 중복
+            if similarity > 0.90:  # 90% 이상 유사하면 중복
                 print(f"⚠️  중복 감지: '{q[:30]}...' vs '{prev[:30]}...' (유사도: {similarity:.2f})")
                 is_duplicate = True
                 break
@@ -323,14 +323,14 @@ def validate_questions_node(state: InterviewState) -> InterviewState:
     if is_duplicate:
         state["validation_passed"] = False
         state["error_count"] = state.get("error_count", 0) + 1
-        print(f"❌ 검증 실패 (재시도 {state['error_count']}/2)")
+        print(f"❌ 검증 실패 (재시도)")
     else:
         state["validation_passed"] = True
         state["error_count"] = 0
         print("✅ 질문 검증 통과")
     
-    # 재시도 2회 이상이면 강제 통과
-    if state.get("error_count", 0) >= 2:
+    # 재시도 1회 이상이면 강제 통과
+    if state.get("error_count", 0) >= 1:
         print("⚠️  재시도 한계 도달, 질문 강제 사용")
         state["validation_passed"] = True
     
