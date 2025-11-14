@@ -6,6 +6,7 @@ console.log("✅ Stream page loaded");
 const state = {
   // Socket.IO 관련
   socket: null, // Socket.IO 연결 객체
+  socketReady: false, // Socket.IO 연결 완료 여부 (즉시 확인용)
   handlersRegistered: false, // 소켓 핸들러 중복 등록 방지 플래그
 
   // STT 관련
@@ -18,6 +19,10 @@ const state = {
   // UI 상태
   currentTab: "", // 현재 활성화된 질문 탭 ID (q1, q2, ...)
   aiAutoGenerate: true, // AI 자동 질문 생성 ON/OFF
+  
+  // 재생성 제어
+  regenCount: 0, // 현재 답변에 대한 재생성 횟수
+  maxRegenCount: 2, // 최대 재생성 횟수
 };
 
 // ========================================
@@ -49,7 +54,33 @@ function ensureSocketConnected(callback) {
   }
 
   if (!state.socket) {
+    console.log("🔌 [STT 최적화] 웹소켓 연결 시작...");
     state.socket = io("http://127.0.0.1:5000");
+    
+    // 🔒 연결 완료 전까지 STT 버튼 비활성화
+    const sttBtn = document.getElementById("stt-btn");
+    if (sttBtn) {
+      sttBtn.disabled = true;
+      sttBtn.textContent = "연결 중...";
+    }
+    
+    // 연결 완료 시 플래그 설정
+    state.socket.on("connect", () => {
+      state.socketReady = true;
+      console.log("✅ [STT 최적화] 웹소켓 연결 완료 (즉시 사용 가능)");
+      
+      // ✅ STT 버튼 활성화
+      if (sttBtn) {
+        sttBtn.disabled = false;
+        sttBtn.textContent = "STT 시작";
+      }
+    });
+    
+    // 연결 끊김 시 플래그 해제
+    state.socket.on("disconnect", () => {
+      state.socketReady = false;
+      console.warn("⚠️ [STT 최적화] 웹소켓 연결 끊김");
+    });
   }
 
   if (callback) callback();
@@ -91,6 +122,7 @@ function registerSocketHandlers() {
       handleSTTPartial(newText);
     }
 
+    // ✅ 스크롤 자동 이동
     box.scrollTop = box.scrollHeight;
   });
 }
@@ -185,6 +217,9 @@ function createSTTMessageDiv(box) {
   state.currentSTTDiv = document.createElement("div");
   state.currentSTTDiv.className = "message stt";
   box.appendChild(state.currentSTTDiv);
+  
+  // ✅ 스크롤 자동 이동
+  box.scrollTop = box.scrollHeight;
 
   // STT 세그먼트 시작 시 질문 ID 고정
   if (!state.sttCurrentQuestion) {
@@ -218,6 +253,11 @@ function handleSTTFinal(newText, targetQ) {
 function handleSTTPartial(newText) {
   state.partialText = newText;
   state.currentSTTDiv.textContent = state.finalText + " " + state.partialText;
+  
+  // ✅ 스크롤 자동 이동
+  const targetQ = state.sttCurrentQuestion || state.currentTab;
+  const box = document.getElementById(targetQ);
+  if (box) box.scrollTop = box.scrollHeight;
 }
 
 // ██████████████████████████████████████████████████████████████████████
@@ -323,6 +363,32 @@ function toggleSTT() {
   state.sttActive = !state.sttActive;
 
   if (state.sttActive) {
+    // ✅ 웹소켓 연결 확인 (연결 안 됐으면 대기)
+    if (!state.socketReady) {
+      console.warn("⏳ [STT 최적화] 웹소켓 연결 대기 중... (재시도)");
+      btn.textContent = "연결 중...";
+      btn.disabled = true;
+      
+      // 연결 완료 대기 후 재시도 (최대 3초)
+      const waitStart = Date.now();
+      const checkInterval = setInterval(() => {
+        if (state.socketReady) {
+          clearInterval(checkInterval);
+          btn.disabled = false;
+          btn.textContent = "STT 시작";
+          console.log("✅ [STT 최적화] 웹소켓 연결 완료, STT 재시작");
+          toggleSTT(); // 다시 시도
+        } else if (Date.now() - waitStart > 3000) {
+          clearInterval(checkInterval);
+          btn.disabled = false;
+          btn.textContent = "STT 시작";
+          state.sttActive = false;
+          alert("웹소켓 연결 실패. 페이지를 새로고침하세요.");
+        }
+      }, 100);
+      return;
+    }
+
     // 🎬 최초 STT 시작 시 세션 시작
     fetch("/session_start", {
       method: "POST",
@@ -332,9 +398,10 @@ function toggleSTT() {
       .then((data) => {
         console.log("🎬 세션 시작:", data);
       })
-      .catch((err) => console.error("❌ 세션 시작 오류:", err));
+      .catch((err) => console.error("❌세션 시작 오류:", err));
 
-    if (state.socket) state.socket.emit("stt_start");
+    console.log("⚡ [STT 최적화] 웹소켓 즉시 전송 (연결 완료 상태)");
+    state.socket.emit("stt_start");
     indicator.classList.add("active");
     btn.textContent = "STT 중지";
     state.finalText = "";
@@ -411,6 +478,11 @@ function endInterview() {
 function sendToAI(fullText, isRegen = false) {
   const box = document.getElementById(state.currentTab);
   const loader = showThinking(box);
+  
+  // 새 답변이면 재생성 카운트 초기화
+  if (!isRegen) {
+    state.regenCount = 0;
+  }
 
   fetch("/ai_followup", {
     method: "POST",
@@ -440,18 +512,38 @@ function sendToAI(fullText, isRegen = false) {
           wrapper.appendChild(btn);
         });
 
+        // 재생성 카운트 증가
+        if (isRegen) {
+          state.regenCount++;
+        }
+
+        // 재생성 버튼
         const regen = document.createElement("button");
         regen.className = "followup-regen";
         regen.innerHTML = "↻";
-        regen.title = "질문 재생성";
-        regen.onclick = () => {
-          wrapper.remove();
-          sendToAI(fullText, true);
-        };
+        
+        // 제한 도달 여부 확인
+        if (state.regenCount >= state.maxRegenCount) {
+          regen.title = `재생성 제한 (최대 ${state.maxRegenCount}회)`;
+          regen.disabled = true;
+          regen.style.opacity = "0.5";
+          regen.style.cursor = "not-allowed";
+        } else {
+          regen.title = `질문 재생성 (${state.regenCount}/${state.maxRegenCount})`;
+          regen.onclick = () => {
+            wrapper.remove();
+            sendToAI(fullText, true);
+          };
+        }
+        
         wrapper.appendChild(regen);
 
         box.appendChild(wrapper);
-        box.scrollTop = box.scrollHeight;
+        
+        // ✅ 후속 질문 생성 후 스크롤 강제 이동 (약간의 딜레이 후)
+        setTimeout(() => {
+          box.scrollTop = box.scrollHeight;
+        }, 100);
       }
     })
     .catch((err) => {
@@ -547,10 +639,214 @@ function toggleAI() {
 }
 
 // ========================================
+// 키보드 단축키 설정
+// ========================================
+function setupKeyboardShortcuts() {
+  document.addEventListener("keydown", (e) => {
+    // Ctrl + Space: STT 시작/중지
+    if (e.ctrlKey && e.code === "Space") {
+      e.preventDefault();
+      const sttBtn = document.getElementById("stt-btn");
+      if (sttBtn && !sttBtn.disabled) {
+        toggleSTT();
+        console.log("⌨️ [단축키] Ctrl + Space → STT 토글");
+      }
+    }
+    
+    // Ctrl + Shift + S: STT 시작/중지 (대체 단축키)
+    if (e.ctrlKey && e.shiftKey && e.code === "KeyS") {
+      e.preventDefault();
+      const sttBtn = document.getElementById("stt-btn");
+      if (sttBtn && !sttBtn.disabled) {
+        toggleSTT();
+        console.log("⌨️ [단축키] Ctrl + Shift + S → STT 토글");
+      }
+    }
+  });
+  
+  console.log("⌨️ [단축키] 등록 완료: Ctrl + Space, Ctrl + Shift + S");
+}
+
+// ========================================
+// 브라우저 콘솔 테스트용 함수
+// ========================================
+window.testAnswer = function(text) {
+  /**
+   * 브라우저 콘솔에서 면접자 답변 시뮬레이션
+   * 
+   * 사용법:
+   *   testAnswer("저는 Spring Boot로 API를 개발했습니다")
+   */
+  console.log("🧪 [테스트 모드] 면접자 답변:", text);
+  
+  const box = document.getElementById(state.currentTab);
+  if (!box) {
+    console.error("❌ 현재 활성 탭을 찾을 수 없습니다.");
+    return;
+  }
+  
+  // AI 버튼 및 후속 질문 리스트 제거
+  const aiBtn = box.querySelector(".inline-ai-btn");
+  if (aiBtn) aiBtn.remove();
+  
+  const followup = box.querySelector(".followup-container");
+  if (followup) followup.remove();
+  
+  // 면접자 답변 UI에 추가
+  const msg = document.createElement("div");
+  msg.className = "message user";
+  msg.textContent = text;
+  box.appendChild(msg);
+  box.scrollTop = box.scrollHeight;
+  
+  // 서버에 저장
+  fetch("/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text: text,
+      question_id: state.currentTab,
+      role: "면접자",
+    }),
+  })
+    .then((res) => res.json())
+    .then((data) => {
+      console.log("✅ 답변 저장 완료:", data);
+      
+      // AI 자동 질문 생성
+      if (state.aiAutoGenerate) {
+        sendToAI(text.trim());
+      } else {
+        showAIButton(box, text);
+      }
+    })
+    .catch((err) => console.error("❌ 답변 저장 오류:", err));
+};
+
+window.testQuestion = function(text) {
+  /**
+   * 브라우저 콘솔에서 면접관 질문 시뮬레이션
+   * 
+   * 사용법:
+   *   testQuestion("구체적으로 어떤 기술을 사용하셨나요?")
+   */
+  console.log("🧪 [테스트 모드] 면접관 질문:", text);
+  
+  const box = document.getElementById(state.currentTab);
+  if (!box) {
+    console.error("❌ 현재 활성 탭을 찾을 수 없습니다.");
+    return;
+  }
+  
+  // AI 버튼 및 후속 질문 리스트 제거
+  const aiBtn = box.querySelector(".inline-ai-btn");
+  if (aiBtn) aiBtn.remove();
+  
+  const followup = box.querySelector(".followup-container");
+  if (followup) followup.remove();
+  
+  // 면접관 질문 UI에 추가
+  appendMessage(state.currentTab, "assistant", text);
+  
+  // 서버에 저장
+  fetch("/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      text,
+      question_id: state.currentTab,
+      role: "면접관",
+    }),
+  })
+    .then((res) => res.json())
+    .then((data) => console.log("✅ 질문 저장 완료:", data))
+    .catch((err) => console.error("❌ 질문 저장 오류:", err));
+};
+
+window.testAI = function() {
+  /**
+   * 브라우저 콘솔에서 AI 후속 질문 강제 생성
+   * 
+   * 사용법:
+   *   testAI()
+   */
+  console.log("🧪 [테스트 모드] AI 후속 질문 생성 강제 실행");
+  
+  const box = document.getElementById(state.currentTab);
+  if (!box) {
+    console.error("❌ 현재 활성 탭을 찾을 수 없습니다.");
+    return;
+  }
+  
+  // 마지막 면접자 답변 찾기
+  const messages = box.querySelectorAll(".message.user");
+  if (messages.length === 0) {
+    console.error("❌ 면접자 답변이 없습니다. testAnswer()로 답변을 먼저 입력하세요.");
+    return;
+  }
+  
+  const lastAnswer = messages[messages.length - 1].textContent;
+  console.log("📝 마지막 답변:", lastAnswer);
+  
+  sendToAI(lastAnswer.trim());
+};
+
+window.testHelp = function() {
+  /**
+   * 테스트 함수 사용법 출력
+   */
+  console.log(`
+🧪 브라우저 콘솔 테스트 함수 사용법
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1️⃣ testAnswer("답변 내용")
+   - 면접자 답변 시뮬레이션
+   - AI 자동 질문 생성 (AI 자동 ON일 때)
+   
+   예시:
+   testAnswer("저는 Spring Boot로 3년간 API를 개발했습니다")
+
+2️⃣ testQuestion("질문 내용")
+   - 면접관 질문 시뮬레이션
+   - UI에 질문 추가
+   
+   예시:
+   testQuestion("구체적으로 어떤 API를 개발하셨나요?")
+
+3️⃣ testAI()
+   - 마지막 답변 기준으로 AI 후속 질문 강제 생성
+   
+   예시:
+   testAI()
+
+4️⃣ testHelp()
+   - 이 도움말 출력
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 빠른 테스트 시나리오:
+
+testAnswer("Spring Boot로 API 개발했습니다")
+// → AI가 자동으로 후속 질문 3개 생성
+
+testQuestion("몇 년 경험하셨나요?")
+testAnswer("3년입니다")
+// → 또 AI가 후속 질문 생성
+
+testAI()
+// → 마지막 답변으로 다시 질문 생성
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  `);
+};
+
+// 초기 도움말 출력
+console.log("🧪 테스트 모드 활성화됨! testHelp() 입력으로 사용법 확인");
+
+// ========================================
 // 초기화
 // ========================================
 loadtab();
 ensureSocketConnected(registerSocketHandlers);
+setupKeyboardShortcuts();
 
 // 전역 함수로 노출 (HTML에서 호출)
 window.toggleSTT = toggleSTT;
