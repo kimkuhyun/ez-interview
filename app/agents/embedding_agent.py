@@ -63,6 +63,8 @@ class EmbeddingAgent:
             "jd_id": jd_id,
             "resume_len": len(resume_text),
             "jd_len": len(jd_text),
+            "resume_text": resume_text,
+            "jd_text": jd_text
         }
         print(f"   ✅ [EmbeddingAgent] 완료")
         print(f"      - session_id: {session_id}")
