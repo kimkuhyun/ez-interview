@@ -10,31 +10,10 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langgraph.graph import StateGraph, END
-from difflib import SequenceMatcher
 import operator
 
 from app.config.config import Config
 from app.utils.interview_store import get_all_documents_by_session
-
-
-# ---------- 문자열 유사도 계산 ----------
-def string_similarity(s1: str, s2: str) -> float:
-    """
-    두 문자열의 유사도 계산 (Levenshtein 거리 기반)
-    
-    Args:
-        s1: 첫 번째 문자열
-        s2: 두 번째 문자열
-    
-    Returns:
-        float: 유사도 (0.0 ~ 1.0)
-    """
-    # 공백 제거 및 소문자 변환
-    s1 = s1.strip().lower()
-    s2 = s2.strip().lower()
-    
-    # SequenceMatcher로 유사도 계산
-    return SequenceMatcher(None, s1, s2).ratio()
 
 
 # ========================================
@@ -64,19 +43,16 @@ class InterviewState(TypedDict):
     # 면접자 답변
     interviewee_answer: str
     
-    # 검증
-    validation_passed: bool
-    error_count: int
-    
-    # 재생성 여부
+    # 재생성 제어
     is_regen: bool
+    regen_count: int  # 현재 답변에 대한 재생성 횟수
 
 
 # ========================================
 # LLM 초기화
 # ========================================
 llm = ChatOpenAI(
-    model="gpt-4",
+    model="gpt-4o-mini",
     temperature=0.7,
     openai_api_key=Config.OPENAI_API_KEY,
 )
@@ -201,60 +177,70 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
     
     # 프롬프트 생성
     prompt_template = ChatPromptTemplate.from_messages([
-        ("system", """너는 날카로운 기술 면접관이야. 
-면접자의 답변을 듣고 자연스럽게 대화를 이어가되, **모순이나 불일치가 보이면 즉시 지적**해.
-이력서는 거짓이 많으니까 철저하게 검증해야 해."""),
+        ("system", """당신은 경험 많은 기술 면접관입니다.
+면접자의 답변을 경청하며 자연스러운 대화를 이어가세요.
+답변의 깊이를 파악하고, 더 구체적인 정보가 필요한 부분을 탐색하세요."""),
         ("user", """
+[면접 자료]
 {rag_context}
 
-[이전 대화 흐름]
+[이전 대화]
 {history_text}
 
-[면접자가 방금 한 답변]
+[면접자의 답변]
 {interviewee_answer}
 
----
+**면접 단계**: {phase} ({phase_guideline})
 
-🎯 **질문 생성 전 필수 체크리스트**:
+**후속 질문 생성 가이드라인**:
 
-1️⃣ **모순 검증 (최우선)**:
-   - 이력서 vs 답변: "이력서엔 'A'라고 했는데, 방금 'B'라고 하셨는데 어느 게 맞나요?"
-   - 이전 답변 vs 지금 답변: "아까 'X'라고 하셨는데, 지금은 'Y'라고 하시네요. 설명 부탁드립니다."
-   - 시간/규모 불일치: "이력서엔 6개월이라고 했는데, 방금 1년이라고 하셨는데요?"
+1. **⚠️ 모순 및 불일치 확인 (최우선)**
+   - 이력서/JD와 답변 내용을 면밀히 비교
+   - 이전 답변과 현재 답변 간 일관성 확인
+   - 숫자, 기간, 기술 스택, 역할 등 구체적 정보의 차이 주의
+   - 발견 시 부드럽게 확인: "조금 전에 말씀하신 내용과 다른 것 같은데, 확인 부탁드립니다"
+
+2. **토픽 전환 판단 (중요)**
    
-   ⚠️ **모순이 발견되면 반드시 질문 중 하나는 모순 지적이어야 함**
+   **다음 상황에서는 새로운 주제로 전환하세요:**
+   ✅ 같은 기술/프로젝트에 대해 2-3번 질문하여 충분히 파악함
+   ✅ 지원자가 해당 주제에 대해 구체적이고 명확한 답변을 여러 차례 제공함
+   ✅ 더 물어봐도 새로운 정보를 얻기 어려울 것 같음
+   ✅ 이력서에 아직 탐색하지 않은 중요한 경험/기술이 남아있음
+   
+   **다음 상황에서는 같은 주제 깊이 파기:**
+   ⚠️ 답변이 막연하거나 표면적임 (구체성 필요)
 
-2️⃣ **애매한 답변 구체화**:
-   - "여러 기술을 사용했다" → "구체적으로 어떤 기술인가요?"
-   - "팀원들과 협업했다" → "몇 명이었고, 당신의 역할은 뭐였나요?"
-   - "성능이 개선됐다" → "정확히 몇 %나 개선됐나요?"
+        
+   ⚠️ 이력서 내용과 불일치 의심 (검증 필요)
+   ⚠️ 핵심 기술/경험인데 아직 2개 미만 질문
 
-3️⃣ **이력서 내용 깊이 검증**:
-   - 이력서에 적힌 프로젝트/기술을 **구체적으로** 물어봐
-   - "이력서에 'Spring Boot로 API 개발'이라고 했는데, 어떤 API를 만들었나요?"
-   - "이력서에 'DB 최적화'라고 했는데, 정확히 무엇을 최적화했나요?"
+3. **답변 내용 깊이 파악**
+   - 막연한 답변은 구체적인 예시나 상황을 요청
+   - 기술적 용어는 실제 사용 경험과 이해도 확인
+   - "여러", "많이", "다양한" 등의 표현은 구체적 수치나 사례 요청
 
-4️⃣ **정량적 정보 요구**:
-   - 기간, 인원, 규모, 성과를 숫자로 물어봐
-   - "몇 명이서 했나요?", "얼마나 걸렸나요?", "몇 %나 개선됐나요?"
+4. **정보 수집 우선순위**
+   - 기술적 세부사항: 어떤 기술을 왜 선택했는지, 어떻게 구현했는지
+   - 문제 해결 과정: 어떤 어려움이 있었고 어떻게 해결했는지
+   - 협업 및 역할: 팀 구성, 본인의 기여도, 의사결정 과정
+   - 정량적 성과: 구체적인 수치, 개선율, 영향 범위
 
----
-
-**질문 생성 순서**:
-① 모순 발견됐나? → 그걸 먼저 질문
-② 애매한 답변 있나? → 구체화 요구
-③ 이력서 내용 검증 필요? → 깊이 파고들기
-
-**면접 단계 참고** (현재: {phase} - {phase_guideline}):
-- 참고만 해. 모순 검증이 최우선.
-
-[이미 물어본 질문들 - 절대 중복 금지]
+**이미 물어본 질문들** (중복 방지):
 {asked_questions_text}
 
-⚠️ 출력 형식:
-- 각 질문은 한 줄로, 번호 없이 순수 질문만 3개
-- 모순이 있으면 반드시 포함
-- 예: 이력서에는 Python을 3년 사용했다고 했는데, 방금 1년이라고 하셨는데 어느 게 맞나요?
+---
+
+**출력 형식**:
+- 번호 없이 질문 3개만 출력
+- 각 질문은 한 줄로 작성
+- 자연스럽고 존중하는 톤 유지
+- 실제 면접 상황처럼 구어체 사용 가능
+
+예시:
+방금 말씀하신 API 최적화 부분이 흥미로운데, 구체적으로 어떤 방식으로 개선하셨나요?
+팀 프로젝트라고 하셨는데, 전체 팀 구성은 어떻게 되었고 본인은 어떤 역할을 맡으셨나요?
+6개월간 진행하셨다고 했는데, 그 기간 동안 가장 어려웠던 기술적 챌린지는 무엇이었나요?
 """)
     ])
     
@@ -294,49 +280,6 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
     return state
 
 
-def validate_questions_node(state: InterviewState) -> InterviewState:
-    """
-    5️⃣ 질문 검증 (중복 방지)
-    
-    문자열 유사도로 중복 검증 (빠른 방식)
-    """
-    questions = state.get("current_questions", [])
-    asked = state.get("asked_questions", [])
-    
-    # 최근 20개만 비교 (성능 최적화)
-    recent_asked = asked[-20:] if len(asked) > 20 else asked
-    
-    is_duplicate = False
-    
-    for q in questions:
-        for prev in recent_asked:
-            similarity = string_similarity(q, prev)
-            
-            if similarity > 0.85:  # 85% 이상 유사하면 중복
-                print(f"⚠️  중복 감지: '{q[:30]}...' vs '{prev[:30]}...' (유사도: {similarity:.2f})")
-                is_duplicate = True
-                break
-        
-        if is_duplicate:
-            break
-    
-    if is_duplicate:
-        state["validation_passed"] = False
-        state["error_count"] = state.get("error_count", 0) + 1
-        print(f"❌ 검증 실패 (재시도 {state['error_count']}/2)")
-    else:
-        state["validation_passed"] = True
-        state["error_count"] = 0
-        print("✅ 질문 검증 통과")
-    
-    # 재시도 2회 이상이면 강제 통과
-    if state.get("error_count", 0) >= 2:
-        print("⚠️  재시도 한계 도달, 질문 강제 사용")
-        state["validation_passed"] = True
-    
-    return state
-
-
 def finalize_questions_node(state: InterviewState) -> InterviewState:
     """
     6️⃣ 질문 확정
@@ -356,27 +299,6 @@ def finalize_questions_node(state: InterviewState) -> InterviewState:
 
 
 # ========================================
-# 조건부 라우팅
-# ========================================
-
-def should_retry(state: InterviewState) -> str:
-    """
-    검증 결과에 따라 다음 노드 결정
-    
-    Returns:
-        "retry": 재생성
-        "done": 완료
-    """
-    validation_passed = state.get("validation_passed", False)
-    error_count = state.get("error_count", 0)
-    
-    if not validation_passed and error_count < 2:
-        return "retry"
-    else:
-        return "done"
-
-
-# ========================================
 # LangGraph 구성
 # ========================================
 
@@ -391,26 +313,14 @@ def create_interview_graph():
     workflow.add_node("preprocess_input", preprocess_input_node)
     workflow.add_node("determine_phase", determine_phase_node)
     workflow.add_node("generate_questions", generate_questions_node)
-    workflow.add_node("validate_questions", validate_questions_node)
     workflow.add_node("finalize_questions", finalize_questions_node)
     
-    # 엣지 연결
+    # 엣지 연결 (단순 선형 플로우)
     workflow.set_entry_point("load_rag")
     workflow.add_edge("load_rag", "preprocess_input")
     workflow.add_edge("preprocess_input", "determine_phase")
     workflow.add_edge("determine_phase", "generate_questions")
-    workflow.add_edge("generate_questions", "validate_questions")
-    
-    # 조건부 엣지: 검증 결과에 따라 분기
-    workflow.add_conditional_edges(
-        "validate_questions",
-        should_retry,
-        {
-            "retry": "generate_questions",  # 재생성
-            "done": "finalize_questions"     # 완료
-        }
-    )
-    
+    workflow.add_edge("generate_questions", "finalize_questions")
     workflow.add_edge("finalize_questions", END)
     
     # 컴파일
@@ -451,6 +361,15 @@ class StreamAgent:
             list[str]: 후속 질문 리스트 (최대 3개)
         """
         try:
+            # 재생성 횟수 체크
+            current_regen_count = getattr(self, '_regen_count', 0)
+            
+            # 재생성이면 카운트 증가, 아니면 초기화
+            if regen:
+                current_regen_count += 1
+            else:
+                current_regen_count = 0
+            
             # 초기 상태 구성
             initial_state = {
                 "session_id": session_id or "",
@@ -462,10 +381,21 @@ class StreamAgent:
                 "current_questions": [],
                 "asked_questions": getattr(self, '_asked_questions_cache', []),
                 "interviewee_answer": text or "",
-                "validation_passed": False,
-                "error_count": 0,
-                "is_regen": regen
+                "is_regen": regen,
+                "regen_count": current_regen_count
             }
+            
+            # 재생성 횟수 제한 (최대 2회)
+            MAX_REGEN_COUNT = 2
+            
+            if regen and current_regen_count > MAX_REGEN_COUNT:
+                print(f"⚠️ 재생성 제한 도달 ({current_regen_count}/{MAX_REGEN_COUNT}). 이전 질문 반환.")
+                # 이전에 생성된 질문 그대로 반환
+                return getattr(self, '_last_questions', [
+                    "재생성 횟수가 초과되었습니다.",
+                    "새로운 답변을 입력하거나 질문을 선택해주세요.",
+                    "면접을 계속 진행해주세요."
+                ])
             
             # LangGraph 실행
             result = self.graph.invoke(initial_state)
@@ -473,8 +403,12 @@ class StreamAgent:
             # asked_questions 캐싱 (재사용)
             self._asked_questions_cache = result.get("asked_questions", [])
             
-            # 생성된 질문 반환
+            # 생성된 질문 저장 (재생성 제한 시 반환용)
             questions = result.get("current_questions", [])
+            self._last_questions = questions
+            
+            # 재생성 카운트 저장
+            self._regen_count = current_regen_count
             
             return questions
             
