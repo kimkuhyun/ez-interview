@@ -1,10 +1,11 @@
 from app.db.db_connection import get_connection
 from app.utils.embedding import get_embedding
 
-def search_similar_chunks(query: str, session_id: str = None, top_k=3):
+def search_similar_chunks(query: str, session_id: str = None, doc_type: str = None, top_k=3):
     print(f"\n📚 [RAG Retriever] 검색 시작")
     print(f"   - Query: {query[:100]}...")
     print(f"   - Session ID: {session_id}")
+    print(f"   - Doc Type: {doc_type}")
     print(f"   - Top-K: {top_k}")
     
     try:
@@ -22,8 +23,16 @@ def search_similar_chunks(query: str, session_id: str = None, top_k=3):
         # 3️⃣ 유사도 검색 쿼리 실행
         print(f"   3️⃣ 유사도 검색 쿼리 실행 중...")
         
-        # session_id가 있으면 해당 세션의 문서만 검색
-        if session_id:
+        # session_id와 doc_type 필터링
+        if session_id and doc_type:
+            cur.execute("""
+                SELECT content, doc_type, 1 - (embedding <=> %s::vector) AS score
+                FROM rag.documents
+                WHERE session_id = %s AND doc_type = %s
+                ORDER BY embedding <-> %s::vector
+                LIMIT %s;
+            """, (emb, session_id, doc_type, emb, top_k))
+        elif session_id:
             cur.execute("""
                 SELECT content, doc_type, 1 - (embedding <=> %s::vector) AS score
                 FROM rag.documents
@@ -43,10 +52,16 @@ def search_similar_chunks(query: str, session_id: str = None, top_k=3):
         results = cur.fetchall()
         print(f"      ✅ 검색 완료: {len(results)}개 결과 반환")
         
-        # 4️⃣ 결과 출력
+        # 4️⃣ 결과를 dict로 변환
+        result_dicts = []
         if results:
-            for idx, (content, doc_type, score) in enumerate(results):
-                print(f"      [{idx+1}] doc_type={doc_type}, score={score:.4f}, content_len={len(content)}")
+            for idx, (content, dtype, score) in enumerate(results):
+                print(f"      [{idx+1}] doc_type={dtype}, score={score:.4f}, content_len={len(content)}")
+                result_dicts.append({
+                    "content": content,
+                    "doc_type": dtype,
+                    "score": score
+                })
         else:
             print(f"      ⚠️  검색 결과가 없습니다!")
         
@@ -54,7 +69,7 @@ def search_similar_chunks(query: str, session_id: str = None, top_k=3):
         conn.close()
         print(f"   ✅ [RAG Retriever] 검색 완료\n")
         
-        return results
+        return result_dicts
         
     except Exception as e:
         print(f"   ❌ [RAG Retriever] 검색 실패: {e}")
