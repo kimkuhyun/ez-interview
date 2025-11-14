@@ -24,37 +24,53 @@ def embed_docs():
     try:
         # 1️⃣ 파일 읽기
         print("1️⃣ 파일 읽기")
+        candidate_name = request.form.get("candidate_name")
         resume_file = request.files.get("resume")
         jd_file = request.files.get("jd")
+        portfolio_file = request.files.get("portfolio")  # 선택
+        
+        if not candidate_name:
+            raise ValueError("면접자 이름이 필요합니다")
         
         if not resume_file or not jd_file:
             raise ValueError("resume과 jd 파일이 필요합니다")
         
+        print(f"   ✅ 면접자 이름: {candidate_name}")
         print(f"   ✅ resume 파일: {resume_file.filename}")
         print(f"   ✅ jd 파일: {jd_file.filename}")
+        if portfolio_file:
+            print(f"   ✅ portfolio 파일: {portfolio_file.filename}")
+        else:
+            print(f"   ℹ️  portfolio: 없음")
 
         # 2️⃣ EmbeddingAgent 실행
         print("\n2️⃣ EmbeddingAgent 실행")
         agent = EmbeddingAgent()
-        embed_result = agent.run(resume_file, jd_file)
+        embed_result = agent.run(resume_file, jd_file, portfolio_file)
         
         print(f"   ✅ 임베딩 완료")
         print(f"      - session_id: {embed_result['session_id']}")
         print(f"      - resume_id: {embed_result['resume_id']}")
         print(f"      - jd_id: {embed_result['jd_id']}")
+        print(f"      - portfolio_id: {embed_result.get('portfolio_id')}")
         print(f"      - resume_len: {embed_result['resume_len']} 자")
         print(f"      - jd_len: {embed_result['jd_len']} 자")
+        print(f"      - portfolio_len: {embed_result.get('portfolio_len', 0)} 자")
 
         # 3️⃣ State 객체 생성
         print("\n3️⃣ State 객체 생성")
         state = InterviewState(
             session_id=embed_result["session_id"],
+            candidate_name=candidate_name,
             resume_id=embed_result["resume_id"],
             jd_id=embed_result["jd_id"],
+            portfolio_id=embed_result.get("portfolio_id"),
             resume_len=embed_result["resume_len"],
             jd_len=embed_result["jd_len"],
+            portfolio_len=embed_result.get("portfolio_len", 0),
             resume_text=embed_result.get("resume_text"),
-            jd_text=embed_result.get("jd_text")
+            jd_text=embed_result.get("jd_text"),
+            portfolio_text=embed_result.get("portfolio_text")
         )
         print(f"   ✅ State 객체 생성 완료")
         
@@ -62,12 +78,16 @@ def embed_docs():
         print("\n4️⃣ GLOBAL_STATE 업데이트")
         from app.routes.state_routes import GLOBAL_STATE
         GLOBAL_STATE.session_id = state.session_id
+        GLOBAL_STATE.candidate_name = state.candidate_name
         GLOBAL_STATE.resume_id = state.resume_id
         GLOBAL_STATE.jd_id = state.jd_id
+        GLOBAL_STATE.portfolio_id = state.portfolio_id
         GLOBAL_STATE.resume_len = state.resume_len
         GLOBAL_STATE.jd_len = state.jd_len
+        GLOBAL_STATE.portfolio_len = state.portfolio_len
         GLOBAL_STATE.resume_text = state.resume_text
         GLOBAL_STATE.jd_text = state.jd_text
+        GLOBAL_STATE.portfolio_text = state.portfolio_text
         print(f"   ✅ GLOBAL_STATE 업데이트 완료")
 
         end_time = time.perf_counter()
