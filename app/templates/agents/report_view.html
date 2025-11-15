@@ -71,17 +71,14 @@
       display: block;
       min-width: 100%;
       white-space: pre-wrap;
-      animation: slotFadeUp 0.35s ease-out;
     }
-    @keyframes slotFadeUp {
-      from {
-        opacity: 0;
-        transform: translateY(100%);
-      }
-      to {
-        opacity: 1;
-        transform: translateY(0);
-      }
+
+    /* 에이전트 로그 메시지 스타일 */
+    .agent-log-item {
+      padding: 0.25rem 0;
+      margin-bottom: 0.15rem;
+      font-size: 0.875rem;
+      line-height: 1.4;
     }
 
     /* 디베이트 로그 스타일 */
@@ -295,6 +292,8 @@
   ];
 
   let slotAnimationInterval = null;
+  let lastSlotMessageIndex = -1;
+  let usedMessageIndices = [];
 
   function startSlotAnimation() {
     const el = document.getElementById("slotText");
@@ -306,7 +305,38 @@
     }
 
     slotAnimationInterval = setInterval(() => {
-      const msg = SLOT_MESSAGES[Math.floor(Math.random() * SLOT_MESSAGES.length)];
+      // 사용 가능한 인덱스 풀 생성 (최근 사용한 것 제외)
+      let availableIndices = [];
+      for (let i = 0; i < SLOT_MESSAGES.length; i++) {
+        if (!usedMessageIndices.includes(i)) {
+          availableIndices.push(i);
+        }
+      }
+
+      // 모든 메시지를 사용했다면 리셋 (현재 메시지만 제외)
+      if (availableIndices.length === 0) {
+        usedMessageIndices = lastSlotMessageIndex >= 0 ? [lastSlotMessageIndex] : [];
+        availableIndices = [];
+        for (let i = 0; i < SLOT_MESSAGES.length; i++) {
+          if (i !== lastSlotMessageIndex) {
+            availableIndices.push(i);
+          }
+        }
+      }
+
+      // 랜덤 인덱스 선택
+      const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+      const msg = SLOT_MESSAGES[randomIndex];
+
+      // 사용 기록 업데이트
+      lastSlotMessageIndex = randomIndex;
+      usedMessageIndices.push(randomIndex);
+
+      // 최근 5개만 유지 (너무 많이 기억하지 않도록)
+      if (usedMessageIndices.length > 5) {
+        usedMessageIndices.shift();
+      }
+
       el.textContent = msg;
       el.classList.remove("slot-text");
       void el.offsetWidth; // reflow
@@ -424,16 +454,13 @@
     const slotText = $("slotText");
     if (!slotText) return;
 
-    // 에이전트 이름 + 메시지를 한 줄로 추가
-    const line = `[${agent}] ${message}`;
-    slotText.textContent = slotText.textContent
-      ? `${slotText.textContent}\n${line}`
-      : line;
+    // 에이전트 로그 아이템 생성
+    const logItem = document.createElement('div');
+    logItem.className = 'agent-log-item';
+    logItem.textContent = `[${agent}] ${message}`;
 
-    // 애니메이션 리셋
-    slotText.classList.remove("slot-text");
-    void slotText.offsetWidth; // reflow
-    slotText.classList.add("slot-text");
+    // 슬롯 텍스트에 추가
+    slotText.appendChild(logItem);
 
     // 최신 메시지가 항상 보이도록 자동 스크롤
     const wrapper = document.querySelector(".slot-wrapper");

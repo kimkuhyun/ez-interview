@@ -132,16 +132,28 @@ class WeightItem(BaseModel):
 
 
 class Headline(BaseModel):
-    summary: NonEmpty
+    summary: NonEmpty  # 기존 1줄 요약 (헤드라인용)
+    overall_summary: NonEmpty = Field(
+        description="인터뷰 전반에 대한 평가 (150-200자)"
+    )
     tag: List[str] = Field(min_length=1, max_length=5, description="키워드 태그 3-5개")
     contradiction_score: Optional[Score] = Field(
         default=None, description="답변 모순도 (0=일관적, 100=모순적)"
     )
+    contradiction_reason: Optional[str] = Field(
+        default=None, description="모순 정도 점수 이유 (1-2문장)"
+    )
     depth_score: Optional[Score] = Field(
         default=None, description="답변 깊이 (0=피상적, 100=깊이있음)"
     )
+    depth_reason: Optional[str] = Field(
+        default=None, description="대화 깊이 점수 이유 (1-2문장)"
+    )
     reliability_score: Optional[Score] = Field(
         default=None, description="신뢰도 (0=낮음, 100=높음)"
+    )
+    reliability_reason: Optional[str] = Field(
+        default=None, description="리포트 신뢰도 점수 이유 (1-2문장)"
     )
 
 
@@ -201,6 +213,30 @@ class ConvKV(BaseModel):
     v: str
 
 
+class CompetencyComment(BaseModel):
+    """역량별 코멘트"""
+    key: KeyStr  # 역량 키 (예: "technical_depth")
+    comment: NonEmpty = Field(
+        description="역량별 점수 이유 (2-3문장)"
+    )
+
+
+class QuestionTypeRatio(BaseModel):
+    """질문 유형별 비율"""
+    type: NonEmpty  # 예: "사실관계파악", "기술질문", "커뮤니케이션질문"
+    ratio: str  # 예: "35%"
+
+
+class InterviewStats(BaseModel):
+    """대화 통계"""
+    duration: str = Field(description="면접 시간 (예: 45분)")
+    followup_ratio: str = Field(description="질문당 후속 질문 비율 (예: 2.3회)")
+    question_type_ratios: List[QuestionTypeRatio] = Field(
+        default_factory=list,
+        description="질문 유형별 비율 (사실관계파악, 기술질문, 커뮤니케이션질문 등)"
+    )
+
+
 class ReportMetadata(BaseModel):
     """PDF 템플릿용 메타데이터"""
     candidate_name: NonEmpty
@@ -213,7 +249,9 @@ class ReportMetadata(BaseModel):
 
 class FinalRecommendation(BaseModel):
     """최종 코멘트 및 채용 권고"""
-    final_comment: NonEmpty  # 7-10문장
+    final_comment: NonEmpty = Field(
+        description="최종 코멘트 (250-300자)"
+    )
     hiring_decision: NonEmpty  # 예: "조건부 채용 (3개월 수습 후 정규 전환 검토)"
     decision_reasons: List[str] = Field(min_length=1, max_length=5)
 
@@ -236,6 +274,18 @@ class ReportOut(BaseModel):
     convStats: List[ConvKV] = Field(default_factory=list)
     jdCoverage: List[JDCoverRow] = Field(default_factory=list)
     evidence: List[EvidenceRow] = Field(default_factory=list)
+
+    # 역량별 코멘트
+    competency_comments: List[CompetencyComment] = Field(
+        default_factory=list,
+        description="각 역량별 점수 이유 (2-3문장)"
+    )
+
+    # 대화 통계
+    interview_stats: Optional[InterviewStats] = Field(
+        default=None,
+        description="면접 시간, 질문 비율 등 통계"
+    )
 
     # 최종 권고
     recommendation: FinalRecommendation
@@ -324,6 +374,7 @@ def _prompt_optimizer_prompt() -> ChatPromptTemplate:
             (
                 "system",
                 "당신은 채용 평가 프롬프트 최적화 전문가입니다.\n\n"
+                "**중요: 모든 분석과 출력은 반드시 한국어로 작성하세요.**\n\n"
                 "**역할:**\n"
                 "사용자가 입력한 자유로운 형식의 프롬프트를 분석하고,\n"
                 "이를 '평가 렌즈(evaluation lens)' 관점으로 변환합니다.\n\n"
@@ -385,6 +436,7 @@ def _query_planner_prompt() -> ChatPromptTemplate:
             (
                 "system",
                 "당신은 벡터 검색 질의 설계 에이전트입니다.\n\n"
+                "한국어로 작성하세요\n\n"
                 "**역할:**\n"
                 "- 이력서, JD, 포트폴리오, 인터뷰 로그에서 평가에 필요한 정보를 찾을 수 있도록 질의를 설계합니다.\n"
                 "- 최적화된 렌즈 관점(lens_perspective)을 반영하여 질의를 구성합니다.\n"
@@ -541,7 +593,7 @@ def retrieve_contexts(
             if r.get("doc_type") == "resume" and r.get("content")
         ]
         resume_ctx = "\n\n".join(resume_chunks) if resume_chunks else ""
-        print(f"   ✅ 이력서 chunk {len(resume_chunks)}개 선택 (총 {len(resume_ctx)} 글자)\n")
+        print(f"    이력서 chunk {len(resume_chunks)}개 선택 (총 {len(resume_ctx)} 글자)\n")
     except Exception as e:
         print(f"   ⚠️ 이력서 검색 실패: {e}\n")
         resume_ctx = ""
@@ -562,7 +614,7 @@ def retrieve_contexts(
             if r.get("doc_type") == "jd" and r.get("content")
         ]
         jd_ctx = "\n\n".join(jd_chunks) if jd_chunks else ""
-        print(f"   ✅ JD chunk {len(jd_chunks)}개 선택 (총 {len(jd_ctx)} 글자)\n")
+        print(f"    JD chunk {len(jd_chunks)}개 선택 (총 {len(jd_ctx)} 글자)\n")
     except Exception as e:
         print(f"   ⚠️ JD 검색 실패: {e}\n")
         jd_ctx = ""
@@ -585,7 +637,7 @@ def retrieve_contexts(
                 if r.get("doc_type") == "portfolio" and r.get("content")
             ]
             portfolio_ctx = "\n\n".join(portfolio_chunks) if portfolio_chunks else ""
-            print(f"   ✅ 포트폴리오 chunk {len(portfolio_chunks)}개 선택 (총 {len(portfolio_ctx)} 글자)\n")
+            print(f"    포트폴리오 chunk {len(portfolio_chunks)}개 선택 (총 {len(portfolio_ctx)} 글자)\n")
         except Exception as e:
             print(f"   ⚠️ 포트폴리오 검색 실패: {e}\n")
 
@@ -597,7 +649,7 @@ def retrieve_contexts(
             log_ctx = ""
             print("   ⚠️ 로그 없음\n")
         else:
-            print(f"   ✅ 로그 조회 완료: {len(log_ctx)} 글자\n")
+            print(f"    로그 조회 완료: {len(log_ctx)} 글자\n")
     except Exception as e:
         print(f"   ⚠️ 로그 조회 실패: {e}\n")
         log_ctx = ""
@@ -605,7 +657,7 @@ def retrieve_contexts(
     # 5. QA 추출
     print("❓ [질문-답변 쌍 추출]")
     qa_pairs = _extract_qa_pairs(log_ctx)
-    print(f"   ✅ {len(qa_pairs)}개 추출\n")
+    print(f"    {len(qa_pairs)}개 추출\n")
 
     # 6. 증거 ID
     total_evidence = len(resume_results) + len(jd_results) + len(portfolio_results) + len(qa_pairs)
@@ -623,7 +675,7 @@ def retrieve_contexts(
         print(f"   세션 ID가 올바른지 확인하세요.\n")
 
     print(f"{'=' * 80}")
-    print("✅ [Retriever] 완료")
+    print(" [Retriever] 완료")
     print(f"   이력서: {len(resume_chunks)}개 chunk ({len(resume_ctx)} 글자)")
     print(f"   JD: {len(jd_chunks)}개 chunk ({len(jd_ctx)} 글자)")
     print(f"   포트폴리오: {len(portfolio_chunks)}개 chunk ({len(portfolio_ctx)} 글자)")
@@ -637,8 +689,11 @@ def retrieve_contexts(
 class InterviewAnalysisOut(BaseModel):
     """인터뷰 로그 분석 결과"""
     contradiction_score: Annotated[int, Ge(0), Le(100)]
+    contradiction_reason: NonEmpty = Field(description="모순 정도 점수 이유 (1-2문장)")
     depth_score: Annotated[int, Ge(0), Le(100)]
+    depth_reason: NonEmpty = Field(description="대화 깊이 점수 이유 (1-2문장)")
     reliability_score: Annotated[int, Ge(0), Le(100)]
+    reliability_reason: NonEmpty = Field(description="리포트 신뢰도 점수 이유 (1-2문장)")
     positive_aspects: List[str] = Field(min_length=1)
     negative_aspects: List[str] = Field(min_length=1)
     final_comment: NonEmpty
@@ -655,6 +710,7 @@ def _interview_analysis_prompt() -> ChatPromptTemplate:
             (
                 "system",
                 "당신은 인터뷰 로그를 심층 분석하는 전문가입니다.\n\n"
+                "한국어로 작성하세요\n\n"
                 "**분석 단계:**\n"
                 "1. 답변 간 일관성 검토 (모순, 과장, 회피, 거짓 등)\n"
                 "2. 답변의 깊이 평가 (구체성, 전문성)\n"
@@ -669,8 +725,11 @@ def _interview_analysis_prompt() -> ChatPromptTemplate:
                 "- 10-15턴 디베이트, 각 턴은 한 문단 이내\n\n"
                 "**출력:**\n"
                 "- contradiction_score: number (0-100)\n"
+                "- contradiction_reason: string (모순 정도 점수 이유, 1-2문장)\n"
                 "- depth_score: number (0-100)\n"
+                "- depth_reason: string (대화 깊이 점수 이유, 1-2문장)\n"
                 "- reliability_score: number (0-100)\n"
+                "- reliability_reason: string (리포트 신뢰도 점수 이유, 1-2문장)\n"
                 "- positive_aspects: array of strings (1-5개)\n"
                 "- negative_aspects: array of strings (1-5개)\n"
                 "- final_comment: string (7-10문장)\n"
@@ -725,6 +784,10 @@ class CompetencyEvalOut(BaseModel):
     weights: List[WeightItem]
     headline: Headline
     reasoning: List[str] = Field(default_factory=list)
+    competency_comments: List[CompetencyComment] = Field(
+        default_factory=list,
+        description="각 역량별 점수 이유 (2-3문장)"
+    )
 
 
 def _competency_prompt() -> ChatPromptTemplate:
@@ -734,6 +797,7 @@ def _competency_prompt() -> ChatPromptTemplate:
             (
                 "system",
                 "당신은 엄격한 면접 평가 전문가입니다.\n\n"
+                "한국어로 작성하세요\n\n"
                 "**평가 원칙:**\n"
                 "1. 실제 증거에 기반 (추측 금지)\n"
                 "2. 구체적 성과와 수치 필요\n"
@@ -752,10 +816,14 @@ def _competency_prompt() -> ChatPromptTemplate:
                 "- 86-95: 탁월\n"
                 "- 95-100: 최고 수준 (거의 부여하지 않음)\n\n"
                 "**출력 (JSON 형식으로 반환하세요):**\n"
-                "- scores: array of objects [{{key: string, value: number}}, ...] (예: [{{\"key\": \"문제해결능력\", \"value\": 82}}, {{\"key\": \"커뮤니케이션\", \"value\": 76}}, ...])\n"
-                "- weights: array of objects [{{key: string, value: number}}, ...] (예: [{{\"key\": \"문제해결능력\", \"value\": 25}}, {{\"key\": \"커뮤니케이션\", \"value\": 20}}, ...])\n"
-                "- headline: object {{summary: string, tag: List[string]}} (예: {{\"summary\": \"기본 역량은 보통 수준이지만...\", \"tag\": [\"문제해결\", \"커뮤니케이션\"]}})\n"
-                "- reasoning: array of strings (각 역량별 평가 근거 1-2문장씩)",
+                "- scores: array of objects [{{key: string, value: number}}, ...]\n"
+                "- weights: array of objects [{{key: string, value: number}}, ...]\n"
+                "- headline: object {{summary: string, overall_summary: string, tag: array}}\n"
+                "  * summary: 헤드라인용 1줄 요약\n"
+                "  * overall_summary: 인터뷰 전반 평가 (150-200자)\n"
+                "  * tag: 키워드 태그 3-5개\n"
+                "- reasoning: array of strings (각 역량별 평가 근거 1-2문장씩)\n"
+                "- competency_comments: array of objects [{{key: string, comment: string}}, ...] (각 역량별 점수 이유 2-3문장)",
             ),
             (
                 "human",
@@ -832,6 +900,7 @@ def _competency_evidence_prompt() -> ChatPromptTemplate:
             (
                 "system",
                 "당신은 핵심역량과 증거를 매핑하는 전문가입니다.\n\n"
+                "한국어로 작성하세요\n\n"
                 "**작업:**\n"
                 "1. 각 핵심역량에 대해 관련 증거(Exx)를 이력서, 포트폴리오, 인터뷰 로그에서 찾으세요\n"
                 "2. 충족도는 증거의 강도에 따라: 적합/보통/부족\n"
@@ -928,6 +997,10 @@ class InterviewSummaryOut(BaseModel):
     positive: List[str] = Field(default_factory=list)
     negative: List[str] = Field(default_factory=list)
     stats: Dict[str, Any]
+    interview_stats: Optional[InterviewStats] = Field(
+        default=None,
+        description="대화 통계 (면접 시간, 질문당 후속 질문 비율, 질문 유형 비율)"
+    )
 
 
 def _interview_summary_prompt() -> ChatPromptTemplate:
@@ -937,18 +1010,24 @@ def _interview_summary_prompt() -> ChatPromptTemplate:
             (
                 "system",
                 "당신은 인터뷰 분석 전문가입니다.\n\n"
+                "한국어로 작성하세요\n\n"
                 "**작업:**\n"
                 "1. 전체 인터뷰 흐름 요약 (overall, 2-3문장)\n"
                 "2. 각 질문 답변 요약 (qa_summaries, 1-3줄)\n"
                 "3. 긍정 의견: 추천 이유와 근거 200-300자 (positive)\n"
                 "4. 부정 의견: 비추천 이유와 근거 200-300자 (negative)\n"
-                "5. 통계: 총 질문 수, 평균 답변 길이 등 (stats)\n\n"
+                "5. 통계: 총 질문 수, 평균 답변 길이 등 key는 한글로 작성할것 (stats)\n"
+                "6. 대화 통계 (interview_stats):\n"
+                "   - duration: 면접 시간 (예: \"45분\")\n"
+                "   - followup_ratio: 질문당 후속 질문 비율 (예: \"2.3회\")\n"
+                "   - question_type_ratios: 질문 유형별 비율 (사실관계파악, 기술질문, 커뮤니케이션질문 등)\n\n"
                 "**출력:**\n"
                 "- overall: string (2-3문장)\n"
                 "- qa_summaries: array of objects [{{q_num: number|string, question_short: string, answer_summary: string}}, ...]\n"
                 "- positive: array of strings (각 200-300자)\n"
                 "- negative: array of strings (각 200-300자)\n"
-                "- stats: object (총 질문 수, 평균 답변 길이 등)",
+                "- stats: object (총 질문 수, 평균 답변 길이 등)\n"
+                "- interview_stats: object {{duration: string, followup_ratio: string, question_type_ratios: array of objects [{{type: string, ratio: string}}, ...]}}",
             ),
             (
                 "human",
@@ -990,10 +1069,11 @@ def _final_recommendation_prompt() -> ChatPromptTemplate:
             (
                 "system",
                 "당신은 채용 의사결정 전문가입니다.\n\n"
+                "한국어로 작성하세요\n\n"
                 "**작업:**\n"
                 "분석된 모든 데이터를 종합하여 최종 채용 권고를 작성하세요.\n\n"
                 "**출력:**\n"
-                "- final_comment: string (7-10문장, 종합 평가 및 권고 사항)\n"
+                "- final_comment: string (250-300자, 종합 평가 및 권고 사항)\n"
                 "- hiring_decision: string (한 문장, 예: '조건부 채용 (3개월 수습)', '즉시 채용 권고', '비추천')\n"
                 "- decision_reasons: array of strings (결정 이유 1-5개)",
             ),
@@ -1045,6 +1125,7 @@ def _metadata_extraction_prompt() -> ChatPromptTemplate:
             (
                 "system",
                 "당신은 JD에서 채용 포지션 정보를 추출하는 전문가입니다.\n\n"
+                "한국어로 작성하세요\n\n"
                 "**작업:**\n"
                 "JD에서 다음 정보를 추출하세요:\n"
                 "- position_applied: 지원 포지션명 (예: 'AI 에이전트 개발자', 'Backend Developer')\n\n"
@@ -1089,6 +1170,7 @@ def _debate_validation_prompt() -> ChatPromptTemplate:
             (
                 "system",
                 "당신은 분석 품질 검증 전문가입니다.\n\n"
+                "한국어로 작성하세요\n\n"
                 "**역할:**\n"
                 "두 명의 가상 에이전트가 디베이트 방식으로 분석 결과를 검증합니다.\n"
                 "- AgentA (Hiring Manager): 실무 기여도, 즉시 투입 가능성, 팀 성과 중심\n"
@@ -1239,7 +1321,7 @@ def debate_validation_node(state: ReportState) -> ReportState:
                     {
                         "agent": f"디베이트 검증 - {name}",
                         "message": (
-                            f"{'✅ 통과' if result.is_valid else '⚠️ 개선 필요'} "
+                            f"{' 통과' if result.is_valid else '⚠️ 개선 필요'} "
                             f"(품질: {result.quality_score:.2f})\n"
                             f"   이슈: {len(result.issues)}개, 제안: {len(result.suggestions)}개"
                         ),
@@ -1265,7 +1347,7 @@ def debate_validation_node(state: ReportState) -> ReportState:
                 {
                     "agent": "디베이트 검증 에이전트",
                     "message": (
-                        f"{'✅ 전체 검증 통과' if all_valid else '⚠️ 일부 개선 필요'}\n"
+                        f"{' 전체 검증 통과' if all_valid else '⚠️ 일부 개선 필요'}\n"
                         f"   평균 품질: {avg_quality:.2f}\n"
                         f"   검증 항목: {len(validation_results)}개"
                     ),
@@ -1392,7 +1474,7 @@ def prompt_optimizer_node(state: ReportState) -> ReportState:
             {
                 "agent": "프롬프트 최적화",
                 "message": (
-                    f"✅ 렌즈 관점 변환 완료\n"
+                    f" 렌즈 관점 변환 완료\n"
                     f"   원본: {optimized.original_prompt[:50]}...\n"
                     f"   변환: {optimized.lens_perspective[:80]}...\n"
                     f"   초점 영역: {', '.join(optimized.key_focus_areas)}"
@@ -1438,7 +1520,7 @@ def query_planner_node(state: ReportState) -> ReportState:
             {
                 "agent": "질의설계",
                 "message": (
-                    "✅ 질의 설계 완료\n"
+                    " 질의 설계 완료\n"
                     f"   이력서: {query_plan.resume_query[:50]}...\n"
                     f"   JD: {query_plan.jd_query[:50]}...\n"
                     f"   포트폴리오: {query_plan.portfolio_query[:50] if query_plan.portfolio_query else '없음'}..."
@@ -1495,7 +1577,7 @@ def retriever_node(state: ReportState) -> ReportState:
             {
                 "agent": "리트리버",
                 "message": (
-                    "✅ 검색 완료 - "
+                    " 검색 완료 - "
                     f"이력서 {len(resume_ctx)}자, JD {len(jd_ctx)}자, "
                     f"포트폴리오 {len(portfolio_ctx)}자, 로그 {len(log_ctx)}자"
                 ),
@@ -1619,7 +1701,7 @@ def analysis_parallel_node(state: ReportState) -> ReportState:
                         {
                             "agent": "인터뷰 분석 에이전트" if not is_retry else "인터뷰 분석 재실행",
                             "message": (
-                                f"✅ {'재실행 ' if is_retry else ''}완료 - "
+                                f" {'재실행 ' if is_retry else ''}완료 - "
                                 f"모순도 {result.contradiction_score}%, "
                                 f"깊이 {result.depth_score}%, "
                                 f"신뢰도 {result.reliability_score}%"
@@ -1669,7 +1751,7 @@ def analysis_parallel_node(state: ReportState) -> ReportState:
                     state["agent_logs"].append(
                         {
                             "agent": "핵심역량평가 에이전트" if not is_retry else "역량 평가 재실행",
-                            "message": f"✅ {'재실행 ' if is_retry else ''}완료 - {scores_str}",
+                            "message": f" {'재실행 ' if is_retry else ''}완료 - {scores_str}",
                         }
                     )
 
@@ -1680,7 +1762,7 @@ def analysis_parallel_node(state: ReportState) -> ReportState:
                         {
                             "agent": "증거매핑 에이전트" if not is_retry else "증거 매핑 재실행",
                             "message": (
-                                f"✅ {'재실행 ' if is_retry else ''}완료 - "
+                                f" {'재실행 ' if is_retry else ''}완료 - "
                                 f"역량 {len(result.competencyCoverage)}개, "
                                 f"증거 {len(result.evidence)}개"
                             ),
@@ -1693,7 +1775,7 @@ def analysis_parallel_node(state: ReportState) -> ReportState:
                     state["agent_logs"].append(
                         {
                             "agent": "요약생성 에이전트",
-                            "message": f"✅ 요약 완료 - QA {len(result.qa_summaries)}개 요약",
+                            "message": f" 요약 완료 - QA {len(result.qa_summaries)}개 요약",
                         }
                     )
 
@@ -1781,7 +1863,7 @@ def final_recommendation_node(state: ReportState) -> ReportState:
             state["agent_logs"].append(
                 {
                     "agent": "최종 권고 생성",
-                    "message": f"✅ 권고 완료 - {recommendation.hiring_decision}",
+                    "message": f" 권고 완료 - {recommendation.hiring_decision}",
                 }
             )
         except Exception as e:
@@ -1879,6 +1961,19 @@ def validation_node(state: ReportState) -> ReportState:
 
         # 리포트 조립
         axes_keys = state["axes_keys"] or []
+
+        # headline 병합: comp_eval과 interview_analysis에서 가져옴
+        headline_data = comp_eval.get("headline") or {}
+        headline_merged = {
+            **headline_data,
+            "contradiction_score": interview_analysis.get("contradiction_score", headline_data.get("contradiction_score")),
+            "contradiction_reason": interview_analysis.get("contradiction_reason", headline_data.get("contradiction_reason", "")),
+            "depth_score": interview_analysis.get("depth_score", headline_data.get("depth_score")),
+            "depth_reason": interview_analysis.get("depth_reason", headline_data.get("depth_reason", "")),
+            "reliability_score": interview_analysis.get("reliability_score", headline_data.get("reliability_score")),
+            "reliability_reason": interview_analysis.get("reliability_reason", headline_data.get("reliability_reason", "")),
+        }
+
         report: Dict[str, Any] = {
             "metadata": metadata.model_dump(),
             "axes": [
@@ -1886,12 +1981,7 @@ def validation_node(state: ReportState) -> ReportState:
             ],
             "scores": comp_eval.get("scores", []),
             "weights": comp_eval.get("weights", []),
-            "headline": {
-                **(comp_eval.get("headline") or {}),
-                "contradiction_score": interview_analysis.get("contradiction_score"),
-                "depth_score": interview_analysis.get("depth_score"),
-                "reliability_score": interview_analysis.get("reliability_score"),
-            },
+            "headline": headline_merged,
             "talkSummary": {"items": talk_items},
             "convStats": [
                 {"k": str(k), "v": str(v)}
@@ -1899,6 +1989,8 @@ def validation_node(state: ReportState) -> ReportState:
             ],
             "jdCoverage": evidence_map.get("competencyCoverage", []),
             "evidence": evidence_map.get("evidence", []),
+            "competency_comments": comp_eval.get("competency_comments", []),
+            "interview_stats": interview_sum.get("interview_stats"),
             "recommendation": final_rec,
         }
 
@@ -1932,7 +2024,7 @@ def validation_node(state: ReportState) -> ReportState:
         state["agent_logs"].append(
             {
                 "agent": "검증 에이전트",
-                "message": "✅ 리포트 생성 완료!",
+                "message": " 리포트 생성 완료!",
             }
         )
 
@@ -1974,7 +2066,7 @@ def debate_router_node(state: ReportState) -> str:
         logger.debug("[debate_router] 모든 검증 통과 → 진행")
         state["agent_logs"].append({
             "agent": "디베이트 라우터",
-            "message": "✅ 모든 검증 통과 → 최종 권고 생성으로 진행"
+            "message": " 모든 검증 통과 → 최종 권고 생성으로 진행"
         })
         return "final_recommendation"
 
