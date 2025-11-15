@@ -659,8 +659,7 @@ def _competency_prompt() -> ChatPromptTemplate:
                 "**사용자 요구사항:** {user_prompt}\n\n"
                 "[이력서]\n{resume}\n\n"
                 "[인터뷰로그]\n{log}\n\n"
-                "위 자료를 바탕으로 역량을 평가하세요.\n"
-                "사용자 요구사항이 있으면 해당 부분에 더 높은 가중치를 부여하세요.\n\n"
+                "위 자료를 바탕으로 역량을 평가하세요.\n\n"
                 "결과를 JSON 형식으로 반환하세요.",
             ),
         ]
@@ -1293,6 +1292,8 @@ def validation_node(state: ReportState) -> ReportState:
         evidence_map = state["evidence_mapping"] or {}
         interview_sum = state["interview_summary"] or {}
         interview_analysis = state["interview_analysis"] or {}
+        
+        comp_reasoning = comp_eval.get("reasoning") or []
 
         # talkSummary 조립
                 # talkSummary 조립
@@ -1373,6 +1374,7 @@ def validation_node(state: ReportState) -> ReportState:
             ],
             "jdCoverage": evidence_map.get("competencyCoverage", []),
             "evidence": evidence_map.get("evidence", []),
+            "competency_reasoning": comp_reasoning,
         }
 
         # 품질 검증
