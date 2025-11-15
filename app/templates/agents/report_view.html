@@ -44,25 +44,33 @@
       to { transform: rotate(360deg); }
     }
     .loading-text {
-      margin-top: 20px;
-      font-size: 16px;
-      color: #6b7280;
+      margin: 1rem auto 0.25rem;
+      font-size: 14px;
+      color: #4b5563;
+      text-align: left;
+      max-width: 720px;
     }
 
-    /* 슬롯머신 스타일 문구 */
+    /* 슬롯머신 스타일 문구 (에이전트 대화 로그 영역) */
     .slot-wrapper {
-      margin-top: 0.5rem;
-      height: 1.6em;
-      overflow: hidden;
+      margin: 0.25rem auto 0;
+      max-height: min(40vh, 16rem);
+      overflow-y: auto;
       position: relative;
-      text-align: center;
-      font-size: 1rem;
+      text-align: left;
+      font-size: 0.9rem;
       color: #4b5563;
-      font-weight: 600;
+      font-weight: 500;
+      padding: 0.5rem 0.75rem;
+      border-radius: 0.5rem;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      max-width: 720px;
     }
     .slot-text {
-      display: inline-block;
+      display: block;
       min-width: 100%;
+      white-space: pre-wrap;
       animation: slotFadeUp 0.35s ease-out;
     }
     @keyframes slotFadeUp {
@@ -144,15 +152,16 @@
 
   <div class="container">
     <!-- 헤더 (간소화) -->
-    <div class="header">
-      <div>
-        <h1 id="reportTitle">면접 리포트</h1>
-        <p>AI 기반 면접 평가 및 분석 결과</p>
+      <div class="header">
+        <div>
+          <h1 id="reportTitle">면접 리포트</h1>
+          <p>AI 기반 면접 평가 및 분석 결과</p>
+        </div>
+        <div class="header-actions">
+          <button id="dlBtn" class="btn btn-success no-print">HTML 다운로드</button>
+          <button id="pdfBtn" class="btn btn-secondary no-print" style="margin-left: 0.5rem;">PDF 다운로드</button>
+        </div>
       </div>
-      <div class="header-actions">
-        <button id="dlBtn" class="btn btn-success no-print">HTML 다운로드</button>
-      </div>
-    </div>
     <div class="header-line"></div>
 
     <!-- 실패 배너 -->
@@ -415,14 +424,22 @@
     const slotText = $("slotText");
     if (!slotText) return;
 
-    // 에이전트 이름 + 메시지를 슬롯에 표시
-    const displayText = `[${agent}] ${message}`;
-    slotText.textContent = displayText;
+    // 에이전트 이름 + 메시지를 한 줄로 추가
+    const line = `[${agent}] ${message}`;
+    slotText.textContent = slotText.textContent
+      ? `${slotText.textContent}\n${line}`
+      : line;
 
     // 애니메이션 리셋
     slotText.classList.remove("slot-text");
     void slotText.offsetWidth; // reflow
     slotText.classList.add("slot-text");
+
+    // 최신 메시지가 항상 보이도록 자동 스크롤
+    const wrapper = document.querySelector(".slot-wrapper");
+    if (wrapper) {
+      wrapper.scrollTop = wrapper.scrollHeight;
+    }
 
     console.log('[에이전트 로그]', agent, ':', message);
   }
@@ -887,6 +904,9 @@
     const dlBtn = $("dlBtn");
     if (dlBtn) dlBtn.onclick = downloadHTML;
 
+    const pdfBtn = $("pdfBtn");
+    if (pdfBtn) pdfBtn.onclick = downloadPDF;
+
     // 쿼리 파라미터 확인 후 자동 스트리밍 시작
     const params = getQueryParams();
     console.log('쿼리 파라미터:', params);
@@ -898,6 +918,48 @@
       console.log('session_id가 없어 부모 창으로부터 데이터 전달 대기 중...');
     }
   })();
+
+  // ==== PDF 다운로드 ====
+  function downloadPDF() {
+    try {
+      if (!currentReportData) {
+        alert('리포트 데이터가 아직 없습니다. 먼저 리포트를 생성한 뒤 다시 시도해주세요.');
+        return;
+      }
+
+      fetch('/reports/pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ report: currentReportData })
+      })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error('PDF 생성 실패 (status ' + res.status + ')');
+        }
+        return res.blob();
+      })
+      .then(blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const sessionId = currentReportData?.metadata?.session_id || 'report';
+        link.href = url;
+        link.download = `interview_report_${sessionId}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      })
+      .catch(e => {
+        console.error('downloadPDF 오류', e);
+        alert('PDF 다운로드 중 오류가 발생했습니다. (콘솔 확인)');
+      });
+    } catch (e) {
+      console.error('downloadPDF 예외', e);
+      alert('PDF 다운로드 중 예외가 발생했습니다. (콘솔 확인)');
+    }
+  }
   </script>
 </body>
 </html>
