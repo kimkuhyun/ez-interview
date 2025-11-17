@@ -130,6 +130,28 @@
       justify-content: space-between;
       align-items: flex-start;
       flex-shrink: 0;
+      cursor: move;
+      transition: all 0.2s;
+    }
+
+    .question-item.dragging {
+      opacity: 0.5;
+      background: #e8f4f8;
+    }
+
+    .question-item.drag-over {
+      border-top: 3px solid #3498db;
+    }
+
+    .drag-handle {
+      color: #999;
+      margin-right: 8px;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .drag-handle:active {
+      cursor: grabbing;
     }
 
     .question-item.fixed {
@@ -236,6 +258,33 @@
       background: #229954;
     }
 
+    .refresh-all-btn {
+      background: #f39c12;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 10px 16px;
+      cursor: pointer;
+      margin-top: 12px;
+      margin-bottom: 10px;
+      font-weight: bold;
+      transition: background 0.3s;
+      flex-shrink: 0;
+    }
+
+    .refresh-all-btn:hover {
+      background: #e67e22;
+    }
+
+    .refresh-btn {
+      background: #9b59b6;
+      color: white;
+    }
+
+    .refresh-btn:hover {
+      background: #8e44ad;
+    }
+
     .metric-list {
       background: #f9f9f9;
       padding: 0;
@@ -262,6 +311,52 @@
     .metric-list input[type="checkbox"] {
       margin-right: 8px;
       cursor: pointer;
+    }
+
+    .metric-input-wrapper {
+      padding: 10px 12px;
+      border-bottom: 1px solid #efefef;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .metric-input-wrapper input[type="text"] {
+      flex: 1;
+      padding: 6px 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .metric-input-wrapper button {
+      padding: 6px 12px;
+      background: #27ae60;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .metric-input-wrapper button:hover {
+      background: #229954;
+    }
+
+    .delete-metric-btn {
+      background: #e74c3c;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      padding: 2px 6px;
+      cursor: pointer;
+      font-size: 11px;
+      margin-left: 8px;
+    }
+
+    .delete-metric-btn:hover {
+      background: #c0392b;
     }
 
     .save-btn {
@@ -374,6 +469,8 @@
     let metrics = [];
     let selectedMetrics = [];
     let editingIndex = -1;
+    let regeneratingQuestionId = null; // 재생성 중인 질문 ID
+    let nextQuestionId = 0; // 질문 고유 ID 부여용
 
     // 고정된 질문들 (첫 번째, 마지막)
     const FIXED_QUESTIONS = {
@@ -394,8 +491,19 @@
       const messageContainer = document.getElementById("messageContainer");
       const questionSection = document.getElementById("questionSection");
       
+      // interview.html의 질문 버튼 비활성화
+      const questionBtn = window.parent.document.getElementById("questionBtn");
+      if (questionBtn) {
+        questionBtn.disabled = true;
+        questionBtn.innerText = "⏳ 질문 생성 중...";
+      }
+      
       if (questions.length > 0) {
         console.log("💡 이미 질문이 생성되었습니다");
+        if (questionBtn) {
+          questionBtn.disabled = true;
+          questionBtn.innerText = "✅ 질문 생성 완료";
+        }
         return;
       }
       
@@ -453,13 +561,22 @@
 
         // 고정 질문 추가: [자기소개, 생성된 질문들..., 마지막 말]
 <!--        questions = [FIXED_QUESTIONS.first, ...data.questions, FIXED_QUESTIONS.last];-->
-        questions = data.questions;
+        questions = data.questions.map((q, idx) => ({
+          id: nextQuestionId++,
+          text: q
+        }));
         metrics = data.metrics;
 
         console.log(`📊 생성된 질문: ${questions.length}개 (고정 2개 포함), 지표: ${metrics.length}개`);
 
         renderQuestions();
         renderMetrics();
+        
+        // 성공 시 버튼 비활성화 유지
+        if (questionBtn) {
+          questionBtn.disabled = true;
+          questionBtn.innerText = "✅ 질문 생성 완료";
+        }
 
       } catch (error) {
         console.error("❌ 에러 발생:", error);
@@ -471,8 +588,16 @@
           </div>
         `;
         questionSection.innerHTML = "";
+        
+        // 실패 시 버튼 활성화
+        if (questionBtn) {
+          questionBtn.disabled = false;
+          questionBtn.innerText = "🤖 질문 생성";
+        }
       }
     }
+
+    let draggedIndex = -1;
 
     function renderQuestions() {
       const section = document.getElementById("questionSection");
@@ -486,18 +611,27 @@
       const wrapper = document.createElement("div");
       wrapper.id = "questionList";
       
-      questions.forEach((q, i) => {
+      questions.forEach((qObj, i) => {
         const isFirst = i === 0;
         const isLast = i === questions.length - 1;
         const isFixed = isFirst || isLast;
+        const q = qObj.text;
+        const qId = qObj.id;
 
         const item = document.createElement("div");
         item.className = `question-item ${isFixed ? 'fixed' : ''}`;
-        item.id = `question-${i}`;
+        item.id = `question-${qId}`;
+        item.dataset.questionId = qId;
+        
+        // 드래그 앤 드롭 속성 추가
+        item.draggable = true;
+        item.dataset.index = i;
+        item.dataset.questionId = qId;
         
         if (editingIndex === i) {
           // 수정 모드
           item.innerHTML = `
+            <span class="drag-handle">⋮⋮</span>
             <div class="question-text">
               <span class="question-number">Q${i + 1}.</span>
               <input type="text" id="edit-input-${i}" value="${escapeHtml(q)}" autofocus>
@@ -510,25 +644,55 @@
         } else {
           // 일반 모드
           item.innerHTML = `
+            <span class="drag-handle">⋮⋮</span>
             <div class="question-text">
               <span class="question-number">Q${i + 1}.</span>
               <span>${q}</span>
             </div>
             <div class="question-actions">
               <button class="edit-btn" onclick="startEdit(${i})">수정</button>
+              ${!isFixed ? `<button class="refresh-btn" onclick="regenerateQuestion(${i})">새로고침</button>` : ''}
               ${!isFixed ? `<button class="delete-btn" onclick="deleteQuestion(${i})">삭제</button>` : ''}
             </div>
           `;
         }
+        
+        // 드래그 이벤트 리스너
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('drop', handleDrop);
+        item.addEventListener('dragend', handleDragEnd);
+        item.addEventListener('dragleave', handleDragLeave);
+        
         wrapper.appendChild(item);
       });
 
+      // 버튼 그룹 (flex 컬테이너)
+      const btnGroup = document.createElement("div");
+      btnGroup.style.display = "flex";
+      btnGroup.style.gap = "10px";
+      btnGroup.style.marginTop = "12px";
+      btnGroup.style.marginBottom = "10px";
+      
       // 질문 추가 버튼
       const addBtn = document.createElement("button");
       addBtn.className = "add-question-btn";
-      addBtn.textContent = "➕ 질문 추가";
+      addBtn.textContent = "➞ 질문 추가";
       addBtn.onclick = addNewQuestion;
-      wrapper.appendChild(addBtn);
+      addBtn.style.flex = "1";
+      addBtn.style.margin = "0";
+      btnGroup.appendChild(addBtn);
+      
+      // 전체 새로고침 버튼
+      const refreshAllBtn = document.createElement("button");
+      refreshAllBtn.className = "refresh-all-btn";
+      refreshAllBtn.textContent = "🔄 질문 전체 새로고침";
+      refreshAllBtn.onclick = refreshAllQuestions;
+      refreshAllBtn.style.flex = "1";
+      refreshAllBtn.style.margin = "0";
+      btnGroup.appendChild(refreshAllBtn);
+      
+      wrapper.appendChild(btnGroup);
       
       section.appendChild(wrapper);
     }
@@ -564,7 +728,7 @@
         return;
       }
       
-      questions[index] = newText;
+      questions[index].text = newText;
       editingIndex = -1;
       renderQuestions();
       console.log(`✏️ 질문 ${index + 1} 수정 완료:`, newText);
@@ -587,9 +751,259 @@
       const newQuestion = prompt("새로운 질문을 입력하세요:");
       if (newQuestion && newQuestion.trim()) {
         // 마지막 질문 앞(즉, 인덱스 length-1에 삽입)
-        questions.splice(questions.length - 1, 0, newQuestion.trim());
+        questions.splice(questions.length - 1, 0, {
+          id: nextQuestionId++,
+          text: newQuestion.trim()
+        });
         renderQuestions();
         console.log(`➕ 새 질문 추가:`, newQuestion);
+      }
+    }
+
+    // 드래그 앤 드롭 핸들러
+    function handleDragStart(e) {
+      draggedIndex = parseInt(e.currentTarget.dataset.index);
+      e.currentTarget.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const item = e.currentTarget;
+      if (!item.classList.contains('dragging')) {
+        item.classList.add('drag-over');
+      }
+    }
+
+    function handleDragLeave(e) {
+      e.currentTarget.classList.remove('drag-over');
+    }
+
+    function handleDrop(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      
+      const dropIndex = parseInt(e.currentTarget.dataset.index);
+      e.currentTarget.classList.remove('drag-over');
+      
+      if (draggedIndex !== dropIndex && draggedIndex !== -1) {
+        // 배열에서 질문 이동
+        const movedQuestion = questions.splice(draggedIndex, 1)[0];
+        questions.splice(dropIndex, 0, movedQuestion);
+        
+        console.log(`🔄 질문 이동: ${draggedIndex + 1} → ${dropIndex + 1}`);
+        
+        // 재생성 중인 질문이 있으면 로딩 상태 복원
+        const regeneratingItem = document.querySelector(`[data-question-id="${regeneratingQuestionId}"]`);
+        
+        renderQuestions();
+        
+        if (regeneratingQuestionId !== null && regeneratingItem) {
+          const newItem = document.querySelector(`[data-question-id="${regeneratingQuestionId}"]`);
+          if (newItem) {
+            const newIndex = questions.findIndex(q => q.id === regeneratingQuestionId);
+            newItem.style.opacity = '0.6';
+            newItem.style.pointerEvents = 'none';
+            newItem.innerHTML = `
+              <div class="question-text">
+                <span class="question-number">Q${newIndex + 1}.</span>
+                <span><div class="loading-spinner" style="display: inline-block;"></div> 질문 재생성 중...</span>
+              </div>
+            `;
+          }
+        }
+      }
+    }
+
+    function handleDragEnd(e) {
+      e.currentTarget.classList.remove('dragging');
+      document.querySelectorAll('.question-item').forEach(item => {
+        item.classList.remove('drag-over');
+      });
+      draggedIndex = -1;
+    }
+
+    // 개별 질문 재생성 (2번 기능)
+    async function regenerateQuestion(index) {
+      if (regeneratingQuestionId !== null) {
+        alert("이미 재생성 중인 질문이 있습니다. 잠시만 기다려주세요.");
+        return;
+      }
+      
+      const questionId = questions[index].id;
+      
+      if (!confirm(`Q${index + 1} 질문을 새로 생성하시겠습니까?`)) {
+        return;
+      }
+
+      regeneratingQuestionId = questionId; // 재생성 중 플래그 설정
+      const questionItem = document.getElementById(`question-${questionId}`);
+      const originalHTML = questionItem.innerHTML;
+      
+      try {
+        // 해당 질문 칸을 비활성화 + 재생성 중 표시
+        questionItem.style.opacity = '0.6';
+        questionItem.style.pointerEvents = 'none';
+        questionItem.innerHTML = `
+          <div class="question-text">
+            <span class="question-number">Q${index + 1}.</span>
+            <span><div class="loading-spinner" style="display: inline-block;"></div> 질문 재생성 중...</span>
+          </div>
+        `;
+        
+        // 현재 session_id 가져오기
+        const stateRes = await fetch("/api/state", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" }
+        });
+        
+        if (!stateRes.ok) {
+          throw new Error("State를 조회할 수 없습니다.");
+        }
+        
+        const stateData = await stateRes.json();
+        const sessionId = stateData.session_id;
+
+        // 기존 질문들을 제외 리스트로 전송 (텍스트만 추출)
+        const existingQuestions = questions.map(q => q.text);
+        
+        const res = await fetch("/api/interview-question-single", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            existing_questions: existingQuestions
+          })
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || "질문 생성 실패");
+        }
+
+        const data = await res.json();
+        
+        if (!data.question) {
+          throw new Error("생성된 질문이 없습니다");
+        }
+
+        // questionId로 질문 찾아서 업데이트 (순서 변경되어도 정확하게 처리)
+        const targetIndex = questions.findIndex(q => q.id === questionId);
+        if (targetIndex !== -1) {
+          questions[targetIndex].text = data.question;
+        }
+        
+        regeneratingQuestionId = null; // 재생성 완료
+        renderQuestions();
+        
+        // 성공 메시지를 해당 질문 위에 임시 표시
+        const messageContainer = document.getElementById("messageContainer");
+        messageContainer.innerHTML = `
+          <div class="success-message">
+            ✅ Q${index + 1} 질문이 새로 생성되었습니다!
+          </div>
+        `;
+        
+        setTimeout(() => {
+          messageContainer.innerHTML = "";
+        }, 3000);
+
+      } catch (error) {
+        console.error("❌ 질문 재생성 실패:", error);
+        
+        regeneratingQuestionId = null; // 재생성 실패 플래그 해제
+        
+        // 실패 시 questionId로 원래 HTML 복구
+        const questionItem = document.getElementById(`question-${questionId}`);
+        if (questionItem) {
+          questionItem.innerHTML = originalHTML;
+          questionItem.style.opacity = '1';
+          questionItem.style.pointerEvents = 'auto';
+        }
+        
+        const messageContainer = document.getElementById("messageContainer");
+        messageContainer.innerHTML = `
+          <div class="error-message">
+            ❌ 질문 재생성 실패: ${error.message}
+          </div>
+        `;
+      }
+    }
+
+    // 전체 질문 새로고침 (1번 기능)
+    async function refreshAllQuestions() {
+      if (!confirm("질문 10개를 모두 새로 생성하시겠습니까?\n(첫 번째와 마지막 질문은 유지됩니다)")) {
+        return;
+      }
+
+      const messageContainer = document.getElementById("messageContainer");
+      const questionSection = document.getElementById("questionSection");
+      
+      try {
+        messageContainer.innerHTML = "";
+        questionSection.innerHTML = '<div class="loading-spinner"></div> 질문 전체 새로고침 중...';
+
+        // 현재 session_id 가져오기
+        const stateRes = await fetch("/api/state", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" }
+        });
+        
+        if (!stateRes.ok) {
+          throw new Error("State를 조회할 수 없습니다.");
+        }
+        
+        const stateData = await stateRes.json();
+        const sessionId = stateData.session_id;
+
+        const res = await fetch("/api/interview-question", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query_text: "지원자 이력서 및 JD를 기반으로 면접 질문과 평가지표를 생성해라.",
+            num_questions: 8,
+            session_id: sessionId
+          })
+        });
+
+        if (!res.ok) {
+          const errorData = await res.json();
+          throw new Error(errorData.error || "질문 생성 실패");
+        }
+
+        const data = await res.json();
+        
+        if (!data.questions) {
+          throw new Error("생성된 질문이 없습니다");
+        }
+
+        // 질문 업데이트 (고정 질문 포함) - 객체 구조로 변환
+        questions = data.questions.map((q, idx) => ({
+          id: nextQuestionId++,
+          text: q
+        }));
+        
+        renderQuestions();
+        
+        messageContainer.innerHTML = `
+          <div class="success-message">
+            ✅ 질문 ${questions.length}개가 새로 생성되었습니다!
+          </div>
+        `;
+        
+        setTimeout(() => {
+          messageContainer.innerHTML = "";
+        }, 3000);
+
+      } catch (error) {
+        console.error("❌ 질문 새로고침 실패:", error);
+        messageContainer.innerHTML = `
+          <div class="error-message">
+            ❌ 질문 새로고침 실패: ${error.message}
+          </div>
+        `;
+        renderQuestions();
       }
     }
 
@@ -597,21 +1011,35 @@
       const metricSection = document.getElementById("metricSection");
       metricSection.innerHTML = "";
 
-      if (metrics.length === 0) {
-        metricSection.innerHTML = "<p style='color: #666;'>생성된 평가지표가 없습니다.</p>";
-        return;
-      }
-
       const wrapper = document.createElement("div");
       wrapper.className = "metric-list";
       
-      metrics.forEach(m => {
-        const label = document.createElement("label");
-        label.innerHTML = `
-          <input type="checkbox" value="${escapeHtml(m)}" onchange="toggleMetric(this)"> 
-          <span>${m}</span>`;
-        wrapper.appendChild(label);
-      });
+      // 사용자 입력 필드 (최상단)
+      const inputWrapper = document.createElement("div");
+      inputWrapper.className = "metric-input-wrapper";
+      inputWrapper.innerHTML = `
+        <input type="text" id="newMetricInput" placeholder="평가지표를 입력하세요..." onkeypress="if(event.key==='Enter') addCustomMetric()">
+        <button onclick="addCustomMetric()">추가</button>
+      `;
+      wrapper.appendChild(inputWrapper);
+      
+      if (metrics.length === 0) {
+        const emptyMsg = document.createElement("p");
+        emptyMsg.style.cssText = "color: #666; padding: 12px; text-align: center;";
+        emptyMsg.textContent = "평가지표를 추가하세요";
+        wrapper.appendChild(emptyMsg);
+      } else {
+        metrics.forEach((m, idx) => {
+          const label = document.createElement("label");
+          const isChecked = selectedMetrics.includes(m);
+          label.innerHTML = `
+            <input type="checkbox" value="${escapeHtml(m)}" onchange="toggleMetric(this)" ${isChecked ? 'checked' : ''}> 
+            <span>${m}</span>
+            <button class="delete-metric-btn" onclick="deleteMetric(${idx})">삭제</button>
+          `;
+          wrapper.appendChild(label);
+        });
+      }
 
       metricSection.appendChild(wrapper);
 
@@ -626,6 +1054,37 @@
       footer.appendChild(countDiv);
       
       metricSection.appendChild(footer);
+    }
+
+    function addCustomMetric() {
+      const input = document.getElementById("newMetricInput");
+      const newMetric = input.value.trim();
+      
+      if (!newMetric) {
+        alert("평가지표를 입력하세요.");
+        return;
+      }
+      
+      if (metrics.includes(newMetric)) {
+        alert("이미 존재하는 평가지표입니다.");
+        return;
+      }
+      
+      metrics.push(newMetric);
+      input.value = "";
+      renderMetrics();
+      console.log(`➕ 평가지표 추가: ${newMetric}`);
+    }
+
+    function deleteMetric(index) {
+      const metric = metrics[index];
+      if (confirm(`"${metric}" 평가지표를 삭제하시겠습니까?`)) {
+        metrics.splice(index, 1);
+        // 선택된 지표에서도 제거
+        selectedMetrics = selectedMetrics.filter(m => m !== metric);
+        renderMetrics();
+        console.log(`🗑️ 평가지표 삭제: ${metric}`);
+      }
     }
 
     function toggleMetric(checkbox) {
@@ -673,7 +1132,7 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            questions: questions,           // UI에서 수정된 질문들
+            questions: questions.map(q => q.text),           // 텍스트만 추출
             selected_metrics: selectedMetrics // 사용자가 선택한 지표 (5개)
           })
         });

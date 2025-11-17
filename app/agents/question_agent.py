@@ -35,6 +35,7 @@ class QuestionAgent:
             "[JD 요구사항]\n{jd_context}\n\n"
             "[지원자 이력서]\n{resume_context}\n\n"
             "[지원자 포트폴리오]\n{portfolio_context}\n\n"
+            "{existing_questions_context}"
             "=== 질문 생성 규칙 ===\n"
             "**총 8개 질문을 생성하세요 (기술 5개 + 인성 3개)**\n\n"
             "**[기술 질문 5개]**\n"
@@ -47,7 +48,14 @@ class QuestionAgent:
             "⚠️ 금지사항:\n"
             "- 'JD에 언급된', 'JD에서 봤는데', 'JD와', 'JD를' 같은 메타 표현 금지\n"
             "- Yes/No 질문 금지 (개방형 질문만)\n"
-            "- 막연한 질문 금지 (구체적인 내용 언급 필수)\n\n"
+            "- 막연한 질문 금지 (구체적인 내용 언급 필수)\n"
+            "- 기존 질문과 비슷한 주제나 표현 사용 금지 (완전히 새로운 관점 필수)\n"
+            "- 기존 질문에서 다룬 기술/경험은 절대 재사용 금지 (예: PostgreSQL/MySQL 이미 물어봤으면 다른 기술로)\n\n"
+            "💡 다양성 강화 (필수):\n"
+            "- 이력서/포트폴리오의 **아직 다루지 않은** 프로젝트, 기술, 경험을 발굴\n"
+            "- JD의 **아직 확인하지 않은** 요구사항이나 업무 영역 선택\n"
+            "- 같은 기술이라도 완전히 다른 각도로 질문 (예: 사용 경험 → 트러블슈팅, 설계, 최적화 등)\n"
+            "- 문서에 명시되지 않은 암묵적 역량 검증 (예: 코드 리뷰 경험, 장애 대응, 기술 선택 근거 등)\n\n"
             "=== 평가지표 생성 규칙 ===\n"
             "JD를 중심으로 10개 평가지표를 생성하세요:\n"
             "- 기술 역량 (6~7개): JD의 필수/우대 기술\n"
@@ -79,7 +87,7 @@ class QuestionAgent:
         self.chain = self.prompt | self.llm | self.parser
 
     # 메인 로직
-    def generate_questions_and_metrics(self, query_text: str, num_questions: int = 10, num_metrics: int = 10, session_id: str = None) -> InterviewState:
+    def generate_questions_and_metrics(self, query_text: str, num_questions: int = 10, num_metrics: int = 10, session_id: str = None, existing_questions: list = None) -> InterviewState:
         """
         RAG로 필요한 문서 부분만 검색하여 질문 및 평가지표 생성
         
@@ -88,6 +96,7 @@ class QuestionAgent:
             num_questions: 생성할 질문 개수 (기본값: 10)
             num_metrics: 생성할 평가지표 개수 (기본값: 10)
             session_id: 세션 UUID
+            existing_questions: 기존 질문 리스트 (중복 방지용)
         """
         
         total_start = time.time()
@@ -182,14 +191,38 @@ class QuestionAgent:
         llm_start = time.time()
         print(f"\n📡 [Step 2] LLM 호출")
         
+        # 기존 질문이 있으면 프롬프트에 추가
+        existing_questions_context = ""
+        if existing_questions and len(existing_questions) > 0:
+            questions_list = "\n".join([f"  - {q}" for q in existing_questions])
+            existing_questions_context = (
+                "=== ⚠️ 중복 금지 질문 목록 ===\n"
+                "아래 질문들과 주제, 의도, 표현이 겹치지 않는 완전히 새로운 질문을 생성하세요:\n"
+                f"{questions_list}\n\n"
+            )
+            print(f"   ⚠️ 기존 질문 {len(existing_questions)}개 제외 (무작위성 강화 모드)")
+        
         try:
             invoke_params = {
                 "jd_context": jd_context or "정보 없음",
                 "resume_context": resume_context or "정보 없음",
                 "portfolio_context": portfolio_context or "정보 없음",
+                "existing_questions_context": existing_questions_context,
             }
             
-            response = self.chain.invoke(invoke_params)
+            # 개별 질문 재생성 시 temperature 높이기 (다양성 증가)
+            llm = self.llm
+            if existing_questions and len(existing_questions) > 0:
+                from langchain_openai import ChatOpenAI
+                llm = ChatOpenAI(
+                    model="gpt-3.5-turbo",
+                    temperature=0.9,  # 0.5 → 0.9 (무작위성 증가)
+                    openai_api_key=os.getenv("OPENAI_API_KEY"),
+                )
+                chain = self.prompt | llm | self.parser
+                response = chain.invoke(invoke_params)
+            else:
+                response = self.chain.invoke(invoke_params)
             llm_time = time.time() - llm_start
             print(f"✅ [Step 2] LLM 호출 완료 (⏱️  {llm_time:.2f}초)")
             

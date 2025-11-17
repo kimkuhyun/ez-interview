@@ -251,6 +251,12 @@
       transform: translateY(0);
     }
 
+    #embedBtn:disabled {
+      background: #bdc3c7;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
     #questionBtn {
       background: #27ae60;
     }
@@ -503,9 +509,12 @@
       document.getElementById("portfolioStatus").textContent = "미선택";
       document.getElementById("portfolioStatus").classList.remove("uploaded");
     }
+    
+    // 토글 변경 시 UI 업데이트 (버그 수정)
+    updateUIState();
   });
 
-  // UI 상태 업데이트 함수
+  // UI 상태 업데이트 함수 (버튼 클릭 시에만 호출)
   function updateUIState() {
     const candidateName = candidateNameInput.value.trim();
     
@@ -528,8 +537,8 @@
     }
   }
 
-  // 이름 입력 감지
-  candidateNameInput.addEventListener("input", updateUIState);
+  // 이름 입력 감지 제거 (버그 수정)
+  // candidateNameInput.addEventListener("input", updateUIState);
 
   // 이력서 파일 미리보기
   resumeInput.addEventListener("change", () => {
@@ -544,8 +553,9 @@
       document.getElementById("resumeStatus").classList.add("uploaded");
       const url = URL.createObjectURL(file);
       resumePreview.src = url;
+      // 파일 선택 시 바로 UI 업데이트
+      updateUIState();
     }
-    updateUIState();
   });
 
   // JD 파일 미리보기
@@ -561,8 +571,9 @@
       document.getElementById("jdStatus").classList.add("uploaded");
       const url = URL.createObjectURL(file);
       jdPreview.src = url;
+      // 파일 선택 시 바로 UI 업데이트
+      updateUIState();
     }
-    updateUIState();
   });
 
   // 포트폴리오 파일 처리
@@ -642,10 +653,11 @@
       }
       
       embedBtn.innerText = "✅ 임베딩 완료!";
+      embedBtn.disabled = true; // 임베딩 버튼 비활성화 유지
       questionBtn.disabled = false; // 질문 버튼 활성화
     } catch (error) {
       alert("❌ " + error.message);
-      embedBtn.disabled = false;
+      embedBtn.disabled = false; // 에러 시에만 활성화
       embedBtn.innerText = "📚 임베딩 실행";
     }
   }
@@ -654,7 +666,13 @@
   async function loadQuestionPanel() {
     console.log("🔄 Question 패널 로드 시작");
     
+    const questionBtn = document.getElementById("questionBtn");
+    
     try {
+      // 버튼 비활성화 및 로딩 표시
+      questionBtn.disabled = true;
+      questionBtn.innerText = "⏳ 로딩 중...";
+      
       const res = await fetch("/panel/question");
       console.log(`📥 /panel/question 응답: ${res.status}`);
       
@@ -693,9 +711,16 @@
       
       console.log("✅ Question 패널 로드 완료");
       
+      // 패널 로드 완료 - 버튼은 "질문 생성 중..." 상태 유지
+      // question.html의 generateQuestions()가 자동 실행되어 완료 시 버튼 업데이트
+      // questionBtn은 이미 비활성화 + "⏳ 질문 생성 중..." 상태
+      
     } catch (error) {
       console.error("❌ 패널 로드 에러:", error);
       alert("❌ 패널 로드 실패: " + error.message);
+      // 에러 시에만 버튼 활성화
+      questionBtn.disabled = false;
+      questionBtn.innerText = "🤖 질문 생성";
     }
   }
 
