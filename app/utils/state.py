@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional, Any
+from typing import List, Optional, Any, Dict
 import uuid
 
 class InterviewState(BaseModel):
@@ -17,6 +17,11 @@ class InterviewState(BaseModel):
     resume_text: Optional[str] = None  # 이력서 전체 텍스트 (질문 생성용)
     jd_text: Optional[str] = None      # JD 전체 텍스트 (질문 생성용)
     portfolio_text: Optional[str] = None  # 포트폴리오 전체 텍스트 (질문 생성용, 선택)
+    
+    # 🆕 구조화된 문서 데이터
+    structured_resume: Optional[Dict[str, Any]] = None  # StructuredResume JSON
+    structured_jd: Optional[Dict[str, Any]] = None      # StructuredJD JSON
+    
     questions: Optional[List[str]] = None
     metrics: Optional[List[str]] = None
     interview_logs: Optional[List[Any]] = None  # 면접 대화 로그

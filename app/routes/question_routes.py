@@ -70,7 +70,9 @@ def embed_docs():
             portfolio_len=embed_result.get("portfolio_len", 0),
             resume_text=embed_result.get("resume_text"),
             jd_text=embed_result.get("jd_text"),
-            portfolio_text=embed_result.get("portfolio_text")
+            portfolio_text=embed_result.get("portfolio_text"),
+            structured_resume=embed_result.get("structured_resume"),
+            structured_jd=embed_result.get("structured_jd")
         )
         print(f"   ✅ State 객체 생성 완료")
         
@@ -88,6 +90,8 @@ def embed_docs():
         GLOBAL_STATE.resume_text = state.resume_text
         GLOBAL_STATE.jd_text = state.jd_text
         GLOBAL_STATE.portfolio_text = state.portfolio_text
+        GLOBAL_STATE.structured_resume = state.structured_resume
+        GLOBAL_STATE.structured_jd = state.structured_jd
         print(f"   ✅ GLOBAL_STATE 업데이트 완료")
 
         end_time = time.perf_counter()
