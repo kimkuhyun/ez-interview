@@ -15,7 +15,7 @@ except Exception:  # pragma: no cover - 런타임 환경에 따라 없을 수 �
     sync_playwright = None
 
 # report_agent에서 create_report, create_report_async 가져오기
-from app.agents.report_agent_v3 import create_report, create_report_async
+from app.agents.report_agent_v4 import create_report, create_report_async
 
 # 나머지는 기존 report_agent에서 가져오기
 """
@@ -122,7 +122,7 @@ def report_pdf():
         user_prompt = request.args.get("user_prompt", "")
         candidate_name = GLOBAL_STATE.candidate_name or "지원자"
 
-        FALLBACK_SESSION_ID = "24ba55a6-bcdc-42ef-8053-3f1d8bfffd8b"
+        FALLBACK_SESSION_ID = "7ac7d019-0c29-4af8-abd3-8bf18f4544bf"
         if not session_id:
             session_id = FALLBACK_SESSION_ID
         else:
@@ -212,142 +212,6 @@ def report_pdf():
     return resp
 
 
-@reports_bp.post("/generate")
-def generate_from_txt():
-    from app.routes.state_routes import GLOBAL_STATE
-    
-    data = request.form if request.form else request.get_json(silent=True) or {}
-    
-    print(f"\n[reports/generate] 요청 시작")
-    print(f"   - 요청 데이터: {data.keys()}")
-
-    try:
-        # ===== 1. GLOBAL_STATE에서 데이터 가져오기 =====
-        session_id = data.get('session_id') or GLOBAL_STATE.session_id
-        resume_id = GLOBAL_STATE.resume_id
-        jd_id = GLOBAL_STATE.jd_id
-        metrics = GLOBAL_STATE.metrics
-        
-        print(f"\n[State에서 가져온 데이터]")
-        print(f"   - session_id: {session_id}")
-        print(f"   - resume_id: {resume_id}")
-        print(f"   - jd_id: {jd_id}")
-        print(f"   - metrics: {metrics}")
-        
-        # ===== 2. 폴백: 하드코딩된 세션 ID 사용 (DB에 실제 데이터가 있는 UUID) =====
-        # DB 확인 결과: 7ac7d019-0c29-4af8-abd3-8bf18f4544bf
-        FALLBACK_SESSION_ID = "24ba55a6-bcdc-42ef-8053-3f1d8bfffd8b"
-
-        # session_id가 있으면 DB에서 데이터 존재 여부 확인
-        use_fallback = False
-        if not session_id:
-            print(f"\n⚠️  [폴백] session_id가 없음")
-            use_fallback = True
-        else:
-            # DB에서 데이터 확인
-            from app.db.db_connection import get_connection
-            try:
-                conn = get_connection()
-                cur = conn.cursor()
-                cur.execute('SELECT COUNT(*) FROM rag.documents WHERE session_id = %s', (session_id,))
-                doc_count = cur.fetchone()[0]
-                cur.execute('SELECT COUNT(*) FROM rag.interview_logs WHERE session_id = %s', (session_id,))
-                log_count = cur.fetchone()[0]
-                cur.close()
-                conn.close()
-
-                print(f"\n[DB 데이터 확인]")
-                print(f"   - session_id: {session_id}")
-                print(f"   - documents: {doc_count}, interview_logs: {log_count}")
-
-                if doc_count == 0 and log_count == 0:
-                    print(f"   ⚠️  DB에 데이터가 없음 → 폴백 사용")
-                    use_fallback = True
-            except Exception as e:
-                print(f"\n⚠️  [DB 확인 실패] {e} → 폴백 사용")
-                use_fallback = True
-
-        if use_fallback:
-            print(f"\n⚠️  [폴백 적용]")
-            print(f"   원래 session_id: {session_id}")
-            session_id = FALLBACK_SESSION_ID
-            print(f"   폴백 session_id: {session_id}")
-        
-        # ===== 3. axes_keys 파싱 =====
-        if metrics:
-            axes_keys = metrics
-        else:
-            axes_keys_raw = data.get('axes_keys')
-            if axes_keys_raw:
-                axes_keys = _parse_axes_keys(data)
-            else:
-                axes_keys = _DEFAULT_AXES_KEYS.copy()
-                print(f"\n⚠️  [폴백] 평가지표가 없어서 기본값 사용: {axes_keys}")
-        
-        if len(axes_keys) != 5:
-            axes_keys = _DEFAULT_AXES_KEYS.copy()
-            print(f"\n⚠️  [폴백] 평가지표 개수가 5개가 아니어서 기본값 사용: {axes_keys}")
-        
-        print(f"\n[최종 사용 데이터]")
-        print(f"   - session_id: {session_id}")
-        print(f"   - axes_keys: {axes_keys}")
-        
-        # ===== 4. 리포트 생성 =====
-        print(f"\n[리포트 생성 시작]")
-        print(f"   - VectorDB 기반 (interview_logs + rag.documents)")
-        
-        # 폴백용 텍스트는 비워둠 (VectorDB에서 가져오기 때문)
-        resume_text = ""
-        jd_text = ""
-        log_text = ""
-        
-        # report_agent 호출
-        rpt = create_report(
-            session_id=session_id,
-            axes_keys=axes_keys,
-            resume_text=resume_text,
-            jd_text=jd_text,
-            log_text=log_text
-        )
-        
-        print(f"\n[리포트 생성 완료]")
-        print(f"   - status: {rpt.get('status', 'success')}")
-
-        if rpt.get("status") == "failed":
-            print(f"\n❌ [리포트 생성 실패]")
-            print(f"   - code: {rpt.get('code')}")
-            print(f"   - message: {rpt.get('message')}")
-            return (render_template("agents/report.html", report=rpt), 200) if _wants_html(data) else (jsonify(rpt), 200)
-
-        # 디버깅용 로그(서버 콘솔)
-        if rpt.get("talkSummary") and rpt["talkSummary"].get("items"):
-            print(f"\n[talkSummary 정보]")
-            print(f"   - 항목 개수: {len(rpt['talkSummary']['items'])}")
-            for idx, item in enumerate(rpt["talkSummary"]["items"]):
-                print(f"      [{idx}] 주제: {item.get('주제', 'N/A')}")
-        
-        print(f"\n[응답 반환]")
-        print(f"   - format: {'html' if _wants_html(data) else 'json'}")
-        
-        return (render_template("agents/report.html", report=rpt), 200) if _wants_html(data) else (jsonify(rpt), 200)
-
-    except KeyError as e:
-        print(f"\n❌ [KeyError] {e}")
-        import traceback
-        traceback.print_exc()
-        err = {"status": "failed", "code": "bad_request", "message": f"필수 파라미터 누락: {e}", "details": {}}
-        return (render_template("agents/report.html", report=err), 200) if _wants_html(data) else (jsonify(err), 200)
-    except ValidationError as e:
-        err = {"status": "failed", "code": "validation_failed", "message": "입력 검증 실패", "details": e.errors()}
-        return (render_template("agents/report.html", report=err), 200) if _wants_html(data) else (jsonify(err), 200)
-    except Exception as e:
-        print(f"\n❌ [Exception] {e}")
-        import traceback
-        traceback.print_exc()
-        err = {"status": "failed", "code": "failed", "message": str(e)}
-        return (render_template("agents/report.html", report=err), 200) if _wants_html(data) else (jsonify(err), 200)
-
-
 @reports_bp.route("/generate/stream", methods=["GET"])
 def generate_stream():
     """
@@ -367,7 +231,7 @@ def generate_stream():
     candidate_name = GLOBAL_STATE.candidate_name or "지원자"
 
     # 폴백 session_id 처리
-    FALLBACK_SESSION_ID = "24ba55a6-bcdc-42ef-8053-3f1d8bfffd8b"
+    FALLBACK_SESSION_ID = "7ac7d019-0c29-4af8-abd3-8bf18f4544bf"
     if not session_id:
         print(f"⚠️  session_id가 없음 → 폴백 사용: {FALLBACK_SESSION_ID}")
         session_id = FALLBACK_SESSION_ID
@@ -396,7 +260,6 @@ def generate_stream():
     else:
         axes_keys_raw = request.args.get('axes_keys')
         if axes_keys_raw:
-            # Query parameter는 문자열이므로 쉼표로 split
             axes_keys = [k.strip() for k in axes_keys_raw.split(',') if k.strip()]
         else:
             axes_keys = _DEFAULT_AXES_KEYS.copy()
@@ -416,21 +279,26 @@ def generate_stream():
             print(f"\n[SSE 스트림 시작]")
             event_count = 0
 
-            # create_report_async를 실시간으로 스트리밍
             async for event in create_report_async(
                 session_id=session_id,
                 candidate_name=candidate_name,
                 axes_keys=axes_keys,
                 user_prompt=user_prompt,
+                has_portfolio=bool(getattr(GLOBAL_STATE, "portfolio_len", 0)),
             ):
+                event_count += 1
+                print(
+                    f"[SSE] 이벤트 #{event_count} 전송 - "
+                    f"type: {event.get('type')}, agent: {event.get('agent', 'N/A')}"
+                )
                 event_count += 1
                 print(f"[SSE] 이벤트 #{event_count} 전송 - type: {event.get('type')}, agent: {event.get('agent', 'N/A')}")
 
                 if event["type"] == "log":
                     yield f"event: log\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
                 elif event["type"] == "debate":
-                    # 디베이트 로그 스트리밍 (인터뷰 분석 A/B 토론)
-                    print(f"[SSE] 디베이트 로그 전송 - {len(event.get('turns', []))}개 턴")
+                    # (현재는 안 나가지만, 추후 디베이트 이벤트 용)
+                    print(f"[SSE] 디베이트 로그 전송")
                     yield f"event: debate\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
                 elif event["type"] == "error":
                     print(f"[SSE] 에러 이벤트 전송 - {event.get('message', '')[:100]}")
@@ -439,9 +307,8 @@ def generate_stream():
                     print(f"[SSE] 최종 리포트 전송 중...")
                     yield f"event: report\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
 
-            # 완료 이벤트 전송
             print(f"[SSE] 완료 이벤트 전송 (총 {event_count}개 이벤트)")
-            yield f"event: done\ndata: {json.dumps({'status': 'completed'})}\n\n"
+            yield f"event: done\ndata: {json.dumps({'status': 'completed'}, ensure_ascii=False)}\n\n"
             print(f"[SSE 스트림 정상 종료]")
 
         except Exception as e:
@@ -457,23 +324,20 @@ def generate_stream():
     def generate():
         """동기 래퍼 - 비동기 제너레이터를 동기로 변환"""
         loop = None
+        async_gen = None
         try:
-            # 새 이벤트 루프 생성
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-            # 비동기 제너레이터 생성
             async_gen = async_generate()
 
-            # 이벤트를 하나씩 실시간으로 yield
             while True:
                 try:
-                    # 다음 이벤트를 기다림
+                    # async_generate에서 한 이벤트 받아오기
                     event_data = loop.run_until_complete(async_gen.__anext__())
-                    # 즉시 클라이언트로 전송
                     yield event_data
                 except StopAsyncIteration:
-                    # 제너레이터 종료
+                    # 제너레이터 정상 종료
                     break
 
         except Exception as e:
@@ -486,6 +350,12 @@ def generate_stream():
             }
             yield f"event: error\ndata: {json.dumps(error_event, ensure_ascii=False)}\n\n"
         finally:
+            # async generator 정리 → 내부 pending task 제거
+            if async_gen is not None:
+                try:
+                    loop.run_until_complete(async_gen.aclose())
+                except Exception:
+                    pass
             if loop and not loop.is_closed():
                 loop.close()
                 print(f"[SSE] 이벤트 루프 종료")
@@ -498,4 +368,5 @@ def generate_stream():
             'X-Accel-Buffering': 'no'
         }
     )
+
 

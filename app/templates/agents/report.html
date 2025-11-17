@@ -300,242 +300,71 @@
 
   // ==== 렌더러 ====
   let radar;
-  function renderReport(r){
+  window.addEventListener('DOMContentLoaded', function() {
+    console.log('DOMContentLoaded 이벤트 발생');
+    try {
+      const data = JSON.parse(document.getElementById('reportData').textContent);
+      console.log('전달된 데이터:', data);
+      if (data && data.status === 'failed') {
+        showError(data);
+      } else {
+        renderReport(data);
+      }
+    } catch (e) {
+      console.error('초기 렌더링 실패:', e);
+    }
+  });
+
+  function renderReport(r) {
     console.log('renderReport 시작, 데이터:', r);
 
-    // 안전한 요소 접근 및 스타일 변경
-    const emptyBox = $("emptyBox");
-    if (emptyBox) emptyBox.style.display="none";
-
     const reportRoot = $("reportRoot");
-    if (reportRoot) reportRoot.style.display="block";
-
-    const dlBtn = $("dlBtn");
-    if (dlBtn) dlBtn.style.display="inline-block";
-
-    const candidateName = r?.candidate_name || "지원자";
-    const reportTitle = $("reportTitle");
-    if (reportTitle) reportTitle.textContent = `${candidateName}의 면접 리포트`;
+    if (reportRoot) reportRoot.style.display = "block";
 
     const headlineSummary = $("headlineSummary");
-    if (headlineSummary) headlineSummary.textContent = r?.headline?.summary || "";
+    if (headlineSummary) headlineSummary.textContent = r?.headline?.summary || "데이터 없음";
 
-    const keywords = (r?.headline?.tag || '').split(',').map(k => k.trim()).filter(Boolean);
     const headlineKeywords = $("headlineKeywords");
     if (headlineKeywords) {
-      headlineKeywords.innerHTML = keywords.map(kw =>
-        `<span class="headline-keyword">#${esc(kw)}</span>`
-      ).join('');
+      const keywords = (r?.headline?.tag || '').split(',').map(k => k.trim()).filter(Boolean);
+      headlineKeywords.innerHTML = keywords.length
+        ? keywords.map(kw => `<span class="headline-keyword">#${esc(kw)}</span>`).join('')
+        : '<span>키워드 없음</span>';
     }
 
-    // 신뢰도 점수 렌더링 (headline에 포함된 경우)
-    if (r?.headline?.contradiction_score !== undefined) {
-      const reliabilityScores = $("reliabilityScores");
-      if (reliabilityScores) {
-        reliabilityScores.style.display = "flex";
-
-        const contradictionScore = $("contradictionScore");
-        if (contradictionScore) {
-          const score = r.headline.contradiction_score;
-          contradictionScore.textContent = `${score}%`;
-          contradictionScore.style.color = score > 50 ? "#dc2626" : score > 30 ? "#f59e0b" : "#10b981";
-        }
-
-        const depthScore = $("depthScore");
-        if (depthScore) {
-          const score = r.headline.depth_score;
-          depthScore.textContent = `${score}%`;
-          depthScore.style.color = score > 70 ? "#10b981" : score > 50 ? "#f59e0b" : "#dc2626";
-        }
-
-        const reliabilityScore = $("reliabilityScore");
-        if (reliabilityScore) {
-          const score = r.headline.reliability_score;
-          reliabilityScore.textContent = `${score}%`;
-          reliabilityScore.style.color = score > 70 ? "#10b981" : score > 50 ? "#f59e0b" : "#dc2626";
-        }
-      }
-    }
-
-    // axes에서 key와 label 추출 (State에서 한글 label 직접 제공)
-    const axes = r.axes || [];
-    const keys = axes.map(a => a.key);
-
-    // 차트 레이블: axes의 label 사용, 없으면 key 사용
-    const labels = axes.map(a => a.label || a.key);
-
-    // scores 객체 생성
-    let scoresObj = {};
-    if (Array.isArray(r.scores)) {
-      r.scores.forEach(s => { scoresObj[s.key] = s.value; });
+    console.log('핵심역량 데이터:', r.jdCoverage);
+    if (!r.jdCoverage || r.jdCoverage.length === 0) {
+      console.warn('핵심역량 데이터가 비어있습니다.');
     } else {
-      scoresObj = r.scores || {};
+      console.table(r.jdCoverage);
     }
-
-    // key 순서대로 values 배열 생성
-    const values = keys.map(k => {
-      const score = scoresObj[k];
-      return (typeof score === "number") ? score : 0;
-    });
-
-    console.log('=== 차트 디버깅 ===');
-    console.log('axes:', axes);
-    console.log('keys:', keys);
-    console.log('labels:', labels);
-    console.log('scoresObj:', scoresObj);
-    console.log('values:', values);
-
-    // 차트 렌더링 (안전하게)
-    const radarCanvas = $("radarChart");
-    if (radarCanvas) {
-      if (radar) radar.destroy();
-      radar = new Chart(radarCanvas, {
-        type:'radar',
-        data:{
-          labels: labels,
-          datasets:[{
-            label:'점수',
-            data:values,
-            fill:true,
-            backgroundColor:'rgba(99,102,241,0.2)',
-            borderColor:'rgb(79,70,229)',
-            borderWidth:2,
-            pointBackgroundColor:'rgb(79,70,229)',
-            pointBorderColor:'#fff',
-            pointBorderWidth:2,
-            pointRadius:4
-          }]
-        },
-        options:{
-          responsive:true,
-          maintainAspectRatio:true,
-          scales:{
-            r:{
-              beginAtZero:true,
-              min:0,
-              max:100,
-              ticks:{ stepSize:20 }
-            }
-          },
-          plugins:{
-            legend:{ display:false },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  return context.label + ': ' + context.parsed.r + '점';
-                }
-              }
-            }
-          }
-        }
-      });
-    } else {
-      console.warn('radarChart 요소를 찾을 수 없습니다');
-    }
-
-    const items = (r.talkSummary && r.talkSummary.items) ? r.talkSummary.items : [];
-    const overall = items.find(x=>x.주제==='인터뷰 요약');
-    const pos = items.find(x=>x.주제==='긍정 의견');
-    const neg = items.find(x=>x.주제==='부정 의견');
-    const flows = items.filter(x=>x.주제!=='인터뷰 요약' && x.주제!=='긍정 의견' && x.주제!=='부정 의견');
-
-    let flowHTML = '';
-    if (overall && overall.발언요약) {
-      flowHTML += `
-        <div class="qa-simple" style="border-left:3px solid #10b981;background:#f0fdf4;">
-          <div class="qa-topic" style="font-weight:600;color:#059669;">전체 요약</div>
-          <div class="qa-summary">${esc(overall.발언요약)}</div>
-        </div>`;
-    }
-    flowHTML += flows.map(it=>{
-      const topic = it.주제 || '';
-      const content = it.발언요약 || '';
-      return `
-        <div class="qa-simple">
-          <div class="qa-topic">${esc(topic)}</div>
-          <div class="qa-summary">${esc(content)}</div>
-        </div>`;
-    }).join("");
-    if (!flowHTML) flowHTML = '<div class="empty"><p>인터뷰 요약이 없습니다</p></div>';
-
-    const flowList = $("flowList");
-    if (flowList) flowList.innerHTML = flowHTML;
-
-    const posBox = $("posBox");
-    if (posBox) posBox.innerHTML = pos ? `<p>${esc(pos.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
-
-    const negBox = $("negBox");
-    if (negBox) negBox.innerHTML = neg ? `<p>${esc(neg.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
-
     const jdBody = document.querySelector("#jdTable tbody");
-    if (!jdBody) {
-      console.warn('jdTable tbody를 찾을 수 없습니다');
-      return;
+    if (jdBody) {
+      jdBody.innerHTML = (r.jdCoverage || []).map(row => {
+        const chips = (row.evidence || []).map(e => `<span class="badge badge-indigo">${esc(e)}</span>`).join(" ");
+        return `<tr>
+          <td>${esc(row.cid || 'N/A')}</td>
+          <td>${esc(row.requirement || 'N/A')}</td>
+          <td>${esc(row.fulfillment || 'N/A')}</td>
+          <td>${chips || '<span>근거 없음</span>'}</td>
+        </tr>`;
+      }).join('');
     }
-    const axesMap = {};
-    (r.axes||[]).forEach((ax, idx) => { axesMap[`C${String(idx+1).padStart(2,'0')}`] = ax; });
-
-    jdBody.innerHTML = (r.jdCoverage||[]).map(row=>{
-      const chips = (row.근거||[]).map(e =>
-        `<span class="badge badge-indigo eid-link" data-eid="${esc(e)}" onclick="scrollToEvidence('${esc(e)}')">${esc(e)}</span>`
-      ).join(" ");
-
-      const axInfo = axesMap[row.jid];
-      let score = 0, competencyName = row.jid;
-      if (axInfo && scoresObj[axInfo.key] !== undefined) {
-        score = scoresObj[axInfo.key];
-        competencyName = axInfo.label || axInfo.key;
-      }
-
-      const expect = String(row.기대치 || '').replace(/^\s*(기준[:\s-]*)?/,'').trim();
-      const fulfillBadge = `<div class="fulfillment-badge"><span class="fulfillment-score">${score}점</span></div>`;
-
-      return `<tr>
-        <td><strong style="color:#7c3aed;">${esc(competencyName)}</strong></td>
-        <td>${esc(row.요구사항)}<div class="jd-expectation">기준: ${esc(expect)}</div></td>
-        <td>${fulfillBadge}</td>
-        <td>${chips||'<span style="color:#9ca3af;">-</span>'}</td>
-      </tr>`;
-    }).join("");
 
     const evBody = document.querySelector("#evTable tbody");
     if (evBody) {
-      evBody.innerHTML = (r.evidence||[]).map(ev=>{
-        const axInfo = axesMap[ev.jid];
-        let competencyName = ev.jid;
-        if (axInfo) competencyName = axInfo.label || axInfo.key;
-
-        return `<tr id="ev-${esc(ev.eid)}" class="evidence-row">
-          <td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td>
-          <td style="color:#6b7280;font-size:0.75rem;">${esc(ev.출처)}</td>
-          <td>${esc(ev.내용)}</td>
-          <td><span class="badge badge-purple">${esc(competencyName)}</span></td>
-        </tr>`;
-      }).join("");
-    } else {
-      console.warn('evTable tbody를 찾을 수 없습니다');
-    }
-
-    const statsElem = $("stats");
-    if (statsElem) {
-      statsElem.innerHTML = (r.convStats||[]).map(kv =>
-        `<div class="stats-item"><span class="stats-label">${esc(kv.k)}</span><span>:</span><span class="stats-value">${esc(kv.v)}</span></div>`
-      ).join("");
+      evBody.innerHTML = (r.evidence || []).length
+        ? (r.evidence || []).map(ev => `<tr>
+            <td>${esc(ev.eid || '없음')}</td>
+            <td>${esc(ev.출처 || '없음')}</td>
+            <td>${esc(ev.내용 || '없음')}</td>
+            <td>${esc(ev.연결 || '없음')}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="4">데이터 없음</td></tr>';
     }
 
     console.log('renderReport 완료');
   }
-
-  // 서버가 초기 렌더 시 report 데이터를 넣어준 경우만 처리
-  {% if report and report.axes %}
-  window.addEventListener('DOMContentLoaded', function() {
-    try {
-      const data = {{ report|tojson|safe }};
-      if (data && data.status === 'failed') showError(data);
-      else renderReport(data);
-    } catch (e) { console.error('초기 렌더링 실패:', e); }
-  });
-  {% endif %}
 
   // EID 클릭 시 증거 맵 하이라이트
   function scrollToEvidence(eid) {
