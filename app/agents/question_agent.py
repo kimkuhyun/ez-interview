@@ -19,8 +19,8 @@ class QuestionAgent:
 
         # LLM 초기화
         self.llm = ChatOpenAI(
-            # model="gpt-4o-mini",
-            model="gpt-3.5-turbo",
+            model="gpt-4o-mini",
+            # model="gpt-3.5-turbo",
             temperature=0.5,
             openai_api_key=api_key,
         )
@@ -44,11 +44,17 @@ class QuestionAgent:
             "- 포트폴리오 기반 1개: 포트폴리오의 기술적 구현/문제 해결을 확인하는 질문 (포트폴리오 없으면 이력서 기반으로 추가)\n\n"
             "**[인성 질문 3개]**\n"
             "- 의사소통, 팀워크, 학습 의지, 문제 해결 태도 등을 확인하는 질문\n"
-            "- JD와 이력서를 연결하여 실무 상황 기반 질문\n\n"
+            "- ⚠️ 반드시 실무 상황 기반 질문 (이력서/JD 맥락 활용)\n"
+            "- 지원자의 실제 경험(회사명/프로젝트명)과 JD 요구사항을 연결\n\n"
+            "⚠️ 질문 형식 (중요):\n"
+            "- 모든 질문은 '~을/를 설명해주세요' 패턴으로 통일\n"
+            "- 한 문장으로 간결하게 (40-60자 권장)\n"
+            "- 구체적 기술/프로젝트명 반드시 명시\n"
             "⚠️ 금지사항:\n"
             "- 'JD에 언급된', 'JD에서 봤는데', 'JD와', 'JD를' 같은 메타 표현 금지\n"
             "- Yes/No 질문 금지 (개방형 질문만)\n"
             "- 막연한 질문 금지 (구체적인 내용 언급 필수)\n"
+            "- 두 문장 이상의 긴 질문 금지\n"
             "- 기존 질문과 비슷한 주제나 표현 사용 금지 (완전히 새로운 관점 필수)\n"
             "- 기존 질문에서 다룬 기술/경험은 절대 재사용 금지 (예: PostgreSQL/MySQL 이미 물어봤으면 다른 기술로)\n\n"
             "💡 다양성 강화 (필수):\n"
@@ -57,12 +63,18 @@ class QuestionAgent:
             "- 같은 기술이라도 완전히 다른 각도로 질문 (예: 사용 경험 → 트러블슈팅, 설계, 최적화 등)\n"
             "- 문서에 명시되지 않은 암묵적 역량 검증 (예: 코드 리뷰 경험, 장애 대응, 기술 선택 근거 등)\n\n"
             "=== 평가지표 생성 규칙 ===\n"
-            "JD를 중심으로 10개 평가지표를 생성하세요:\n"
-            "- 기술 역량 (6~7개): JD의 필수/우대 기술\n"
-            "- 인성/태도 (3~4개): 팀워크, 의사소통, 학습의지, 문제해결\n\n"
+            "JD를 중심으로 10개 평가지표를 생성하세요 (카테고리별 통합):\n\n"
+            "**[기술 역량 카테고리 6~7개]**\n"
+            "- JD 필수 기술 영역을 대분류로 묶어서 표현\n"
+            "- 개별 기술이 아닌 기술 영역/도메인 중심으로 통합\n\n"
+            "**[인성/태도 카테고리 3~4개]**\n"
+            "- 팀워크, 의사소통, 학습의지, 문제해결 등\n"
+            "- 단순 추상적 표현보다 실무 맥락 포함 권장\n"
+            "- 예: '팀워크' → '협업 및 의사소통', '학습의지' → '기술 학습 및 성장 의지'\n\n"
             "⚠️ 중요:\n"
+            "- 질문과 1:1 대응 금지 (평가지표는 여러 질문에서 공통 평가)\n"
             "- 하나의 지표 = 하나의 역량만 (복합 표현 금지)\n"
-            "- '및', '와', '/', '그리고' 사용 금지\n"
+            "- '및', '와', '/', '그리고' 사용 금지 (단, '협업 및 의사소통'처럼 불가분 관계는 예외)\n"
             "- 예: 'SQL 튜닝 능력' (O), 'SQL 튜닝 및 최적화' (X)\n\n"
             "=== 출력 형식 (JSON) ===\n"
             "{{\n"
@@ -109,9 +121,81 @@ class QuestionAgent:
         from app.routes.state_routes import GLOBAL_STATE
         has_portfolio = GLOBAL_STATE.portfolio_len and GLOBAL_STATE.portfolio_len > 0
         
+        # 🆕 Priority 1: 구조화 데이터 추출 (RAG 우회)
+        print(f"\n📄 [Step 0] 구조화 데이터 추출")
+        structured_resume = GLOBAL_STATE.structured_resume
+        structured_jd = GLOBAL_STATE.structured_jd
+        
+        # 구조화 데이터에서 핵심 정보 추출
+        resume_tech_stack = []
+        resume_projects = []
+        resume_companies = []
+        
+        if structured_resume:
+            print(f"   ✅ Resume 구조화 데이터 발견")
+            
+            # dict로 접근 (Pydantic 객체가 아님!)
+            skills = structured_resume.get('skills', {})
+            if skills:
+                resume_tech_stack.extend(skills.get('technical', []))
+                resume_tech_stack.extend(skills.get('languages', []))
+                resume_tech_stack.extend(skills.get('frameworks', []))
+                resume_tech_stack.extend(skills.get('tools', []))
+            
+            # 프로젝트 정보
+            projects = structured_resume.get('projects', [])
+            for proj in projects:
+                resume_projects.append({
+                    "name": proj.get('name', ''),
+                    "tech": proj.get('tech_stack', []),
+                    "description": proj.get('description', '')[:100]
+                })
+            
+            # 경력 정보
+            experience = structured_resume.get('experience', [])
+            for exp in experience:
+                resume_companies.append({
+                    "company": exp.get('company', ''),
+                    "role": exp.get('role', ''),
+                    "tech": exp.get('tech_stack', [])
+                })
+                if exp.get('tech_stack'):
+                    resume_tech_stack.extend(exp['tech_stack'])
+            
+            resume_tech_stack = list(set(resume_tech_stack))  # 중복 제거
+            print(f"      - 기술 스택: {len(resume_tech_stack)}개 ({', '.join(resume_tech_stack[:5])}...)")
+            print(f"      - 프로젝트: {len(resume_projects)}개")
+            print(f"      - 경력: {len(resume_companies)}개")
+        else:
+            print(f"   ⚠️  Resume 구조화 데이터 없음")
+        
+        jd_required_skills = []
+        jd_preferred_skills = []
+        jd_tech_stack = []
+        jd_responsibilities = []
+        
+        if structured_jd:
+            print(f"   ✅ JD 구조화 데이터 발견")
+            
+            # dict로 접근
+            requirements = structured_jd.get('requirements', {})
+            if requirements:
+                jd_required_skills = requirements.get('required_skills', [])
+                jd_preferred_skills = requirements.get('preferred_skills', [])
+            
+            jd_tech_stack = structured_jd.get('tech_stack', [])
+            jd_responsibilities = structured_jd.get('responsibilities', [])[:5]  # 상위 5개만
+            
+            print(f"      - 필수 기술: {len(jd_required_skills)}개 ({', '.join(jd_required_skills[:3])}...)")
+            print(f"      - 우대 기술: {len(jd_preferred_skills)}개")
+            print(f"      - 기술 스택: {len(jd_tech_stack)}개")
+            print(f"      - 주요 업무: {len(jd_responsibilities)}개")
+        else:
+            print(f"   ⚠️  JD 구조화 데이터 없음")
+        
         # 1️⃣ RAG 검색 (문서별 필요한 부분만 검색)
         rag_start = time.time()
-        print(f"\n🔍 [Step 1] RAG 검색 (문서별 가중치 적용)")
+        print(f"\n🔍 [Step 1] RAG 검색 (메타데이터 필터링 적용)")
         print(f"   - Session ID: {session_id}")
         print(f"   - Portfolio 제출 여부: {has_portfolio}")
         
@@ -122,7 +206,8 @@ class QuestionAgent:
                 query=jd_query,
                 session_id=session_id,
                 doc_type="jd",
-                top_k=3
+                top_k=3,
+                metadata_filter=None  # JD는 필터 없음
             )
             jd_context = "\n".join([chunk.get("content", "") for chunk in jd_chunks])
             print(f"   ✅ JD 검색: {len(jd_chunks)}개 청크, {len(jd_context)}자")
@@ -132,13 +217,14 @@ class QuestionAgent:
                 content = chunk.get('content', '')[:150]
                 print(f"      {i}. [유사도: {score:.3f}] {content}...")
             
-            # 이력서 중심 검색 (top 5) - 필수
+            # 이력서 중심 검색 (top 5) - 필수, 🆕 experience/projects 섬션 우선
             resume_query = "경력, 프로젝트 경험, 기술 스택, 주요 성과"
             resume_chunks = search_similar_chunks(
                 query=resume_query,
                 session_id=session_id,
                 doc_type="resume",
-                top_k=5
+                top_k=5,
+                metadata_filter={"sections": ["experience", "projects"]}  # 🆕 Priority 2
             )
             resume_context = "\n".join([chunk.get("content", "") for chunk in resume_chunks])
             print(f"   ✅ 이력서 검색: {len(resume_chunks)}개 청크, {len(resume_context)}자")
@@ -156,7 +242,8 @@ class QuestionAgent:
                     query=portfolio_query,
                     session_id=session_id,
                     doc_type="portfolio",
-                    top_k=3
+                    top_k=3,
+                    metadata_filter={"sections": ["projects"]}  # 🆕 Priority 2
                 )
                 
                 if portfolio_chunks:
@@ -209,6 +296,47 @@ class QuestionAgent:
                 "portfolio_context": portfolio_context or "정보 없음",
                 "existing_questions_context": existing_questions_context,
             }
+            
+            # 🆕 Priority 1: 구조화 데이터를 프롬프트에 직접 추가
+            if structured_resume or structured_jd:
+                structured_context = "\n=== 📄 구조화 데이터 (정확한 정보) ===\n"
+                
+                if structured_resume:
+                    structured_context += "\n[지원자 기술 스택]\n"
+                    if resume_tech_stack:
+                        structured_context += f"{', '.join(resume_tech_stack[:20])}\n"  # 상위 20개
+                    
+                    structured_context += "\n[지원자 프로젝트]\n"
+                    for proj in resume_projects[:5]:  # 상위 5개
+                        structured_context += f"- {proj['name']}: {', '.join(proj['tech'][:5])}\n"
+                    
+                    structured_context += "\n[지원자 경력]\n"
+                    for exp in resume_companies[:3]:  # 상위 3개
+                        structured_context += f"- {exp['company']} ({exp['role']}): {', '.join(exp['tech'][:5])}\n"
+                
+                if structured_jd:
+                    structured_context += "\n[JD 필수 기술]\n"
+                    if jd_required_skills:
+                        structured_context += f"{', '.join(jd_required_skills)}\n"
+                    
+                    structured_context += "\n[JD 우대 기술]\n"
+                    if jd_preferred_skills:
+                        structured_context += f"{', '.join(jd_preferred_skills)}\n"
+                    
+                    structured_context += "\n[JD 기술 스택]\n"
+                    if jd_tech_stack:
+                        structured_context += f"{', '.join(jd_tech_stack)}\n"
+                    
+                    structured_context += "\n[JD 주요 업무]\n"
+                    for idx, resp in enumerate(jd_responsibilities, 1):
+                        structured_context += f"{idx}. {resp}\n"
+                
+                structured_context += "\n⚠️  위 구조화 데이터를 우선적으로 활용하여 질문을 생성하세요.\n"
+                
+                # 프롬프트에 추가
+                invoke_params["resume_context"] = structured_context + "\n" + invoke_params["resume_context"]
+                
+                print(f"   🆕 구조화 데이터 프롬프트에 주입 완료")
             
             # 개별 질문 재생성 시 temperature 높이기 (다양성 증가)
             llm = self.llm
