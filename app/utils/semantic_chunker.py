@@ -6,6 +6,61 @@ Resume와 JD를 섹션별/의미별로 분할하여 RAG 검색 품질 향상
 from typing import List, Dict, Any
 from app.utils.schemas import StructuredResume, StructuredJD
 import json
+import hashlib
+import hashlib
+import copy
+
+
+def anonymize_personal_info(resume: StructuredResume) -> StructuredResume:
+    """
+    개인정보를 익명화 처리 (원본은 수정하지 않고 복사본 반환)
+    
+    익명화 규칙:
+    - 이름: "김철수" → "지원자_A3F2" (MD5 해시 기반 익명 ID)
+    - 이메일: 완전 제거 (None)
+    - 전화번호: 완전 제거 (None)
+    - GitHub/LinkedIn/블로그: 유지 (기술 평가에 유용)
+    - 주소: 완전 제거 (None) - basic_info에 주소 필드 없지만 대비
+    
+    Args:
+        resume: 원본 구조화된 이력서 객체
+        
+    Returns:
+        StructuredResume: 익명화된 이력서 객체 (복사본)
+    """
+    # Deep copy로 원본 보호
+    anonymized = copy.deepcopy(resume)
+    
+    if anonymized.basic_info:
+        # 1️⃣ 이름 익명화 (해시 기반 익명 ID 생성)
+        if anonymized.basic_info.name:
+            name_hash = hashlib.md5(anonymized.basic_info.name.encode()).hexdigest()[:4].upper()
+            original_name = anonymized.basic_info.name
+            anonymized.basic_info.name = f"지원자_{name_hash}"
+            print(f"   🔒 [익명화] 이름: '{original_name}' → '{anonymized.basic_info.name}'")
+        
+        # 2️⃣ 연락처 완전 제거
+        if anonymized.basic_info.email:
+            print(f"   🔒 [익명화] 이메일 제거: {anonymized.basic_info.email[:10]}...")
+            anonymized.basic_info.email = None
+        
+        if anonymized.basic_info.phone:
+            print(f"   🔒 [익명화] 전화번호 제거: {anonymized.basic_info.phone}")
+            anonymized.basic_info.phone = None
+        
+        # 3️⃣ GitHub/LinkedIn/블로그는 유지 (기술 평가용)
+        preserved = []
+        if anonymized.basic_info.github:
+            preserved.append(f"GitHub: {anonymized.basic_info.github}")
+        if anonymized.basic_info.linkedin:
+            preserved.append(f"LinkedIn: {anonymized.basic_info.linkedin}")
+        if anonymized.basic_info.blog:
+            preserved.append(f"Blog: {anonymized.basic_info.blog}")
+        
+        if preserved:
+            print(f"   ℹ️  [익명화] 유지된 정보: {', '.join(preserved)}")
+    
+    return anonymized
 
 
 def chunk_structured_resume(resume: StructuredResume) -> List[Dict[str, Any]]:
@@ -18,6 +73,11 @@ def chunk_structured_resume(resume: StructuredResume) -> List[Dict[str, Any]]:
     Returns:
         List[Dict]: 청크 리스트 (content, metadata 포함)
     """
+    # 🔒 개인정보 익명화 처리
+    print(f"\n🔒 [개인정보 보호] 익명화 시작")
+    resume = anonymize_personal_info(resume)
+    print(f"✅ [개인정보 보호] 익명화 완료\n")
+    
     chunks = []
     
     # 1. 기본 정보 청크
