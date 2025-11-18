@@ -182,12 +182,18 @@ def ai_followup():
     if not conversation:
         return error_response(f"{data.get('question_id')} 대화가 없습니다", 404)
 
-    # AI 에이전트 호출 (session_id 전달하여 RAG 활성화)
+    # history에 resume_text, jd_text, portfolio_text 추가
+    history_with_docs = conversation.get("followups", []).copy()
+    
+    # AI 에이전트 호출 (session_id + 문서 텍스트 전달)
     questions = stream_agent.generate_followups(
         text=data.get("text", ""),
         question_id=data.get("question_id"),
-        history=conversation.get("followups", []),
-        session_id=GLOBAL_STATE.session_id,  # RAG 검색을 위한 session_id 전달
+        history=history_with_docs,
+        session_id=GLOBAL_STATE.session_id,  # RAG 검색용
+        resume_text=GLOBAL_STATE.resume_text or "",  # 이력서 원문
+        jd_text=GLOBAL_STATE.jd_text or "",  # JD 원문
+        portfolio_text=GLOBAL_STATE.portfolio_text or "",  # 포트폴리오 원문
         regen=data.get("regen", False),
     )
     
