@@ -1,420 +1,53 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>면접 리포트</title>
   <style>{% include 'css/report.css' %}</style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-  <div class="container">
-    <!-- 헤더 -->
-    <div class="header">
-      <div>
-        <h1 id="reportTitle">면접 리포트</h1>
-        <p>AI 기반 면접 평가 및 분석 결과</p>
-      </div>
-      <div class="header-actions">
-        <span id="genStatus" class="pill" style="display:none;">생성중…</span>
-        <button id="genBtn" class="btn btn-primary no-print">리포트 생성</button>
-        <button id="newWindowBtn" type="button" class="btn btn-secondary no-print" style="display:none;">새 창에서 열기</button>
-        <button id="dlBtn" class="btn btn-success no-print" style="display:none;">HTML 다운로드</button>
-      </div>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1>면접 리포트</h1>
+      <p>AI 기반 면접 평가 및 분석 결과</p>
     </div>
-    <div class="header-line"></div>
-
-    <!-- 실패 배너 -->
-    <div id="errBox" class="alert alert-error" style="display:none;"></div>
-
-    <!-- 프롬프트 입력 섹션 -->
-    <div id="promptSection" class="card" style="margin-bottom: 1.5rem;">
-      <div class="card-header" style="color: #4f46e5;">💬 리포트 생성 프롬프트</div>
-      <div style="margin-bottom: 1rem;">
-        <label for="userPrompt" style="display: block; font-size: 0.875rem; color: #6b7280; margin-bottom: 0.5rem;">
-          리포트 생성 시 반영할 추가 요구사항을 입력하세요 (선택사항)
-        </label>
-        <textarea
-          id="userPrompt"
-          rows="4"
-          placeholder="예시:&#10;- 기술적 깊이를 중점적으로 평가해주세요&#10;- 리더십 역량을 자세히 분석해주세요&#10;- 답변의 구체성에 초점을 맞춰주세요"
-          style="width: 100%; padding: 0.75rem; border: 1px solid #d1d5db; border-radius: 0.5rem; font-size: 0.875rem; font-family: inherit; resize: vertical;"
-        ></textarea>
-      </div>
-      <div style="display: flex; gap: 0.5rem; align-items: center;">
-        <button
-          id="useExampleBtn"
-          class="btn"
-          style="background: #6b7280; color: white; font-size: 0.75rem; padding: 0.5rem 0.75rem;"
-          onclick="fillExamplePrompt()"
-        >
-          예시 프롬프트 사용
-        </button>
-        <span style="font-size: 0.75rem; color: #9ca3af;">
-          * 비워두면 기본 분석이 수행됩니다
-        </span>
-      </div>
-    </div>
-
-    <!-- 본문(초기에는 안내만 보임) -->
-    <div id="emptyBox" class="empty" style="display:none;"><p>리포트를 생성하려면 "리포트 생성"을 클릭하세요.</p></div>
-
-    <div id="reportRoot" style="display:none;">
-      <!-- 헤드라인 (신뢰도 지표 추가) -->
-      <div class="headline">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-          <div style="flex: 1;">
-            <div id="headlineSummary" class="headline-summary"></div>
-            <div id="headlineKeywords" class="headline-keywords"></div>
-          </div>
-          <div id="reliabilityScores" class="reliability-scores" style="display: none;">
-            <div class="reliability-item">
-              <div class="reliability-label">모순 정도</div>
-              <div id="contradictionScore" class="reliability-value">-</div>
-            </div>
-            <div class="reliability-item">
-              <div class="reliability-label">대화 깊이</div>
-              <div id="depthScore" class="reliability-value">-</div>
-            </div>
-            <div class="reliability-item">
-              <div class="reliability-label">신뢰도</div>
-              <div id="reliabilityScore" class="reliability-value">-</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 차트 + 인터뷰 요약 -->
-      <div class="grid-2">
-        <div class="card card-indigo card-highlight">
-          <div class="card-header">📊 핵심 평가</div>
-          <div class="chart-container"><canvas id="radarChart"></canvas></div>
-        </div>
-        <div class="card card-emerald card-highlight">
-          <div class="card-header">💬 인터뷰 요약</div>
-          <div id="flowList" class="summary-scroll"></div>
-        </div>
-      </div>
-
-      <!-- 긍/부정 의견 -->
-      <div class="grid-2">
-        <div class="card" style="border-color:#22d3ee">
-          <div class="card-header">✅ 긍정 의견</div>
-          <div id="posBox" class="prose"></div>
-        </div>
-        <div class="card" style="border-color:#fb7185">
-          <div class="card-header">⚠️ 부정 의견</div>
-          <div id="negBox" class="prose"></div>
-        </div>
-      </div>
-
-      <!-- 핵심역량 -->
-      <div class="card">
-        <div class="card-header" style="color:#7c3aed;">📋 핵심역량</div>
-        <div style="overflow-x:auto;">
-          <table id="jdTable">
-            <thead><tr><th>역량</th><th>요구사항 / 기대치</th><th>점수</th><th>근거</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 증거 맵 -->
-      <div class="card">
-        <div class="card-header" style="color:#d97706;">🔍 증거 맵</div>
-        <div style="overflow-x:auto;">
-          <table id="evTable">
-            <thead><tr><th>EID</th><th>출처</th><th>내용</th><th>연결 JD</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 대화 통계 -->
-      <div class="card">
-        <div class="card-header" style="color:#0891b2;">📈 대화 통계</div>
-        <div id="stats" class="stats"></div>
-      </div>
+    <div class="header-actions">
+      <button id="genBtn" class="btn btn-primary no-print">리포트 생성</button>
     </div>
   </div>
+  <div class="header-line"></div>
 
-  <script>
-  const $ = (id)=>document.getElementById(id);
-  const esc = (s)=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+  <div id="promptSection" class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header">💬 리포트 생성 프롬프트</div>
+    <textarea id="userPrompt" rows="3" placeholder="예: 기술적 깊이를 중점적으로 평가해주세요" style="width:100%;padding:0.75rem;border:1px solid #d1d5db;border-radius:0.5rem;font-size:0.875rem;resize:vertical;"></textarea>
+  </div>
+</div>
 
-  // 전역 리포트 데이터
-  let currentReportData = null;
-
-  // ==== 새 창에서 리포트 열기 (데이터 전달 방식) ====
-  function openInNewWindow(){
-    console.log('=== openInNewWindow 시작 ===');
-
-    if (!currentReportData) {
-      alert('리포트 데이터가 없습니다. 먼저 리포트를 생성하세요.');
-      console.error('currentReportData가 없음');
-      return;
+<script>
+const $=id=>document.getElementById(id);
+async function generateReport(){
+  const prompt=($("userPrompt")?$("userPrompt").value.trim():"");
+  let sid=null,axes=null;
+  try{
+    const res=await fetch('/api/state');
+    if(res.ok){
+      const d=await res.json();
+      const st=d.state||d;
+      sid=st.session_id;
+      if(st.metrics&&st.metrics.length>0)axes=st.metrics.join(',');
     }
-
-    try {
-      // 1) 전용 템플릿 URL로 빈 창 열기
-      const reportViewUrl = '/panel/report/view';
-      const windowFeatures = 'width=1200,height=800,menubar=yes,toolbar=yes,location=yes,status=yes,scrollbars=yes,resizable=yes';
-      const newWindow = window.open(reportViewUrl, '_blank', windowFeatures);
-
-      if (!newWindow) {
-        console.error('팝업이 차단됨');
-        alert('팝업이 차단되었습니다.\n\n브라우저 설정에서 팝업을 허용해주세요.');
-        return;
-      }
-
-      console.log('새 창 열기 성공');
-
-      // 2) 새 창이 로드된 후 데이터 전달
-      newWindow.addEventListener('load', function() {
-        console.log('새 창 로드 완료, 데이터 전달 중...');
-
-        // 새 창의 전역 함수 호출하여 데이터 전달
-        if (newWindow.loadReportData && typeof newWindow.loadReportData === 'function') {
-          newWindow.loadReportData(currentReportData);
-          console.log('데이터 전달 완료');
-        } else {
-          console.error('새 창에 loadReportData 함수가 없습니다');
-        }
-      });
-
-    } catch (error) {
-      console.error('openInNewWindow 오류:', error);
-      alert('새 창 열기 중 오류가 발생했습니다:\n' + error.message);
-    }
-
-    console.log('=== openInNewWindow 완료 ===');
-  }
-
-
-
-  // ==== HTML 다운로드 ====
-  function downloadHTML() {
-    const htmlDoc = document.documentElement.cloneNode(true);
-
-    // 상태 및 버튼 영역 정리
-    const headerActions = htmlDoc.querySelector('.header-actions');
-    if (headerActions) headerActions.remove();
-    const errBox = htmlDoc.querySelector('#errBox');
-    if (errBox) errBox.remove();
-    const emptyBox = htmlDoc.querySelector('#emptyBox');
-    if (emptyBox) emptyBox.remove();
-
-    const htmlStr = '<!DOCTYPE html>\n' + htmlDoc.outerHTML;
-    const blob = new Blob([htmlStr], { type: 'text/html;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `interview_report_${new Date().toISOString().slice(0,10)}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  }
-
-  // ==== 에이전트 대화 메시지 추가 ====
-  function addAgentMessage(agent, message) {
-    const chatContent = $("agentChatContent");
-    if (!chatContent) return;
-
-    const msgDiv = document.createElement('div');
-    msgDiv.className = 'agent-message';
-    msgDiv.innerHTML = `
-      <div class="agent-message-agent-name">${esc(agent)}</div>
-      <div class="agent-message-content">${esc(message)}</div>
-    `;
-
-    chatContent.appendChild(msgDiv);
-
-    // 자동 스크롤
-    chatContent.scrollTop = chatContent.scrollHeight;
-  }
-
-  // ==== 예시 프롬프트 채우기 ====
-  function fillExamplePrompt() {
-    const userPrompt = $("userPrompt");
-    if (!userPrompt) return;
-
-    const examples = [
-      "기술적 깊이와 전문성을 중점적으로 평가해주세요. 특히 기술 스택 활용 경험과 문제 해결 능력에 주목해주세요.",
-      "리더십과 협업 역량을 자세히 분석해주세요. 팀 내 역할과 커뮤니케이션 능력을 중심으로 평가해주세요.",
-      "답변의 구체성과 신뢰도에 초점을 맞춰주세요. STAR 기법 활용 여부와 정량적 지표 제시 여부를 확인해주세요."
-    ];
-
-    const randomExample = examples[Math.floor(Math.random() * examples.length)];
-    userPrompt.value = randomExample;
-  }
-
-  // ==== 리포트 생성 - 새 창에서 스트리밍 ====
-  async function generateReport() {
-    // 프롬프트 가져오기
-    const userPromptInput = $("userPrompt");
-    const userPrompt = userPromptInput ? userPromptInput.value.trim() : "";
-
-    // 1) 상태 조회
-    let sessionId = null, axesKeys = null;
-    try {
-      const stateRes = await fetch('/api/state', { method: 'GET' });
-      if (stateRes.ok) {
-        const stateData = await stateRes.json();
-        const st = stateData.state || stateData;
-        sessionId = st.session_id;
-        if (st.metrics && st.metrics.length > 0) axesKeys = st.metrics.join(',');
-      }
-    } catch(e){ console.warn('state 조회 실패:', e); }
-
-    const payload = new URLSearchParams();
-    if (sessionId) payload.set('session_id', sessionId);
-    if (axesKeys) payload.set('axes_keys', axesKeys);
-    if (userPrompt) payload.set('user_prompt', userPrompt);
-
-    // 2) 새 창으로 리포트 뷰 열기 (스트리밍은 새 창에서 처리)
-    const reportUrl = '/panel/report/view?' + payload.toString();
-    const newWindow = window.open(reportUrl, '_blank', 'width=1400,height=900');
-
-    if (!newWindow) {
-      alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.');
-    }
-  }
-
-  function showError(err){
-    const box=$("errBox");
-    box.innerHTML =
-      `<div class="alert-title">리포트 생성 실패</div>
-       <div class="alert-body"><span class="code">${esc(err.code||'ERROR')}</span> ${esc(err.message||'오류')}</div>
-       ${err.details?`<details class="alert-details"><summary>진단 정보</summary><pre>${esc(JSON.stringify(err.details,null,2))}</pre></details>`:''}
-       ${err.trace_id?`<div class="alert-trace">trace_id: <code>${esc(err.trace_id)}</code></div>`:''}`;
-    box.style.display="block";
-  }
-
-  function normalizeFulfill(v){
-    const s = String(v||'').trim().toLowerCase().replace(/\s+/g,'');
-    if (/^(충족|만족|ok|pass|full)$/.test(s)) return 'full';
-    if (/^(부분|부분충족|부분만족|partial)$/.test(s)) return 'partial';
-    return 'none';
-  }
-
-  // ==== 렌더러 ====
-  let radar;
-  window.addEventListener('DOMContentLoaded', function() {
-    console.log('DOMContentLoaded 이벤트 발생');
-    try {
-      const data = JSON.parse(document.getElementById('reportData').textContent);
-      console.log('전달된 데이터:', data);
-      if (data && data.status === 'failed') {
-        showError(data);
-      } else {
-        renderReport(data);
-      }
-    } catch (e) {
-      console.error('초기 렌더링 실패:', e);
-    }
-  });
-
-  function renderReport(r) {
-    console.log('renderReport 시작, 데이터:', r);
-
-    const reportRoot = $("reportRoot");
-    if (reportRoot) reportRoot.style.display = "block";
-
-    const headlineSummary = $("headlineSummary");
-    if (headlineSummary) headlineSummary.textContent = r?.headline?.summary || "데이터 없음";
-
-    const headlineKeywords = $("headlineKeywords");
-    if (headlineKeywords) {
-      const keywords = (r?.headline?.tag || '').split(',').map(k => k.trim()).filter(Boolean);
-      headlineKeywords.innerHTML = keywords.length
-        ? keywords.map(kw => `<span class="headline-keyword">#${esc(kw)}</span>`).join('')
-        : '<span>키워드 없음</span>';
-    }
-
-    console.log('핵심역량 데이터:', r.jdCoverage);
-    if (!r.jdCoverage || r.jdCoverage.length === 0) {
-      console.warn('핵심역량 데이터가 비어있습니다.');
-    } else {
-      console.table(r.jdCoverage);
-    }
-    const jdBody = document.querySelector("#jdTable tbody");
-    if (jdBody) {
-      jdBody.innerHTML = (r.jdCoverage || []).map(row => {
-        const chips = (row.evidence || []).map(e => `<span class="badge badge-indigo">${esc(e)}</span>`).join(" ");
-        return `<tr>
-          <td>${esc(row.cid || 'N/A')}</td>
-          <td>${esc(row.requirement || 'N/A')}</td>
-          <td>${esc(row.fulfillment || 'N/A')}</td>
-          <td>${chips || '<span>근거 없음</span>'}</td>
-        </tr>`;
-      }).join('');
-    }
-
-    const evBody = document.querySelector("#evTable tbody");
-    if (evBody) {
-      evBody.innerHTML = (r.evidence || []).length
-        ? (r.evidence || []).map(ev => `<tr>
-            <td>${esc(ev.eid || '없음')}</td>
-            <td>${esc(ev.출처 || '없음')}</td>
-            <td>${esc(ev.내용 || '없음')}</td>
-            <td>${esc(ev.연결 || '없음')}</td>
-          </tr>`).join('')
-        : '<tr><td colspan="4">데이터 없음</td></tr>';
-    }
-
-    console.log('renderReport 완료');
-  }
-
-  // EID 클릭 시 증거 맵 하이라이트
-  function scrollToEvidence(eid) {
-    const targetRow = document.getElementById(`ev-${eid}`);
-    if (!targetRow) return;
-    document.querySelectorAll('.evidence-row').forEach(row => row.classList.remove('evidence-highlight'));
-    targetRow.scrollIntoView({ behavior:'smooth', block:'center' });
-    setTimeout(() => {
-      targetRow.classList.add('evidence-highlight');
-      setTimeout(() => targetRow.classList.remove('evidence-highlight'), 3000);
-    }, 500);
-  }
-
-  // ==== 초기화: 버튼 이벤트 바인딩 ====
-  (function initButtons() {
-    console.log('=== 버튼 초기화 시작 ===');
-
-    const genBtn = $("genBtn");
-    console.log('genBtn:', genBtn);
-    if (genBtn) {
-      genBtn.onclick = function(e) {
-        console.log('리포트 생성 버튼 클릭됨');
-        generateReport();
-      };
-      console.log('리포트 생성 버튼 바인딩 완료');
-    }
-
-    const newWindowBtn = $("newWindowBtn");
-    console.log('newWindowBtn:', newWindowBtn);
-    if (newWindowBtn) {
-      newWindowBtn.onclick = function(e) {
-        console.log('새 창 버튼 클릭됨');
-        console.log('currentReportData:', currentReportData);
-        openInNewWindow();
-      };
-      console.log('새 창 버튼 바인딩 완료');
-    }
-
-    const dlBtn = $("dlBtn");
-    console.log('dlBtn:', dlBtn);
-    if (dlBtn) {
-      dlBtn.onclick = function(e) {
-        console.log('다운로드 버튼 클릭됨');
-        downloadHTML();
-      };
-      console.log('다운로드 버튼 바인딩 완료');
-    }
-
-    console.log('=== 버튼 초기화 완료 ===');
-  })();
-  </script>
+  }catch(e){}
+  const p=new URLSearchParams();
+  if(sid)p.set('session_id',sid);
+  if(axes)p.set('axes_keys',axes);
+  if(prompt)p.set('user_prompt',prompt);
+  const w=window.open('/panel/report/view?'+p.toString(),'_blank','width=1400,height=900');
+  if(!w)alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.');
+}
+$("genBtn").onclick=generateReport;
+</script>
 </body>
 </html>

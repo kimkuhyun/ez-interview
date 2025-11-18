@@ -1,992 +1,264 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>면접 리포트</title>
   <style>{% include 'css/report.css' %}</style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    /* 리포트 전용 뷰 스타일 */
-    body {
-      margin: 0;
-      padding: 20px;
-      background: #f9fafb;
-      font-family: 'Malgun Gothic', sans-serif;
-    }
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
-    /* 로딩 화면 */
-    .loading-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(255, 255, 255, 0.95);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      z-index: 9999;
-    }
-    .loading-spinner {
-      width: 50px;
-      height: 50px;
-      border: 4px solid #e5e7eb;
-      border-top-color: #6366f1;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    .loading-text {
-      margin: 1rem auto 0.25rem;
-      font-size: 14px;
-      color: #4b5563;
-      text-align: left;
-      max-width: 720px;
-    }
-
-    /* 슬롯머신 스타일 문구 (에이전트 대화 로그 영역) */
-    .slot-wrapper {
-      margin: 0.25rem auto 0;
-      max-height: min(40vh, 16rem);
-      overflow-y: auto;
-      position: relative;
-      text-align: left;
-      font-size: 0.9rem;
-      color: #4b5563;
-      font-weight: 500;
-      padding: 0.5rem 0.75rem;
-      border-radius: 0.5rem;
-      background: #f9fafb;
-      border: 1px solid #e5e7eb;
-      max-width: 720px;
-    }
-    .slot-text {
-      display: block;
-      min-width: 100%;
-      white-space: pre-wrap;
-    }
-
-    /* 에이전트 로그 메시지 스타일 */
-    .agent-log-item {
-      padding: 0.25rem 0;
-      margin-bottom: 0.15rem;
-      font-size: 0.875rem;
-      line-height: 1.4;
-    }
-
-    /* 디베이트 로그 스타일 */
-    .debate-container {
-      margin-top: 1rem;
-      max-height: 300px;
-      overflow-y: auto;
-      padding: 1rem;
-      background: #f9fafb;
-      border-radius: 0.5rem;
-      border: 1px solid #e5e7eb;
-    }
-    .debate-turn {
-      margin-bottom: 0.75rem;
-      padding: 0.75rem;
-      border-radius: 0.5rem;
-      animation: fadeIn 0.3s ease-out;
-    }
-   /* .debate-turn.agent-a {
-      background: #eff6ff;
-      border-left: 3px solid #3b82f6;
-    }
-    .debate-turn.agent-b {
-      background: #fef3c7;
-      border-left: 3px solid #f59e0b;
-    }
-    .debate-speaker {
-      font-weight: 600;
-      font-size: 0.875rem;
-      margin-bottom: 0.25rem;
-    }
-    .debate-turn.agent-a .debate-speaker {
-      color: #3b82f6;
-    }
-    .debate-turn.agent-b .debate-speaker {
-      color: #f59e0b;
-    }*/
-    .debate-content {
-      font-size: 0.875rem;
-      line-height: 1.5;
-      color: #374151;
-    }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(10px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
+    .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;z-index:9999;}
+    .loading-spinner{width:50px;height:50px;border:4px solid #e5e7eb;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .loading-text{margin-top:1rem;font-size:14px;color:#374151;max-width:720px;text-align:center;font-weight:500;}
+    .slot-wrapper{margin-top:1rem;max-height:20rem;overflow-y:auto;padding:0;max-width:720px;width:100%;text-align:center;}
+    .agent-log-item{padding:0.75rem 0;font-size:0.875rem;color:#1f2937;line-height:1.6;opacity:0.85;text-align:left;}
+    .debate-container{display:none;}
   </style>
 </head>
 <body>
-  <!-- 로딩 화면 (슬롯머신 문구 + 디베이트 로그) -->
-  <div id="loadingOverlay" class="loading-overlay">
-    <div style="max-width: 900px; width: 90%; background: white; border-radius: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.15); padding: 2rem; text-align: center;">
-      <div class="loading-spinner" style="margin: 0 auto 1rem;"></div>
-      <div class="loading-text" style="margin-bottom: 0.5rem;"></div>
-      <div class="slot-wrapper">
-        <span id="slotText" class="slot-text">시작 준비 중...</span>
-      </div>
+<div id="loadingOverlay" class="loading-overlay">
+  <div style="max-width:900px;width:90%;background:white;border-radius:1rem;box-shadow:0 10px 40px rgba(0,0,0,0.15);padding:2rem;text-align:center;display:flex;flex-direction:column;align-items:center;">
+    <div class="loading-spinner" style="margin:0 auto 1rem;"></div>
+    <div class="loading-text">리포트 생성 중...</div>
+    <div class="slot-wrapper"><span id="slotText">시작 준비 중...</span></div>
+    <div id="debateLog" class="debate-container" style="display:none;"><div id="debateContent"></div></div>
+  </div>
+</div>
 
-      <!-- 디베이트 로그 (AgentA vs AgentB 토론) -->
-      <div id="debateLog" class="debate-container" style="display: none; text-align: left;">
-        <h3 style="font-size: 0.95rem; font-weight: 700; color: #374151; margin-bottom: 0.75rem;">
-          
-        </h3>
-        <div id="debateContent"></div>
-      </div>
+<div class="container">
+  <div class="header">
+    <div><h1 id="reportTitle">면접 리포트</h1><p>AI 기반 면접 평가 및 분석 결과</p></div>
+    <div class="header-actions">
+      <button id="dlBtn" class="btn btn-success no-print">HTML 다운로드</button>
+      <button id="pdfBtn" class="btn btn-secondary no-print" style="margin-left:0.5rem;">PDF 다운로드</button>
     </div>
   </div>
+  <div class="header-line"></div>
+  <div id="errBox" class="alert" style="display:none;"></div>
 
-  <div class="container">
-    <!-- 헤더 (간소화) -->
-      <div class="header">
-        <div>
-          <h1 id="reportTitle">면접 리포트</h1>
-          <p>AI 기반 면접 평가 및 분석 결과</p>
+  <div id="reportRoot">
+    <div class="headline">
+      <div style="display:flex;justify-content:space-between;gap:1rem;">
+        <div style="flex:1;"><div id="headlineSummary" class="headline-summary"></div><div id="headlineKeywords" class="headline-keywords"></div></div>
+        <div id="reliabilityScores" class="reliability-scores" style="display:none;">
+          <div class="reliability-item"><div class="reliability-label">모순 정도</div><div id="contradictionScore" class="reliability-value">-</div></div>
+          <div class="reliability-item"><div class="reliability-label">대화 깊이</div><div id="depthScore" class="reliability-value">-</div></div>
+          <div class="reliability-item"><div class="reliability-label">신뢰도</div><div id="reliabilityScore" class="reliability-value">-</div></div>
         </div>
-        <div class="header-actions">
-          <button id="dlBtn" class="btn btn-success no-print">HTML 다운로드</button>
-          <button id="pdfBtn" class="btn btn-secondary no-print" style="margin-left: 0.5rem;">PDF 다운로드</button>
-        </div>
-      </div>
-    <div class="header-line"></div>
-
-    <!-- 실패 배너 -->
-    <div id="errBox" class="alert alert-error" style="display:none;"></div>
-
-    <!-- 리포트 본문 -->
-    <div id="reportRoot">
-      <!-- 헤드라인 (신뢰도 지표 추가) -->
-      <div class="headline">
-        <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem;">
-          <div style="flex: 1;">
-            <div id="headlineSummary" class="headline-summary"></div>
-            <div id="headlineKeywords" class="headline-keywords"></div>
-          </div>
-          <div id="reliabilityScores" class="reliability-scores" style="display: none;">
-            <div class="reliability-item">
-              <div class="reliability-label">모순 정도</div>
-              <div id="contradictionScore" class="reliability-value">-</div>
-            </div>
-            <div class="reliability-item">
-              <div class="reliability-label">대화 깊이</div>
-              <div id="depthScore" class="reliability-value">-</div>
-            </div>
-            <div class="reliability-item">
-              <div class="reliability-label">신뢰도</div>
-              <div id="reliabilityScore" class="reliability-value">-</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 차트 + 인터뷰 요약 -->
-      <div class="grid-2">
-        <div class="card card-indigo card-highlight">
-          <div class="card-header">핵심 평가</div>
-          <div class="chart-container"><canvas id="radarChart"></canvas></div>
-        </div>
-        <div class="card card-emerald card-highlight">
-          <div class="card-header">인터뷰 요약</div>
-          <div id="flowList" class="summary-scroll"></div>
-        </div>
-      </div>
-
-      <!-- 긍/부정 의견 -->
-      <div class="grid-2">
-        <div class="card" style="border-color:#22d3ee">
-          <div class="card-header">긍정 의견</div>
-          <div id="posBox" class="prose"></div>
-        </div>
-        <div class="card" style="border-color:#fb7185">
-          <div class="card-header">부정 의견</div>
-          <div id="negBox" class="prose"></div>
-        </div>
-      </div>
-
-      <!-- 핵심역량 -->
-      <div class="card">
-        <div class="card-header" style="color:#7c3aed;">핵심역량</div>
-        <div style="overflow-x:auto;">
-          <table id="jdTable">
-            <thead><tr><th>역량</th><th>요구사항 / 기대치</th><th>점수</th><th>근거</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 증거 맵 -->
-      <div class="card">
-        <div class="card-header" style="color:#d97706;">증거 맵</div>
-        <div style="overflow-x:auto;">
-          <table id="evTable">
-            <thead><tr><th>EID</th><th>출처</th><th>내용</th><th>연결 JD</th></tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- 대화 통계 -->
-      <div class="card">
-        <div class="card-header" style="color:#0891b2;">대화 통계</div>
-        <div id="stats" class="stats"></div>
       </div>
     </div>
+
+    <div class="grid-2">
+      <div class="card card-indigo card-highlight"><div class="card-header">핵심 평가</div><div class="chart-container"><canvas id="radarChart"></canvas></div></div>
+      <div class="card card-emerald card-highlight"><div class="card-header">인터뷰 요약</div><div id="flowList" class="summary-scroll"></div></div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card" style="border-color:#22d3ee"><div class="card-header">긍정 의견</div><div id="posBox" class="prose"></div></div>
+      <div class="card" style="border-color:#fb7185"><div class="card-header">부정 의견</div><div id="negBox" class="prose"></div></div>
+    </div>
+
+    <div class="card"><div class="card-header" style="color:#7c3aed;">핵심역량</div><table id="jdTable"><thead><tr><th>역량</th><th>요구사항/기대치</th><th>점수</th><th>근거</th></tr></thead><tbody></tbody></table></div>
+    <div class="card"><div class="card-header" style="color:#d97706;">증거 맵</div><table id="evTable"><thead><tr><th>EID</th><th>출처</th><th>내용</th><th>연결</th></tr></thead><tbody></tbody></table></div>
+    <div class="card"><div class="card-header" style="color:#0891b2;">대화 통계</div><div id="stats" class="stats"></div></div>
   </div>
+</div>
 
-  <script>
-  const $ = (id)=>document.getElementById(id);
-  const esc = (s)=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+let radar,currentReportData=null;
 
-  // 슬롯머신 로딩 문구 리스트
-  const SLOT_MESSAGES = [
-    "이력서를 확인하는 중...",
-    "JD를 스캔하는 중...",
-    "인터뷰 로그를 정규화하는 중...",
-    "대화 타임라인을 분석하는 중...",
-    "핵심 역량을 비교하는 중...",
-    "JD 기준을 매칭하는 중...",
-    "근거 데이터를 정리하는 중...",
-    "점수 분포를 계산하는 중...",
-    "요약 후보를 생성하는 중...",
-    "표현을 간결하게 다듬는 중...",
-    "중복된 문장을 제거하는 중...",
-    "의미적 유사도를 평가하는 중...",
-    "JD 가중치를 반영하는 중...",
-    "사용자의 답변을 재해석하는 중...",
-    "면접 흐름을 복원하는 중...",
-    "의도 파악 정확도를 높이는 중...",
-    "모순 가능성을 탐지하는 중...",
-    "대화 깊이를 측정하는 중...",
-    "대화 신뢰도를 산출하는 중...",
-    "관찰 포인트를 추출하는 중...",
-    "핵심 문장을 정렬하는 중...",
-    "증거-요구사항 연결을 확인하는 중...",
-    "노이즈 문장을 제거하는 중...",
-    "답변 분포를 구조화하는 중...",
-    "리포트 구조를 정비하는 중...",
-    "문맥을 통합하는 중...",
-    "전반적 인상을 계산하는 중...",
-    "태그를 분류하는 중...",
-    "가중 점수 반영 중...",
-    "최적의 설명을 선택하는 중...",
-    "부정·긍정 포인트를 분리하는 중...",
-    "근거들을 재배열하는 중...",
-    "요약 품질을 검증하는 중...",
-    "최종 형태로 포맷팅 중...",
-    "PDF 가능 여부를 확인하는 중...",
-    "차트 데이터를 구성하는 중...",
-    "결과물 정합성을 확인하는 중...",
-    "에러를 점검하는 중...",
-    "최종 결과를 조립하는 중..."
-  ];
+function showError(err){
+  const box=$("errBox");
+  box.innerHTML=`<div class="alert-title">리포트 로드 실패</div><div class="alert-body"><span class="code">${esc(err.code||'ERROR')}</span> ${esc(err.message||'오류')}</div>`;
+  box.style.display="block";
+  if($("loadingOverlay"))$("loadingOverlay").style.display="none";
+}
 
-  let slotAnimationInterval = null;
-  let lastSlotMessageIndex = -1;
-  let usedMessageIndices = [];
-
-  function startSlotAnimation() {
-    const el = document.getElementById("slotText");
-    if (!el) return;
-
-    // 기존 인터벌이 있으면 정리
-    if (slotAnimationInterval) {
-      clearInterval(slotAnimationInterval);
-    }
-
-    slotAnimationInterval = setInterval(() => {
-      // 사용 가능한 인덱스 풀 생성 (최근 사용한 것 제외)
-      let availableIndices = [];
-      for (let i = 0; i < SLOT_MESSAGES.length; i++) {
-        if (!usedMessageIndices.includes(i)) {
-          availableIndices.push(i);
-        }
-      }
-
-      // 모든 메시지를 사용했다면 리셋 (현재 메시지만 제외)
-      if (availableIndices.length === 0) {
-        usedMessageIndices = lastSlotMessageIndex >= 0 ? [lastSlotMessageIndex] : [];
-        availableIndices = [];
-        for (let i = 0; i < SLOT_MESSAGES.length; i++) {
-          if (i !== lastSlotMessageIndex) {
-            availableIndices.push(i);
-          }
-        }
-      }
-
-      // 랜덤 인덱스 선택
-      const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
-      const msg = SLOT_MESSAGES[randomIndex];
-
-      // 사용 기록 업데이트
-      lastSlotMessageIndex = randomIndex;
-      usedMessageIndices.push(randomIndex);
-
-      // 최근 5개만 유지 (너무 많이 기억하지 않도록)
-      if (usedMessageIndices.length > 5) {
-        usedMessageIndices.shift();
-      }
-
-      el.textContent = msg;
-      el.classList.remove("slot-text");
-      void el.offsetWidth; // reflow
-      el.classList.add("slot-text");
-    }, 2000);
+function addAgentMessage(agent,message){
+  const el=$('slotText');
+  if(!el)return;
+  const div=document.createElement('div');
+  div.className='agent-log-item';
+  if(message.startsWith('→')){
+    div.style.fontWeight='700';
+    div.style.marginTop='0.5rem';
+    div.style.color='#000000';
   }
+  div.textContent=message;
+  el.appendChild(div);
+  const wrapper=document.querySelector('.slot-wrapper');
+  if(wrapper)wrapper.scrollTop=wrapper.scrollHeight;
+}
 
-  function stopSlotAnimation() {
-    if (slotAnimationInterval) {
-      clearInterval(slotAnimationInterval);
-      slotAnimationInterval = null;
+function showDebateLog(topic,logs){
+  const debateLog=$("debateLog"),debateContent=$("debateContent");
+  if(!debateLog||!debateContent||!logs||!logs.length)return;
+  debateLog.style.display="block";
+  const section=document.createElement("div");
+  section.className="debate-section";
+  const h=document.createElement("div");
+  h.className="debate-topic";
+  h.textContent=topic||"에이전트 토론";
+  section.appendChild(h);
+  logs.forEach(log=>{
+    const d=document.createElement("div");
+    d.className="debate-content";
+    d.textContent="• "+log;
+    section.appendChild(d);
+  });
+  debateContent.appendChild(section);
+  debateLog.scrollTop=debateLog.scrollHeight;
+}
+
+function renderReport(r){
+  if($("reportRoot"))$("reportRoot").style.display="block";
+  if($("dlBtn"))$("dlBtn").style.display="inline-block";
+  const title=$("reportTitle");
+  if(title)title.textContent=`${r?.metadata?.candidate_name||"지원자"}의 면접 리포트`;
+  const hs=$("headlineSummary");
+  if(hs)hs.textContent=r?.headline?.oneline_summary||"";
+  const hk=$("headlineKeywords");
+  if(hk){
+    const tags=Array.isArray(r?.headline?.tag)?r.headline.tag:[];
+    hk.innerHTML=tags.map(t=>`<span class="headline-keyword">#${esc(t)}</span>`).join('');
+  }
+  if(r?.quality){
+    const rs=$("reliabilityScores");
+    if(rs)rs.style.display="flex";
+    const q=r.quality;
+    const cs=$("contradictionScore"),ds=$("depthScore"),rls=$("reliabilityScore");
+    if(cs&&q.contradiction_score!==undefined){
+      cs.textContent=`${q.contradiction_score}%`;
+      cs.style.color=q.contradiction_score>50?"#dc2626":q.contradiction_score>30?"#f59e0b":"#10b981";
+    }
+    if(ds&&q.depth_score!==undefined){
+      ds.textContent=`${q.depth_score}%`;
+      ds.style.color=q.depth_score>70?"#10b981":q.depth_score>50?"#f59e0b":"#dc2626";
+    }
+    if(rls&&q.reliabality_score!==undefined){
+      rls.textContent=`${q.reliabality_score}%`;
+      rls.style.color=q.reliabality_score>70?"#10b981":q.reliabality_score>50?"#f59e0b":"#dc2626";
     }
   }
+  const axes=r.axes||[],labels=axes.map(a=>a.competency||a.label||""),values=axes.map(a=>a.score||0);
+  const rc=$("radarChart");
+  if(rc){
+    if(radar)radar.destroy();
+    radar=new Chart(rc,{type:'radar',data:{labels,datasets:[{label:'점수',data:values,fill:true,backgroundColor:'rgba(99,102,241,0.2)',borderColor:'rgb(79,70,229)',borderWidth:2,pointBackgroundColor:'rgb(79,70,229)',pointBorderColor:'#fff',pointBorderWidth:2,pointRadius:4}]},options:{responsive:true,maintainAspectRatio:true,scales:{r:{beginAtZero:true,min:0,max:100,ticks:{stepSize:20}}},plugins:{legend:{display:false}}}});
+  }
+  const items=(r.interview_summary?.items)||[];
+  const flowList=$("flowList");
+  if(flowList){
+    flowList.innerHTML=items.map(it=>`<div class="qa-simple"><div class="qa-topic">${esc(it.questions||"")}</div><div class="qa-summary">${esc(it.answers||"")}</div></div>`).join("")||'<div class="empty"><p>요약 없음</p></div>';
+  }
+  const posBox=$("posBox"),negBox=$("negBox");
+  if(posBox)posBox.innerHTML=`<p>${esc(r?.interview_commentary?.positive_comment||"")}</p>`||'<div class="empty"><p>없음</p></div>';
+  if(negBox)negBox.innerHTML=`<p>${esc(r?.interview_commentary?.improvement_comment||"")}</p>`||'<div class="empty"><p>없음</p></div>';
+  const jdBody=document.querySelector("#jdTable tbody");
+  if(jdBody){
+    jdBody.innerHTML=(r.compCoverage||[]).map(row=>{
+      const eids = Array.isArray(row.evidence_ids) ? row.evidence_ids : [];
+      const chips=eids.map(e=>`<span class="badge badge-indigo eid-link" data-eid="${esc(e)}" onclick="scrollToEvidence('${esc(e)}')">${esc(e)}</span>`).join(" ");
+      return`<tr><td><strong style="color:#7c3aed;">${esc(row.competency||"")}</strong></td><td>${esc(row.expectation||"")}</td><td>${row.fulfillment||0}</td><td>${chips||'-'}</td></tr>`;
+    }).join('');
+  }
+  const evBody=document.querySelector("#evTable tbody");
+  if(evBody){
+    evBody.innerHTML=(r.evidences||[]).map(ev=>`<tr id="ev-${esc(ev.eid)}" class="evidence-row"><td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td><td style="color:#6b7280;font-size:0.75rem;">면접</td><td>${esc(ev.evidence)}</td><td><span class="badge badge-purple">${esc(ev.competency)}</span></td></tr>`).join('');
+  }
+  const statsElem=$("stats");
+  if(statsElem&&r.interview_stat){
+    const st=r.interview_stat;
+    statsElem.innerHTML=`<div class="stats-item"><span class="stats-label">소요시간</span><span>:</span><span class="stats-value">${esc(st.duration||"-")}</span></div><div class="stats-item"><span class="stats-label">후속질문 평균</span><span>:</span><span class="stats-value">${esc(st.follow_up_avg||"-")}</span></div>`;
+  }
+  if($("loadingOverlay"))$("loadingOverlay").style.display="none";
+}
 
-  // 전역 리포트 데이터
-  let currentReportData = null;
+function scrollToEvidence(eid){
+  const tr=document.getElementById(`ev-${eid}`);
+  if(!tr)return;
+  document.querySelectorAll('.evidence-row').forEach(r=>r.classList.remove('evidence-highlight'));
+  tr.scrollIntoView({behavior:'smooth',block:'center'});
+  setTimeout(()=>{tr.classList.add('evidence-highlight');setTimeout(()=>tr.classList.remove('evidence-highlight'),3000);},500);
+}
 
-  // ==== HTML 다운로드 ====
-  function downloadHTML() {
-    try {
-      // 1) 현재 화면에 렌더된 차트를 이미지로 캡처
-      const radarCanvas = document.getElementById('radarChart');
-      let chartDataURL = null;
-
-      if (radarCanvas && radarCanvas.toDataURL) {
-        try {
-          chartDataURL = radarCanvas.toDataURL('image/png');
-        } catch (e) {
-          console.warn('차트 캡처 실패:', e);
-        }
-      }
-
-      // 2) DOM 전체 클론 (<html> 엘리먼트 기준)
-      const htmlEl = document.documentElement.cloneNode(true);
-
-      // 3) 캔버스를 이미지로 교체
-      if (chartDataURL) {
-        const clonedCanvas = htmlEl.querySelector('#radarChart');
-        if (clonedCanvas && clonedCanvas.parentNode) {
-          const img = document.createElement('img');
-          img.id = 'radarChartImage';
-          img.src = chartDataURL;
-          img.alt = '면접 핵심 평가 차트';
-
-          // 캔버스와 동일한 박스에 맞추도록
-          img.style.display = 'block';
-          img.style.width = '100%';
-          img.style.height = '100%';
-          img.style.objectFit = 'contain';
-
-          clonedCanvas.parentNode.replaceChild(img, clonedCanvas);
-        }
-      }
-
-      // 3-1) 혹시 report.css에 canvas 전용 규칙만 있을 경우를 대비해
-      //       다운로드용 HTML에 img용 규칙을 하나 더 주입
-      const head = htmlEl.querySelector('head');
-      if (head) {
-        const extraStyle = document.createElement('style');
-        extraStyle.textContent = `
-          .chart-container img#radarChartImage {
-            width: 100% !important;
-            height: 100% !important;
-            object-fit: contain;
-            display: block;
-          }
-        `;
-        head.appendChild(extraStyle);
-      }
-
-      // 4) 로딩 오버레이 / 버튼 제거
-      const loadingOverlay = htmlEl.querySelector('#loadingOverlay');
-      if (loadingOverlay) loadingOverlay.remove();
-
-      const headerActions = htmlEl.querySelector('.header-actions');
-      if (headerActions) headerActions.remove();
-
-      const errBox = htmlEl.querySelector('#errBox');
-      if (errBox) errBox.remove();
-
-      // 5) HTML 파일로 다운로드
-      const htmlStr = '<!DOCTYPE html>\n' + htmlEl.outerHTML;
-      const blob = new Blob([htmlStr], { type: 'text/html;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `interview_report_${new Date().toISOString().slice(0,10)}.html`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-    } catch (e) {
-      console.error('downloadHTML 오류', e);
-      alert('HTML 다운로드 중 오류가 발생했습니다. (콘솔 확인)');
+function downloadHTML(){
+  const rc=$("radarChart");
+  let dataURL=null;
+  if(rc&&rc.toDataURL){try{dataURL=rc.toDataURL('image/png');}catch(e){}}
+  const html=document.documentElement.cloneNode(true);
+  if(dataURL){
+    const cc=html.querySelector('#radarChart');
+    if(cc&&cc.parentNode){
+      const img=document.createElement('img');
+      img.id='radarChartImage';
+      img.src=dataURL;
+      img.alt='면접 핵심 평가 차트';
+      img.style.cssText='display:block;width:100%;height:100%;object-fit:contain;';
+      cc.parentNode.replaceChild(img,cc);
+    }
+    const head=html.querySelector('head');
+    if(head){
+      const style=document.createElement('style');
+      style.textContent='.chart-container img#radarChartImage{width:100%!important;height:100%!important;object-fit:contain;display:block;}';
+      head.appendChild(style);
     }
   }
-  function showError(err){
-    const box=$("errBox");
-    box.innerHTML =
-      `<div class="alert-title">리포트 로드 실패</div>
-       <div class="alert-body"><span class="code">${esc(err.code||'ERROR')}</span> ${esc(err.message||'오류')}</div>
-       ${err.details?`<details class="alert-details"><summary>진단 정보</summary><pre>${esc(JSON.stringify(err.details,null,2))}</pre></details>`:''}`;
-    box.style.display="block";
+  const lo=html.querySelector('#loadingOverlay');if(lo)lo.remove();
+  const ha=html.querySelector('.header-actions');if(ha)ha.remove();
+  const eb=html.querySelector('#errBox');if(eb)eb.remove();
+  const str='<!DOCTYPE html>\n'+html.outerHTML;
+  const blob=new Blob([str],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const link=document.createElement('a');
+  link.href=url;
+  link.download=`interview_report_${new Date().toISOString().slice(0,10)}.html`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
-    // 로딩 오버레이 숨김
-    const loadingOverlay = $("loadingOverlay");
-    if (loadingOverlay) loadingOverlay.style.display = "none";
-  }
+function downloadPDF(){
+  if(!currentReportData){alert('리포트 데이터가 없습니다.');return;}
+  fetch('/reports/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({report:currentReportData})}).then(res=>{if(!res.ok)throw new Error('PDF 생성 실패');return res.blob();}).then(blob=>{const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`interview_report_${currentReportData?.metadata?.session_id||'report'}.pdf`;document.body.appendChild(link);link.click();document.body.removeChild(link);URL.revokeObjectURL(url);}).catch(e=>{console.error(e);alert('PDF 다운로드 중 오류 발생');});
+}
 
-  // ==== 렌더러 ====
-  let radar;
-
-  // 에이전트 로그를 슬롯 텍스트로 표시
-  function addAgentMessage(agent, message) {
-    const slotText = $("slotText");
-    if (!slotText) return;
-
-    // 에이전트 로그 아이템 생성
-    const logItem = document.createElement('div');
-    logItem.className = 'agent-log-item';
-    logItem.textContent = `[${agent}] ${message}`;
-
-    // 슬롯 텍스트에 추가
-    slotText.appendChild(logItem);
-
-    // 최신 메시지가 항상 보이도록 자동 스크롤
-    const wrapper = document.querySelector(".slot-wrapper");
-    if (wrapper) {
-      wrapper.scrollTop = wrapper.scrollHeight;
-    }
-
-    console.log('[에이전트 로그]', agent, ':', message);
-  }
-
-  // 디베이트 로그 표시
-  function showDebateLog(turns) {
-    const debateLog = $("debateLog");
-    const debateContent = $("debateContent");
-
-    if (!debateLog || !debateContent || !turns || !turns.length) return;
-
-    console.log("[디베이트 로그] 표시 시작, 총", turns.length, "턴");
-
-    // 컨테이너 보이기
-    debateLog.style.display = "block";
-    debateContent.innerHTML = "";
-
-    // 타이핑/턴 간 속도 설정
-    const TYPING_INTERVAL = 35;   // 글자당 ms (숫자 키우면 더 느리게)
-    const TURN_DELAY = 700;       // 한 턴이 끝난 뒤 다음 턴까지 대기 시간(ms)
-    function typeText(element, text, onDone) {
-      let idx = 0;
-
-      function step() {
-        if (idx < text.length) {
-          element.textContent += text.charAt(idx++);
-          // 매 글자마다 스크롤 맨 아래 유지
-          debateContent.scrollTop = debateContent.scrollHeight;
-          setTimeout(step, TYPING_INTERVAL);
-        } else {
-          if (typeof onDone === "function") {
-            setTimeout(onDone, TURN_DELAY);
-          }
-        }
+async function startStreaming(){
+  const params=new URLSearchParams(window.location.search);
+  const sid=params.get('session_id');
+  if(!sid){showError({code:'NO_SESSION',message:'session_id가 없습니다'});return;}
+  const payload=new URLSearchParams();
+  if(sid)payload.set('session_id',sid);
+  if(params.get('axes_keys'))payload.set('axes_keys',params.get('axes_keys'));
+  if(params.get('user_prompt'))payload.set('user_prompt',params.get('user_prompt'));
+  try{
+    const es=new EventSource('/reports/generate/stream?'+payload.toString());
+    es.addEventListener('debate',e=>{
+      const d=JSON.parse(e.data);
+      if(d.debate_topic){
+        addAgentMessage(d.agent,`→ ${d.debate_topic}`);
       }
-
-      step();
-    }
-
-    // 턴 순차 렌더링
-    function renderTurn(index) {
-      if (index >= turns.length) return;
-
-      const turn = turns[index];
-
-      const speakerClass = (turn.speaker || "")
-        .toLowerCase()
-        .includes("agenta")
-        ? "agent-a"
-        : "agent-b";
-
-      const speakerName =
-        speakerClass === "agent-a" ? "열정적인 채용 담당자" : "냉철한 인사 담당자";
-
-      const turnDiv = document.createElement("div");
-      turnDiv.className = `debate-turn ${speakerClass}`;
-
-      const speakerDiv = document.createElement("div");
-      speakerDiv.className = "debate-speaker";
-      speakerDiv.textContent = speakerName;
-
-      const contentDiv = document.createElement("div");
-      contentDiv.className = "debate-content";
-      contentDiv.textContent = ""; // 타이핑으로 채울 것
-
-      turnDiv.appendChild(speakerDiv);
-      turnDiv.appendChild(contentDiv);
-      debateContent.appendChild(turnDiv);
-
-      // 현재 턴 타이핑 후 다음 턴으로
-      typeText(contentDiv, String(turn.content || ""), () => {
-        renderTurn(index + 1);
-      });
-    }
-
-    // 첫 턴부터 시작
-    renderTurn(0);
-  }
-
-  function renderReport(r){
-    console.log('renderReport 시작, 데이터:', r);
-
-    const reportRoot = $("reportRoot");
-    if (reportRoot) reportRoot.style.display="block";
-
-    const dlBtn = $("dlBtn");
-    if (dlBtn) dlBtn.style.display="inline-block";
-
-    const candidateName = r?.candidate_name || "지원자";
-    const reportTitle = $("reportTitle");
-    if (reportTitle) reportTitle.textContent = `${candidateName}의 면접 리포트`;
-
-    const headlineSummary = $("headlineSummary");
-    if (headlineSummary) headlineSummary.textContent = r?.headline?.summary || "";
-
-    // tag는 배열 또는 쉼표 구분 문자열일 수 있음
-    let keywords = [];
-    if (r?.headline?.tag) {
-      if (Array.isArray(r.headline.tag)) {
-        keywords = r.headline.tag.filter(Boolean);
-      } else {
-        keywords = String(r.headline.tag).split(',').map(k => k.trim()).filter(Boolean);
+      if(d.message){
+        addAgentMessage(d.agent,d.message);
       }
-    }
-    const headlineKeywords = $("headlineKeywords");
-    if (headlineKeywords) {
-      headlineKeywords.innerHTML = keywords.map(kw =>
-        `<span class="headline-keyword">#${esc(kw)}</span>`
-      ).join('');
-    }
-
-    // 신뢰도 점수 렌더링
-    if (r?.headline?.contradiction_score !== undefined) {
-      const reliabilityScores = $("reliabilityScores");
-      if (reliabilityScores) {
-        reliabilityScores.style.display = "flex";
-
-        const contradictionScore = $("contradictionScore");
-        if (contradictionScore) {
-          const score = r.headline.contradiction_score;
-          contradictionScore.textContent = `${score}%`;
-          contradictionScore.style.color = score > 50 ? "#dc2626" : score > 30 ? "#f59e0b" : "#10b981";
-        }
-
-        const depthScore = $("depthScore");
-        if (depthScore) {
-          const score = r.headline.depth_score;
-          depthScore.textContent = `${score}%`;
-          depthScore.style.color = score > 70 ? "#10b981" : score > 50 ? "#f59e0b" : "#dc2626";
-        }
-
-        const reliabilityScore = $("reliabilityScore");
-        if (reliabilityScore) {
-          const score = r.headline.reliability_score;
-          reliabilityScore.textContent = `${score}%`;
-          reliabilityScore.style.color = score > 70 ? "#10b981" : score > 50 ? "#f59e0b" : "#dc2626";
-        }
-      }
-    }
-
-    // axes에서 key와 label 추출
-    const axes = r.axes || [];
-    const keys = axes.map(a => a.key);
-    const labels = axes.map(a => a.label || a.key);
-
-    // scores 객체 생성
-    let scoresObj = {};
-    if (Array.isArray(r.scores)) {
-      r.scores.forEach(s => { scoresObj[s.key] = s.value; });
-    } else {
-      scoresObj = r.scores || {};
-    }
-
-    const values = keys.map(k => {
-      const score = scoresObj[k];
-      return (typeof score === "number") ? score : 0;
     });
+    es.addEventListener('error',e=>{try{const d=JSON.parse(e.data);showError({code:'AGENT_ERROR',message:d.message});}catch(err){showError({code:'AGENT_ERROR',message:'에이전트 오류 발생'});}es.close();});
+    es.addEventListener('report',e=>{const ed=JSON.parse(e.data);const rd=ed.data||ed;currentReportData=rd;renderReport(rd);});
+    es.addEventListener('done',e=>{if($("loadingOverlay"))$("loadingOverlay").style.display="none";es.close();});
+    es.onerror=e=>{if(es.readyState===EventSource.CLOSED)console.log('EventSource 연결 종료');else showError({code:'STREAM_ERROR',message:'스트리밍 연결 오류'});es.close();};
+  }catch(e){showError({code:'NETWORK',message:'네트워크 오류'});}
+}
 
-    console.log('=== 차트 디버깅 (새 창) ===');
-    console.log('axes:', axes);
-    console.log('keys:', keys);
-    console.log('labels:', labels);
-    console.log('scoresObj:', scoresObj);
-    console.log('values:', values);
-
-    // 차트 렌더링
-    const radarCanvas = $("radarChart");
-    if (radarCanvas) {
-      if (radar) radar.destroy();
-      radar = new Chart(radarCanvas, {
-        type:'radar',
-        data:{
-          labels: labels,
-          datasets:[{
-            label:'점수',
-            data:values,
-            fill:true,
-            backgroundColor:'rgba(99,102,241,0.2)',
-            borderColor:'rgb(79,70,229)',
-            borderWidth:2,
-            pointBackgroundColor:'rgb(79,70,229)',
-            pointBorderColor:'#fff',
-            pointBorderWidth:2,
-            pointRadius:4
-          }]
-        },
-        options:{
-          responsive:true,
-          maintainAspectRatio:true,
-          scales:{
-            r:{
-              beginAtZero:true,
-              min:0,
-              max:100,
-              ticks:{ stepSize:20 }
-            }
-          },
-          plugins:{
-            legend:{ display:false },
-            tooltip: {
-              callbacks: {
-                label: function(context) {
-                  return context.label + ': ' + context.parsed.r + '점';
-                }
-              }
-            }
-          }
-        }
-      });
-    }
-
-    const items = (r.talkSummary && Array.isArray(r.talkSummary.items)) ? r.talkSummary.items : [];
-    const topicOf = (item) => (item?.topic ?? item?.주제 ?? '').trim();
-    const summaryOf = (item) => (item?.talkSummary ?? item?.summary ?? item?.발언요약 ?? '').trim();
-    const overall = items.find(x => ['인터뷰 요약', '전체 요약'].includes(topicOf(x)));
-    const pos = items.find(x => ['긍정 의견', '강점'].includes(topicOf(x)));
-    const neg = items.find(x => ['부정 의견', '우려 사항'].includes(topicOf(x)));
-    const flows = items.filter(x => {
-      const topic = topicOf(x);
-      return topic && !['인터뷰 요약','전체 요약','긍정 의견','강점','부정 의견','우려 사항'].includes(topic);
-    });
-
-    let flowHTML = '';
-    if (overall && summaryOf(overall)) {
-      flowHTML += `
-        <div class="qa-simple" style="border-left:3px solid #10b981;background:#f0fdf4;">
-          <div class="qa-topic" style="font-weight:600;color:#059669;">인터뷰 요약</div>
-          <div class="qa-summary">${esc(summaryOf(overall))}</div>
-        </div>`;
-    }
-    flowHTML += flows.map(it=>{
-      const topic = topicOf(it);
-      const content = summaryOf(it);
-      return `
-        <div class="qa-simple">
-          <div class="qa-topic">${esc(topic)}</div>
-          <div class="qa-summary">${esc(content)}</div>
-        </div>`;
-    }).join("");
-    if (!flowHTML) flowHTML = '<div class="empty"><p>인터뷰 요약이 없습니다</p></div>';
-
-    const flowList = $("flowList");
-    if (flowList) flowList.innerHTML = flowHTML;
-
-    const posBox = $("posBox");
-    if (posBox) {
-      posBox.innerHTML = pos && summaryOf(pos)
-        ? `<p>${esc(summaryOf(pos))}</p>`
-        : '<div class="empty"><p>없음</p></div>';
-    }
-
-    const negBox = $("negBox");
-    if (negBox) {
-      negBox.innerHTML = neg && summaryOf(neg)
-        ? `<p>${esc(summaryOf(neg))}</p>`
-        : '<div class="empty"><p>없음</p></div>';
-    }
-
-    const jdBody = document.querySelector("#jdTable tbody");
-    if (!jdBody) {
-      console.warn('jdTable tbody를 찾을 수 없습니다');
-      return;
-    }
-    const axesMap = {};
-    (r.axes||[]).forEach((ax, idx) => { axesMap[`C${String(idx+1).padStart(2,'0')}`] = ax; });
-
-
-
-    const jdRows = r.compCoverage || r.jdCoverage || [];
-      jdBody.innerHTML = jdRows.map(row=>{
-      const axInfo = (r.axes||[]).find(ax => ax.key === row.cid) || {};
-      const score = (r.scores||[]).find(s => s.key === axInfo.key)?.value ?? 0;
-      const comment = (r.competency_comments||[]).find(c => c.key === axInfo.key)?.comment ?? "";
-      const chips = (row.evidence||[]).map(e =>
-        `<span class="badge badge-indigo eid-link" data-eid="${esc(e)}" onclick="scrollToEvidence('${esc(e)}')">${esc(e)}</span>`
-      ).join(" ");
-      return `<tr>
-        <td><strong style="color:#7c3aed;">${esc(axInfo.label||row.cid)}</strong></td>
-        <td>${esc(row.requirement)}<div class="jd-expectation">기준: ${esc(row.expectation||"")}</div></td>
-        <td>${score}<div class="comment" style="font-size:0.95em;color:#6366f1;margin-top:2px;">${esc(comment)}</div></td>
-        <td>${chips||'<span style="color:#9ca3af;">-</span>'}</td>
-      </tr>`;
-    }).join("");
-
-    const evBody = document.querySelector("#evTable tbody");
-    if (evBody) {
-      evBody.innerHTML = (r.evidence||[]).map(ev=>{
-        const axInfo = axesMap[ev.cid];
-        let competencyName = ev.cid;
-        if (axInfo) competencyName = competencyNames[axInfo.key] || axInfo.label || axInfo.key;
-
-        return `<tr id="ev-${esc(ev.eid)}" class="evidence-row">
-          <td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td>
-          <td style="color:#6b7280;font-size:0.75rem;">${esc(ev.source)}</td>
-          <td>${esc(ev.content)}</td>
-          <td><span class="badge badge-purple">${esc(competencyName)}</span></td>
-        </tr>`;
-      }).join("");
-    }
-
-    const statsElem = $("stats");
-    if (statsElem) {
-      statsElem.innerHTML = (r.convStats||[]).map(kv =>
-        `<div class="stats-item"><span class="stats-label">${esc(kv.k)}</span><span>:</span><span class="stats-value">${esc(kv.v)}</span></div>`
-      ).join("");
-    }
-
-    // 로딩 오버레이 숨김
-    const loadingOverlay = $("loadingOverlay");
-    if (loadingOverlay) loadingOverlay.style.display = "none";
-
-    console.log('renderReport 완료');
-  }
-
-  // EID 클릭 시 증거 맵 하이라이트
-  function scrollToEvidence(eid) {
-    const targetRow = document.getElementById(`ev-${eid}`);
-    if (!targetRow) return;
-    document.querySelectorAll('.evidence-row').forEach(row => row.classList.remove('evidence-highlight'));
-    targetRow.scrollIntoView({ behavior:'smooth', block:'center' });
-    setTimeout(() => {
-      targetRow.classList.add('evidence-highlight');
-      setTimeout(() => targetRow.classList.remove('evidence-highlight'), 3000);
-    }, 500);
-  }
-
-  // ==== 외부에서 데이터를 전달받는 함수 (부모 창에서 호출) ====
-  window.loadReportData = function(data) {
-    console.log('loadReportData 호출됨, 데이터:', data);
-
-    if (!data) {
-      showError({
-        code: 'NO_DATA',
-        message: '전달받은 리포트 데이터가 없습니다'
-      });
-      return;
-    }
-
-    if (data.status === 'failed') {
-      showError(data);
-      return;
-    }
-
-    currentReportData = data;
-    renderReport(data);
-  };
-
-  // ==== 쿼리 파라미터 파싱 ====
-  function getQueryParams() {
-    const params = new URLSearchParams(window.location.search);
-    return {
-      session_id: params.get('session_id'),
-      axes_keys: params.get('axes_keys'),
-      user_prompt: params.get('user_prompt')
-    };
-  }
-
-  // ==== 스트리밍 시작 ====
-  async function startStreaming() {
-    const params = getQueryParams();
-
-    if (!params.session_id) {
-      showError({
-        code: 'NO_SESSION',
-        message: 'session_id가 제공되지 않았습니다'
-      });
-      return;
-    }
-
-    const agentChatBox = $("agentChatBox");
-    const agentChatContent = $("agentChatContent");
-
-    // (에이전트 박스는 이제 DOM에 없으므로, null이면 아무 것도 안 함)
-    if (agentChatBox) agentChatBox.style.display = "block";
-    if (agentChatContent) agentChatContent.innerHTML = "";
-
-    const payload = new URLSearchParams();
-    if (params.session_id) payload.set('session_id', params.session_id);
-    if (params.axes_keys) payload.set('axes_keys', params.axes_keys);
-    if (params.user_prompt) payload.set('user_prompt', params.user_prompt);
-
-    try {
-      // EventSource로 스트리밍 연결
-      const eventSource = new EventSource('/reports/generate/stream?' + payload.toString());
-
-      eventSource.addEventListener('log', (e) => {
-        const data = JSON.parse(e.data);
-        console.log('[LOG]', data.agent, ':', data.message);
-
-        // 슬롯 애니메이션 중지하고 실제 에이전트 메시지 표시
-        stopSlotAnimation();
-        addAgentMessage(data.agent, data.message);
-      });
-
-      eventSource.addEventListener('debate', (e) => {
-        const data = JSON.parse(e.data);
-        console.log('[DEBATE] 디베이트 로그 수신, 턴 수:', data.turns?.length);
-
-        // 슬롯 애니메이션 중지하고 디베이트 로그 표시
-        stopSlotAnimation();
-
-        // 슬롯 텍스트 업데이트
-        const slotText = $("slotText");
-        if (slotText) {
-          slotText.textContent = "인터뷰 로그 분석 진행 중...";
-        }
-
-        // 디베이트 로그 표시
-        if (data.turns && data.turns.length > 0) {
-          showDebateLog(data.turns);
-        }
-      });
-
-      eventSource.addEventListener('error', (e) => {
-        const data = JSON.parse(e.data);
-        console.error('[ERROR]', data.message);
-        showError({code:'AGENT_ERROR', message:data.message});
-        eventSource.close();
-      });
-
-      eventSource.addEventListener('report', (e) => {
-        const eventData = JSON.parse(e.data);
-        console.log('[REPORT] 리포트 생성 완료, 데이터:', eventData);
-
-        // eventData = {type: "report", data: {...실제 리포트...}}
-        const reportData = eventData.data || eventData;
-        console.log('[REPORT] 리포트 데이터 추출:', reportData);
-
-        currentReportData = reportData;
-        renderReport(reportData);
-      });
-
-      eventSource.addEventListener('done', (e) => {
-        console.log('[DONE] 스트리밍 완료');
-        eventSource.close();
-      });
-
-      eventSource.onerror = (e) => {
-        console.error('[EventSource Error]', e);
-        if (eventSource.readyState === EventSource.CLOSED) {
-          console.log('EventSource 연결 종료');
-        } else {
-          showError({code:'STREAM_ERROR', message:'스트리밍 연결 오류'});
-        }
-        eventSource.close();
-      };
-
-    } catch(e){
-      console.error('[Exception]', e);
-      showError({code:'NETWORK', message:'네트워크 오류', details:{why:String(e)}});
-    }
-  }
-
-  // ==== 초기화 ====
-  (function init() {
-    console.log('리포트 뷰 초기화');
-
-    // 슬롯머신 로딩 애니메이션 시작
-    startSlotAnimation();
-
-    // 다운로드 버튼 이벤트 바인딩
-    const dlBtn = $("dlBtn");
-    if (dlBtn) dlBtn.onclick = downloadHTML;
-
-    const pdfBtn = $("pdfBtn");
-    if (pdfBtn) pdfBtn.onclick = downloadPDF;
-
-    // 쿼리 파라미터 확인 후 자동 스트리밍 시작
-    const params = getQueryParams();
-    console.log('쿼리 파라미터:', params);
-
-    if (params.session_id) {
-      console.log('자동 스트리밍 시작...');
-      startStreaming();
-    } else {
-      console.log('session_id가 없어 부모 창으로부터 데이터 전달 대기 중...');
-    }
-  })();
-
-  // ==== PDF 다운로드 ====
-  function downloadPDF() {
-    try {
-      if (!currentReportData) {
-        alert('리포트 데이터가 아직 없습니다. 먼저 리포트를 생성한 뒤 다시 시도해주세요.');
-        return;
-      }
-
-      fetch('/reports/pdf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ report: currentReportData })
-      })
-      .then(res => {
-        if (!res.ok) {
-          throw new Error('PDF 생성 실패 (status ' + res.status + ')');
-        }
-        return res.blob();
-      })
-      .then(blob => {
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        const sessionId = currentReportData?.metadata?.session_id || 'report';
-        link.href = url;
-        link.download = `interview_report_${sessionId}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-      })
-      .catch(e => {
-        console.error('downloadPDF 오류', e);
-        alert('PDF 다운로드 중 오류가 발생했습니다. (콘솔 확인)');
-      });
-    } catch (e) {
-      console.error('downloadPDF 예외', e);
-      alert('PDF 다운로드 중 예외가 발생했습니다. (콘솔 확인)');
-    }
-  }
-  </script>
+(function(){
+  if($("dlBtn"))$("dlBtn").onclick=downloadHTML;
+  if($("pdfBtn"))$("pdfBtn").onclick=downloadPDF;
+  const params=new URLSearchParams(window.location.search);
+  if(params.get('session_id'))startStreaming();
+})();
+</script>
 </body>
 </html>

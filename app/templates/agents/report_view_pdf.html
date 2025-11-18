@@ -1,681 +1,179 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <title>면접 평가 리포트</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <style>
-    :root {
-      --primary: #111827;
-      --accent: #4f46e5;
-      --accent-soft: #eef2ff;
-      --border: #e5e7eb;
-      --muted: #6b7280;
-      --bg-subtle: #f9fafb;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    html, body {
-      height: 100%;
-    }
-
-    body {
-      font-family: 'Malgun Gothic', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #e5e7eb;
-      color: var(--primary);
-    }
-
-    .report-wrapper {
-      max-width: 960px;
-      margin: 24px auto;
-      background: #ffffff;
-      padding: 20px 28px;
-      border-radius: 8px;
-      box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
-      min-height: calc(100vh - 48px);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .report-content {
-      flex: 1;
-    }
-
-    @media print {
-      @page {
-        size: A4;
-        margin: 12mm;
-      }
-      body {
-        background: #ffffff;
-      }
-      .report-wrapper {
-        max-width: none;
-        margin: 0;
-        padding: 0;
-        border-radius: 0;
-        box-shadow: none;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-      }
-      .report-content {
-        flex: 1;
-      }
-      .footer {
-        margin-top: auto;
-        position: relative;
-      }
-      .no-print {
-        display: none !important;
-      }
-      .page-break {
-        page-break-before: always;
-      }
-      a {
-        color: inherit;
-        text-decoration: none;
-      }
-    }
-
-    /* 헤더 */
-    .header {
-      display: flex;
-      justify-content: space-between;
-      gap: 20px;
-      border-bottom: 2px solid #0f172a;
-      padding-bottom: 10px;
-      margin-bottom: 12px;
-    }
-
-    .brand {
-      font-size: 11px;
-      letter-spacing: 0.14em;
-      text-transform: uppercase;
-      color: var(--muted);
-      margin-bottom: 4px;
-    }
-
-    h1.report-title {
-      font-size: 18px;
-      font-weight: 800;
-      letter-spacing: 0.03em;
-      margin-bottom: 3px;
-    }
-
-    .subtitle {
-      font-size: 10px;
-      color: var(--muted);
-    }
-
-    .meta-table {
-      border-collapse: collapse;
-      font-size: 10px;
-      min-width: 200px;
-    }
-
-    .meta-table th,
-    .meta-table td {
-      padding: 2px 0;
-      vertical-align: top;
-    }
-
-    .meta-table th {
-      font-weight: 600;
-      color: var(--muted);
-      padding-right: 8px;
-      white-space: nowrap;
-    }
-
-    .meta-table td {
-      color: var(--primary);
-    }
-
-    /* 섹션 공통 */
-    .section {
-      margin-bottom: 14px;
-    }
-
-    .section-title {
-      font-size: 12px;
-      font-weight: 700;
-      margin-bottom: 7px;
-      padding-left: 0;
-      border-left: none;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-    }
-
-    .section-title .decision-badge {
-      font-size: 11px;
-      font-weight: 600;
-      font-style: italic;
-      text-transform: none;
-      letter-spacing: 0;
-    }
-
-    /* 추천 관련 색상 - 파란색 */
-    .section-title .decision-badge.positive {
-      color: #2563eb;
-    }
-
-    /* 비추천 관련 색상 - 빨간색 */
-    .section-title .decision-badge.negative {
-      color: #dc2626;
-    }
-
-    /* 중립/기타 - 기본 보라색 */
-    .section-title .decision-badge.neutral {
-      color: #4338ca;
-    }
-
-    .section-caption {
-      font-size: 10px;
-      color: var(--muted);
-      margin-bottom: 8px;
-    }
-
-    .section-body {
-      font-size: 12px;
-      line-height: 1.6;
-    }
-
-    /* 요약 섹션 */
-    .summary-grid {
-      display: grid;
-      grid-template-columns: 2fr 1.3fr;
-      gap: 12px;
-      align-items: stretch;
-    }
-
-    .summary-main {
-      padding: 9px 11px;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: var(--bg-subtle);
-      display: flex;
-      flex-direction: column;
-    }
-
-    .block-title {
-      font-size: 10px;
-      font-weight: 700;
-      margin-bottom: 3px;
-    }
-
-    .headline-summary {
-      margin-bottom: 4px;
-      white-space: pre-line;
-      font-size: 9.5px;
-      line-height: 1.4;
-      flex: 1;
-    }
-
-    .chip-list {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 3px;
-      margin-top: 0;
-    }
-
-    .chip {
-      padding: 1px 6px;
-      border-radius: 999px;
-      background: #eff6ff;
-      border: 1px solid #dbeafe;
-      font-size: 8.5px;
-      color: #1d4ed8;
-    }
-
-    .summary-metrics {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      justify-content: space-between;
-    }
-
-    .metric-card {
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      padding: 6px 8px;
-      background: #ffffff;
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .metric-label {
-      font-size: 8.5px;
-      color: var(--muted);
-      margin-bottom: 1px;
-      font-weight: 600;
-    }
-
-    .metric-value {
-      font-size: 13px;
-      font-weight: 800;
-      margin-bottom: 2px;
-    }
-
-    .metric-desc {
-      font-size: 10px;
-      color: var(--muted);
-      line-height: 1.4;
-    }
-
-    .metric-reason {
-      font-size: 8px;
-      color: var(--primary);
-      margin-top: 1px;
-      line-height: 1.28;
-      font-weight: 400;
-      flex: 1;
-    }
-
-    .pill-row {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 3px 8px;
-      border-radius: 999px;
-      background: var(--accent-soft);
-      border: 1px solid #c7d2fe;
-      font-size: 11px;
-      margin-top: 4px;
-    }
-
-    .pill-label {
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      font-weight: 600;
-      color: #4338ca;
-    }
-
-    /* 카드 공통 */
-    .card {
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      background: #ffffff;
-      padding: 9px 11px;
-    }
-
-    .card-title {
-      font-size: 11px;
-      font-weight: 700;
-      margin-bottom: 5px;
-      color: #111827;
-    }
-
-    .comp-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 10px;
-    }
-
-    .comp-table th,
-    .comp-table td {
-      padding: 5px 8px;
-      border-bottom: 1px solid #e5e7eb;
-      vertical-align: top;
-      line-height: 1.35;
-    }
-
-    .comp-table th {
-      background: #f3f4f6;
-      font-weight: 600;
-    }
-
-    .comp-table td.numeric {
-      text-align: right;
-      white-space: nowrap;
-    }
-
-    .level-tag {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 999px;
-      font-size: 10px;
-      border: 1px solid #d1d5db;
-      background: #f9fafb;
-    }
-
-    /* JD 매핑 / 증거 */
-    .table-wrapper {
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      overflow: hidden;
-    }
-
-    table.data-table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 11px;
-    }
-
-    table.data-table th,
-    table.data-table td {
-      padding: 6px 8px;
-      border-bottom: 1px solid #e5e7eb;
-      vertical-align: top;
-    }
-
-    table.data-table th {
-      background: #f3f4f6;
-      font-weight: 600;
-      text-align: left;
-    }
-
-    table.data-table tr:last-child td {
-      border-bottom: none;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 2px 6px;
-      border-radius: 999px;
-      font-size: 10px;
-      border: 1px solid #e5e7eb;
-      background: #f9fafb;
-      margin-right: 4px;
-      margin-bottom: 2px;
-    }
-
-    .badge-eid {
-      color: #1d4ed8;
-      border-color: #bfdbfe;
-      background: #eff6ff;
-    }
-
-    .badge-axis {
-      color: #7c2d12;
-      border-color: #fed7aa;
-      background: #fffbeb;
-    }
-
-    .jd-expect {
-      margin-top: 2px;
-      font-size: 10px;
-      color: var(--muted);
-    }
-
-    /* 인터뷰 요약 / 대화 통계 */
-    .notes-grid {
-      display: grid;
-      grid-template-columns: 2fr 1.3fr;
-      gap: 16px;
-    }
-
-    .qa-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      font-size: 11px;
-    }
-
-    .qa-item-title {
-      font-weight: 600;
-      margin-bottom: 2px;
-    }
-
-    .qa-item-body {
-      white-space: pre-line;
-    }
-
-    .stats-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 3px 10px;
-      font-size: 10px;
-    }
-
-    .stat-label {
-      color: var(--muted);
-    }
-
-    .stat-value {
-      font-weight: 600;
-      text-align: right;
-    }
-
-    /* 최종 코멘트 */
-    .comment-box {
-      border-radius: 6px;
-      border: 1px solid var(--border);
-      padding: 9px 11px;
-      font-size: 10px;
-      min-height: 45px;
-      white-space: pre-line;
-      line-height: 1.45;
-    }
-
-    .recommend-row {
-      margin-top: 16px;
-      display: flex;
-      justify-content: flex-end;
-      gap: 10px;
-      font-size: 10px;
-      color: var(--primary);
-    }
-
-    .recommend-label {
-      font-weight: 600;
-      color: var(--muted);
-    }
-
-    .stats-inline {
-      font-size: 9.5px;
-      color: #1f2937;
-      margin-top: 10px;
-      padding: 8px 10px;
-      background: transparent;
-      border: none;
-      border-radius: 0;
-      font-weight: 500;
-      line-height: 1.6;
-    }
-
-    /* 푸터 */
-    .footer {
-      margin-top: auto;
-      padding-top: 0;
-      border-top: none;
-      font-size: 7.5px;
-      color: var(--muted);
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-    }
+:root{--primary:#111827;--accent:#4f46e5;--border:#e5e7eb;--muted:#6b7280;--bg-subtle:#f9fafb;}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{height:100%;}
+body{font-family:'Malgun Gothic',system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#e5e7eb;color:var(--primary);}
+.report-wrapper{max-width:960px;margin:24px auto;background:#fff;padding:20px 28px;border-radius:8px;box-shadow:0 10px 30px rgba(15,23,42,0.12);min-height:calc(100vh - 48px);display:flex;flex-direction:column;}
+.report-content{flex:1;}
+@media print{
+  @page{size:A4;margin:12mm;}
+  body{background:#fff;}
+  .report-wrapper{max-width:none;margin:0;padding:0;border-radius:0;box-shadow:none;min-height:100vh;display:flex;flex-direction:column;}
+  .report-content{flex:1;}
+  .footer{margin-top:auto;position:relative;}
+  .no-print{display:none!important;}
+  .page-break{page-break-before:always;}
+  a{color:inherit;text-decoration:none;}
+}
+.header{display:flex;justify-content:space-between;gap:20px;border-bottom:2px solid #0f172a;padding-bottom:10px;margin-bottom:12px;}
+.brand{font-size:11px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-bottom:4px;}
+h1.report-title{font-size:18px;font-weight:800;letter-spacing:0.03em;margin-bottom:3px;}
+.subtitle{font-size:10px;color:var(--muted);}
+.meta-table{border-collapse:collapse;font-size:10px;min-width:200px;}
+.meta-table th,.meta-table td{padding:2px 0;vertical-align:top;}
+.meta-table th{font-weight:600;color:var(--muted);padding-right:8px;white-space:nowrap;}
+.meta-table td{color:var(--primary);}
+.section{margin-bottom:14px;}
+.section-title{font-size:12px;font-weight:700;margin-bottom:7px;text-transform:uppercase;letter-spacing:0.04em;display:flex;align-items:baseline;gap:8px;}
+.section-title .decision-badge{font-size:11px;font-weight:600;font-style:italic;text-transform:none;letter-spacing:0;}
+.section-title .decision-badge.positive{color:#2563eb;}
+.section-title .decision-badge.negative{color:#dc2626;}
+.section-title .decision-badge.neutral{color:#4338ca;}
+.section-body{font-size:13px;line-height:1.6;}
+.summary-grid{display:grid;grid-template-columns:2fr 1.3fr;gap:12px;align-items:stretch;}
+.summary-main{padding:9px 11px;border-radius:6px;border:1px solid var(--border);background:var(--bg-subtle);display:flex;flex-direction:column;}
+.block-title{font-size:11px;font-weight:700;margin-bottom:3px;}
+.headline-summary{margin-bottom:4px;white-space:pre-line;font-size:14px;line-height:1.5;flex:1;}
+.chip-list{display:flex;flex-wrap:wrap;gap:3px;margin-top:0;}
+.chip{padding:1px 6px;border-radius:999px;background:#eff6ff;border:1px solid #dbeafe;font-size:8.5px;color:#1d4ed8;}
+.summary-metrics{display:flex;flex-direction:column;gap:5px;justify-content:space-between;}
+.metric-card{border-radius:6px;border:1px solid var(--border);padding:6px 8px;background:#fff;flex:1;display:flex;flex-direction:column;}
+.metric-label{font-size:10px;color:var(--muted);margin-bottom:1px;font-weight:600;}
+.metric-value{font-size:16px;font-weight:800;margin-bottom:2px;}
+.metric-reason{font-size:8px;color:var(--primary);margin-top:1px;line-height:1.35;font-weight:400;flex:1;word-wrap:break-word;}
+.card{border-radius:6px;border:1px solid var(--border);background:#fff;padding:9px 11px;}
+.card-title{font-size:12px;font-weight:700;margin-bottom:5px;color:#111827;}
+.comp-table{width:100%;border-collapse:collapse;font-size:11px;}
+.comp-table th,.comp-table td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;line-height:1.35;}
+.comp-table th{background:#f3f4f6;font-weight:600;}
+.comp-table td.numeric{text-align:right;white-space:nowrap;}
+.table-wrapper{border-radius:6px;border:1px solid var(--border);overflow:hidden;}
+table.data-table{width:100%;border-collapse:collapse;font-size:12px;}
+table.data-table th,table.data-table td{padding:6px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;}
+table.data-table th{background:#f3f4f6;font-weight:600;text-align:left;}
+table.data-table tr:last-child td{border-bottom:none;}
+.badge{display:inline-block;padding:2px 6px;border-radius:999px;font-size:10px;border:1px solid #e5e7eb;background:#f9fafb;margin-right:4px;margin-bottom:2px;}
+.badge-eid{color:#1d4ed8;border-color:#bfdbfe;background:#eff6ff;}
+.badge-axis{color:#7c2d12;border-color:#fed7aa;background:#fffbeb;}
+.jd-expect{margin-top:2px;font-size:10px;color:var(--muted);}
+.comment-box{border-radius:6px;border:1px solid var(--border);padding:9px 11px;font-size:13px;min-height:45px;white-space:pre-line;line-height:1.5;}
+.recommend-row{margin-top:16px;display:flex;justify-content:flex-end;gap:10px;font-size:10px;color:var(--primary);}
+.recommend-label{font-weight:600;color:var(--muted);}
+.stats-inline{font-size:9.5px;color:#1f2937;margin-top:10px;padding:8px 10px;background:transparent;border:none;font-weight:500;line-height:1.6;}
+.footer{margin-top:auto;padding-top:0;border-top:none;font-size:7.5px;color:var(--muted);display:flex;justify-content:space-between;gap:8px;}
   </style>
 </head>
 <body>
-{% set meta = report.metadata or {} %}
-{% set headline = report.headline or {} %}
-{% set axes = report.axes or [] %}
-{% set scores = report.scores or [] %}
-{% set jd_rows = report.compCoverage or [] %}
-{% set evidence = report.evidence or [] %}
-{% set talk_items = report.talkSummary["items"] if report.talkSummary is defined and report.talkSummary and "items" in report.talkSummary else [] %}
-{% set conv_stats = report.convStats or [] %}
-{% set recommendation = report.recommendation or {} %}
+{% set meta=report.metadata or {} %}
+{% set headline=report.headline or {} %}
+{% set quality=report.quality or {} %}
+{% set axes=report.axes or [] %}
+{% set jd_rows=report.compCoverage or [] %}
+{% set evidence=report.evidences or [] %}
+{% set interview_commentary=report.interview_commentary or {} %}
+{% set recommendation=report.recommendation or {} %}
+{% set interview_stat=report.interview_stat or {} %}
 
 <div class="report-wrapper">
-  <div class="report-content">
-  <!-- 헤더 -->
-  <header class="header">
-    <div>
-      <div class="brand">INTERVIEW REPORT</div>
-      <h1 class="report-title">면접 평가 리포트</h1>
-      <p class="subtitle">{{ meta.position_applied or "지원 포지션" }} 지원자 평가 결과</p>
-    </div>
-    <table class="meta-table">
-      <tr>
-        <th>지원자</th>
-        <td>{{ meta.candidate_name or "지원자" }}</td>
-      </tr>
-      <tr>
-        <th>지원 포지션</th>
-        <td>{{ meta.position_applied or "-" }}</td>
-      </tr>
-      <tr>
-        <th>인터뷰 일자</th>
-        <td>{{ meta.interview_date or "-" }}</td>
-      </tr>
-      <tr>
-        <th>리포트 생성일</th>
-        <td>{{ meta.report_date or "-" }}</td>
-      </tr>
-      <tr>
-        <th>세션 ID</th>
-        <td>{{ meta.session_id or "-" }}</td>
-      </tr>
-    </table>
-  </header>
-
-  <!-- 1. 종합 요약 -->
-  <section class="section">
-    <h2 class="section-title">1. 종합 요약</h2>
-    <div class="section-body summary-grid">
-      <!-- 왼쪽: 핵심 요약 -->
-      <div class="summary-main">
-        <div class="block-title">핵심 요약</div>
-        <div class="headline-summary">
-{{ headline.overall_summary or headline.summary or "" }}
-        </div>
-        <div class="chip-list">
-          {% for tag in (headline.tag or []) %}
-            <span class="chip">{{ tag }}</span>
-          {% endfor %}
-        </div>
-      </div>
-
-      <!-- 오른쪽: 모순/깊이/신뢰도 카드 -->
-      <div class="summary-metrics">
-        <div class="metric-card">
-          <div class="metric-label">모순 정도</div>
-          <div class="metric-value">
-            {% if headline.contradiction_score is not none %}
-              {{ headline.contradiction_score }}<span style="font-size: 12px;">%</span>
-            {% else %}-{% endif %}
-          </div>
-          <div class="metric-reason">
-{{ headline.contradiction_reason or "" }}
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">대화 깊이</div>
-          <div class="metric-value">
-            {% if headline.depth_score is not none %}
-              {{ headline.depth_score }}<span style="font-size: 12px;">%</span>
-            {% else %}-{% endif %}
-          </div>
-          <div class="metric-reason">
-{{ headline.depth_reason or "" }}
-          </div>
-        </div>
-        <div class="metric-card">
-          <div class="metric-label">리포트 신뢰도</div>
-          <div class="metric-value">
-            {% if headline.reliability_score is not none %}
-              {{ headline.reliability_score }}<span style="font-size: 12px;">%</span>
-            {% else %}-{% endif %}
-          </div>
-          <div class="metric-reason">
-{{ headline.reliability_reason or "" }}
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- 2. 핵심 역량 요약 -->
-  <section class="section">
-    <h2 class="section-title">2. 핵심 역량 요약</h2>
-
-    <div class="section-body">
-      <div class="card">
-        <table class="comp-table">
-          <thead>
-            <tr>
-              <th style="width: 26%;">역량</th>
-              <th style="width: 14%;" class="numeric">점수</th>
-              <th>요약 코멘트</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% set scores_map = {} %}
-            {% for s in scores %}
-              {% set _ = scores_map.update({s.key: s.value}) %}
-            {% endfor %}
-            {% set comment_map = {} %}
-            {% if report.competency_comments %}
-              {% for c in report.competency_comments %}
-                {% set _ = comment_map.update({c.key: c.comment}) %}
-              {% endfor %}
-            {% endif %}
-            {% for axis in axes %}
-              <tr>
-                <td><strong>{{ axis.label or axis.key }}</strong></td>
-                <td class="numeric">
-                  {% set val = scores_map.get(axis.key) %}
-                  {% if val is not none %}{{ val }} 점{% else %}-{% endif %}
-                </td>
-                <td>{{ comment_map.get(axis.key) or "" }}</td>
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </section>
-
-  <!-- 3. 최종 코멘트 및 채용 권고 -->
-  <section class="section">
-    <h2 class="section-title">
-      <span>3. 최종 코멘트 및 채용 권고</span>
-      {% set decision = recommendation.hiring_decision or "-" %}
-      {% set decision_lower = decision.lower() if decision != "-" else "" %}
-      {# 비추천/부정적 키워드 체크 #}
-      {% if "비추천" in decision or "불합격" in decision or "탈락" in decision or "부적합" in decision or "거부" in decision or "반려" in decision or "보류" in decision %}
-        <span class="decision-badge negative">{{ decision }}</span>
-      {# 추천/긍정적 키워드 체크 #}
-      {% elif "채용" in decision or "합격" in decision or "적합" in decision or "승인" in decision or "통과" in decision or "추천" in decision %}
-        <span class="decision-badge positive">{{ decision }}</span>
-      {# 기타 #}
-      {% else %}
-        <span class="decision-badge neutral">{{ decision }}</span>
-      {% endif %}
-    </h2>
-
-    <div class="section-body">
-      <div class="comment-box">
-{{ recommendation.final_comment or "" }}
-      </div>
-      <div class="stats-inline">
-        {% set stats = report.interview_stats or {} %}
-        면접 시간: {{ stats.duration or "-" }} | 질문당 후속 질문: {{ stats.followup_ratio or "-" }}{% if stats.question_type_ratios %} | {% for qt in stats.question_type_ratios %}{{ qt.type }}: {{ qt.ratio }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}
-      </div>
-      <div class="recommend-row">
-        <div>
-          <span class="recommend-label">작성자</span>
-          <span style="margin-left: 6px;">{{ meta.interviewer_name or "AI 평가 시스템" }}</span>
-        </div>
-      </div>
-    </div>
-  </section>
+<div class="report-content">
+<header class="header">
+  <div>
+    <div class="brand">INTERVIEW REPORT</div>
+    <h1 class="report-title">면접 평가 리포트</h1>
+    <p class="subtitle">{{meta.position_applied or "지원 포지션"}} 지원자 평가 결과</p>
   </div>
+  <table class="meta-table">
+    <tr><th>지원자</th><td>{{meta.candidate_name or "지원자"}}</td></tr>
+    <tr><th>지원 포지션</th><td>{{meta.position_applied or "-"}}</td></tr>
+    <tr><th>인터뷰 일자</th><td>{{meta.interview_date or "-"}}</td></tr>
+    <tr><th>리포트 생성일</th><td>{{meta.report_date or "-"}}</td></tr>
+    <tr><th>세션 ID</th><td>{{meta.session_id or "-"}}</td></tr>
+  </table>
+</header>
 
-  <footer class="footer">
-    <div>본 리포트는 인터뷰 로그와 제출 자료 기반 분석 결과이며, 최종 채용 결정은 회사의 인사 정책과 면접관의 판단에 따라 이루어져야 합니다.</div>
-    <div>Confidential – For internal recruitment use only</div>
-  </footer>
+<section class="section">
+  <h2 class="section-title">1. 종합 요약</h2>
+  <div class="section-body summary-grid">
+    <div class="summary-main">
+      <div class="block-title">인터뷰 요약</div>
+      <div class="headline-summary">{{report.interview_summary.interview_summary or "요약 없음"}}</div>
+    </div>
+    <div class="summary-metrics">
+      <div class="metric-card">
+        <div class="metric-label">모순 정도</div>
+        <div class="metric-value">{% if quality.contradiction_score is not none %}{{quality.contradiction_score}}<span style="font-size:12px;">%</span>{% else %}-{% endif %}</div>
+        {% if quality.contradiction_reason and quality.contradiction_reason != "" %}
+        <div class="metric-reason" style="margin-top:4px;">{{quality.contradiction_reason}}</div>
+        {% endif %}
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">대화 깊이</div>
+        <div class="metric-value">{% if quality.depth_score is not none %}{{quality.depth_score}}<span style="font-size:12px;">%</span>{% else %}-{% endif %}</div>
+        {% if quality.depth_reason and quality.depth_reason != "" %}
+        <div class="metric-reason" style="margin-top:4px;">{{quality.depth_reason}}</div>
+        {% endif %}
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">리포트 신뢰도</div>
+        <div class="metric-value">{% if quality.reliabality_score is not none %}{{quality.reliabality_score}}<span style="font-size:12px;">%</span>{% else %}-{% endif %}</div>
+        {% if quality.reliability_reason and quality.reliability_reason != "" %}
+        <div class="metric-reason" style="margin-top:4px;">{{quality.reliability_reason}}</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2 class="section-title">2. 핵심 역량 상세 평가</h2>
+  <div class="section-body">
+    <div class="table-wrapper">
+      <table class="data-table">
+        <thead><tr><th style="width:20%;">역량</th><th style="width:10%;">점수</th><th style="width:70%;">요약 코멘트</th></tr></thead>
+        <tbody>
+          {% for row in jd_rows %}
+          <tr>
+            <td><strong>{{row.competency or ""}}</strong></td>
+            <td style="text-align:center;">{% if row.fulfillment is not none %}{{row.fulfillment}}점{% else %}-{% endif %}</td>
+            <td>{{row.comment or "-"}}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section">
+  <h2 class="section-title">
+    <span>3. 최종 코멘트 및 채용 권고</span>
+    {% set decision=recommendation.hiring_decision or "-" %}
+    {% if "비추천" in decision or "불합격" in decision or "탈락" in decision or "부적합" in decision or "보류" in decision %}
+      <span class="decision-badge negative">{{decision}}</span>
+    {% elif "채용" in decision or "합격" in decision or "적합" in decision or "승인" in decision or "추천" in decision %}
+      <span class="decision-badge positive">{{decision}}</span>
+    {% else %}
+      <span class="decision-badge neutral">{{decision}}</span>
+    {% endif %}
+  </h2>
+  <div class="section-body">
+    <div class="comment-box">{{recommendation.final_comment or ""}}</div>
+    <div class="stats-inline">면접 시간: {{interview_stat.duration or "-"}} | 후속 질문: {{interview_stat.follow_up_avg or "-"}}{% if interview_stat.question_type_ratio %} | {% for qt in interview_stat.question_type_ratio %}{{qt.type}}: {{qt.ratio}}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}</div>
+    <div class="recommend-row"><div><span class="recommend-label">작성자</span><span style="margin-left:6px;">{{meta.interviewer_name or "AI 평가 시스템"}}</span></div></div>
+  </div>
+</section>
+</div>
+
+<footer class="footer">
+  <div>본 리포트는 인터뷰 로그와 제출 자료 기반 분석 결과이며, 최종 채용 결정은 회사의 인사 정책과 면접관의 판단에 따라 이루어져야 합니다.</div>
+  <div>Confidential – For internal recruitment use only</div>
+</footer>
 </div>
 </body>
 </html>

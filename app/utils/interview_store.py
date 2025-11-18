@@ -211,14 +211,32 @@ def retrieve_interview_context(session_id: str) -> str:
         if not rows:
             return ""
         
-        # 질문별로 그룹핑
+        # 통계 계산
+        max_offset = max(row[4] for row in rows if row[4] is not None)
+        duration_min = int(max_offset // 60)
+        duration_str = f"{duration_min}분"
+        
+        # 질문별로 그룹핑하여 후속질문 비율 계산
         qa_dict = defaultdict(list)
         for row in rows:
             qid, role, msg, turn, offset = row
             qa_dict[qid].append((role, msg, turn))
         
+        total_questions = len(qa_dict)
+        # 각 질문별 후속질문 개수 계산 (Q+A 2개 제외하고 나머지가 후속질문)
+        total_followups = sum(max(0, len(msgs) - 2) for msgs in qa_dict.values())
+        avg_followups = round(total_followups / total_questions, 1) if total_questions > 0 else 0.0
+        follow_up_avg_str = f"{avg_followups}개"
+        
         # 텍스트 포맷팅
-        context_lines = []
+        context_lines = [
+            f"[인터뷰 통계 - 절대 변경 금지]",
+            f"소요시간: {duration_str}",
+            f"후속질문 평균: {follow_up_avg_str}",
+            "",
+            "[인터뷰 내용]"
+        ]
+        
         for qid in sorted(qa_dict.keys()):
             messages = qa_dict[qid]
             for role, msg, turn in messages:

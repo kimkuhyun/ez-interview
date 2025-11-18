@@ -15,17 +15,7 @@ except Exception:  # pragma: no cover - 런타임 환경에 따라 없을 수 �
     sync_playwright = None
 
 # report_agent에서 create_report, create_report_async 가져오기
-from app.agents.report_agent_v4 import create_report, create_report_async
-
-# 나머지는 기존 report_agent에서 가져오기
-"""
-from app.agents.report_agent import (
-    validate_and_save,
-    get_report,
-    apply_feedback,
-)
-
-"""
+from app.agents.report_agent_v4o import create_report, create_report_async
 
 """
 리포트 생성/검증 HTTP 라우트. LangGraph 기반 report_agent와 연동
@@ -294,11 +284,7 @@ def generate_stream():
                 event_count += 1
                 print(f"[SSE] 이벤트 #{event_count} 전송 - type: {event.get('type')}, agent: {event.get('agent', 'N/A')}")
 
-                if event["type"] == "log":
-                    yield f"event: log\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
-                elif event["type"] == "debate":
-                    # (현재는 안 나가지만, 추후 디베이트 이벤트 용)
-                    print(f"[SSE] 디베이트 로그 전송")
+                if event["type"] == "debate":
                     yield f"event: debate\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
                 elif event["type"] == "error":
                     print(f"[SSE] 에러 이벤트 전송 - {event.get('message', '')[:100]}")
@@ -306,10 +292,10 @@ def generate_stream():
                 elif event["type"] == "report":
                     print(f"[SSE] 최종 리포트 전송 중...")
                     yield f"event: report\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
-
-            print(f"[SSE] 완료 이벤트 전송 (총 {event_count}개 이벤트)")
-            yield f"event: done\ndata: {json.dumps({'status': 'completed'}, ensure_ascii=False)}\n\n"
-            print(f"[SSE 스트림 정상 종료]")
+                elif event["type"] == "done":
+                    print(f"[SSE] 완료 이벤트 전송")
+                    yield f"event: done\ndata: {json.dumps({'status': 'completed'}, ensure_ascii=False)}\n\n"
+                    return
 
         except Exception as e:
             print(f"\n❌ [스트리밍 오류] {e}")

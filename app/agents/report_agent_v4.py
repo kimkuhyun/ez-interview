@@ -39,8 +39,8 @@ SOLAR_MODEL = os.getenv("SOLAR_MODEL", "solar-pro2")
 SOLAR_BASE_URL = "https://api.upstage.ai/v1"
 
 
-REPORT_MAX_RETRIEVAL_RETRY = int(os.getenv("REPORT_MAX_RETRIEVAL_RETRY", "2"))
-REPORT_MAX_ANALYSIS_RETRY = int(os.getenv("REPORT_MAX_ANALYSIS_RETRY", "1"))
+REPORT_MAX_RETRIEVAL_RETRY = int(os.getenv("REPORT_MAX_RETRIEVAL_RETRY", "0"))#2
+REPORT_MAX_ANALYSIS_RETRY = int(os.getenv("REPORT_MAX_ANALYSIS_RETRY", "0"))#1
 REPORT_QUALITY_THRESHOLD = float(os.getenv("REPORT_QUALITY_THRESHOLD", "0.7"))
 SUMMARY_MAX_LOG_CHARS = int(os.getenv("REPORT_SUMMARY_MAX_LOG_CHARS", "4000"))
 
@@ -334,7 +334,6 @@ class ReportOut(BaseModel):
     
     recommendation: FinalRecommendation
 
-
 # ==================== 중간 출력 스키마 ====================
 
 class OptimizedPrompt(BaseModel):
@@ -523,7 +522,7 @@ class InterviewAnalysisOut(BaseModel):
     reliability_reason: NonEmpty
     positive_aspects: str
     negative_aspects: str
-    final_comment: NonEmpty
+    final_comment: NonEmpty  # 반드시 포함. 프롬프트에 명시
     analysis_quality_score: Annotated[float, Ge(0.0), Le(1.0)] = Field(default=1.0)
     analysis_needs_retry: bool = Field(default=False)
     analysis_retry_hints: List[str] = Field(default_factory=list)
@@ -586,7 +585,7 @@ class InterviewAnalysisOut(BaseModel):
 
 class CompetencyEvalOut(BaseModel):
     scores: List[ScoreItem]
-    headline: Headline
+    headline: Headline  # 반드시 포함. 프롬프트에 명시
     reasoning: List[str] = Field(default_factory=list)
     competency_comments: List[CompetencyComment] = Field(default_factory=list)
     scoring_quality_score: Annotated[float, Ge(0.0), Le(1.0)] = Field(default=1.0)
@@ -677,6 +676,8 @@ class CompetencyEvalOut(BaseModel):
             data["competency_comments"] = norm_comments
 
         return data
+            # headline 필드가 없으면 validation error 발생(폴백 금지)
+            # 자동 생성/보정 로직 제거
 
 
 
@@ -804,6 +805,8 @@ class SummaryStatsOut(BaseModel):
         if isinstance(value, dict):
             return ", ".join(f"{k}: {v}" for k, v in value.items())
         return str(value)
+                    # final_comment 필드가 없으면 validation error 발생(폴백 금지)
+                    # 자동 생성/보정 로직 제거
 
 
 
@@ -933,31 +936,23 @@ async def _safe_structured_invoke_async(
     schema: type[T],
     variables: dict[str, Any],
 ) -> Optional[T]:
-    """
-    비동기 구조화 호출 (프롬프트 + Pydantic 스키마)
-    실패 시 None 리턴.
-    """
-    for method in ("json_mode", "function_calling"):
-        try:
-            chain = prompt | _llm_solar_chat().with_structured_output(
-                schema, method=method
-            )
-            return await chain.ainvoke(variables)
-        except ValidationError as e:
-            logger.warning(
-                "Pydantic validation error for %s (method=%s): %s",
-                schema.__name__,
-                method,
-                e,
-            )
-        except Exception as e:  # noqa: BLE001
-            logger.warning(
-                "structured async invoke failed for %s (method=%s): %s",
-                schema.__name__,
-                method,
-                e,
-            )
-    return None
+    try:
+        chain = prompt | _llm_solar_chat().with_structured_output(schema)
+        return await chain.ainvoke(variables)
+    except Exception:
+        return None
+
+async def _safe_structured_invoke_async_reason(
+    prompt: ChatPromptTemplate,
+    schema: type[T],
+    variables: dict[str, Any],
+) -> Optional[T]:
+    try:
+        chain = prompt | _llm_solar_reasoning().with_structured_output(schema)
+        return await chain.ainvoke(variables)
+    except Exception:
+        return None
+
 
 
 def _keep_first_value(old: Any | None, new: Any | None) -> Any | None:
@@ -973,8 +968,7 @@ class ReportState(TypedDict, total=False):
     user_prompt: Annotated[Optional[str], _keep_first_value]
     meta: Annotated[Dict[str, Any], _keep_first_value]
 
-    # 공용 로그
-    agent_logs: Annotated[List[Dict[str, str]], operator.add]
+    # 오류
     error: Annotated[Optional[str], _keep_first_value]
 
     # 0~3. 인터뷰 로그/세그먼트
@@ -1037,243 +1031,160 @@ class ReportState(TypedDict, total=False):
     final_recommendation: Annotated[Dict[str, Any], _keep_first_value]
     report: Annotated[Dict[str, Any], _keep_first_value]
 
-# ==================== 0. Precheck ====================
 
-def precheck_node(state: ReportState) -> ReportState:
-    session_id = state["session_id"]
-    meta = state.get("meta") or {}
-    missing: List[str] = []
+# ==================== 역할별 최소 스키마 ====================
 
-    try:
-        log_ctx = retrieve_interview_context(session_id) or ""
-    except Exception:
-        log_ctx = ""
-    if not log_ctx:
-        missing.append("인터뷰 로그")
+from pydantic import BaseModel
+from typing import List, Optional, Dict, Any
 
-    state["raw_log"] = log_ctx
-    state["agent_logs"].append(
-        {
-            "agent": "0. 프리체크",
-            "message": f"세션 {session_id} 프리체크 완료. 누락: {', '.join(missing) if missing else '없음'}",
-        }
-    )
-    if missing:
-        logger.info("Precheck: missing=%s", missing)
-    return state
+class CompCoverageRow(BaseModel):
+    cid: str
+    requirement: str
+    expectation: str
+    fulfillment: str
+    evidence: List[str]
 
+class EvidenceRow(BaseModel):
+    eid: str
+    source: str
+    content: str
+    cid: str
 
-# ==================== 1. SegPrep ====================
+class ScoreItem(BaseModel):
+    key: str
+    value: int
 
-def seg_prep_node(state: ReportState) -> ReportState:
-    raw_log = state.get("raw_log", "") or ""
-    qa_pairs = _extract_qa_pairs(raw_log)
-    
-    segments: List[Dict[str, Any]] = []
-    for idx, qa in enumerate(qa_pairs, start=1):
-        q_id = qa.get("q_id") or qa.get("q_num") or f"Q{idx}"
-        segments.append(
-            {
-                "q_id": q_id,
-                "q_index": idx - 1,
-                "question": qa.get("question", ""),
-                "answer": qa.get("answer", ""),
-                # speaker/meta 필요하면 여기 확장
-            }
-        )
-        
-    state["segments"] = segments
-    state.setdefault("agent_logs", []).append(
-        {
-            "agent": "1. 세그먼트 전처리",
-            "message": f"질문-답변 세그먼트 {len(segments)}개 추출",
-        }
-    )
-    return state
+class CompetencyEvalOut(BaseModel):
+    scores: List[ScoreItem]
+    compCoverage: List[CompCoverageRow]
+    evidence: List[EvidenceRow]
+    reasoning: List[str]
+    competency_comments: List[str]
+    scoring_quality_score: float
+    scoring_needs_retry: bool
+    scoring_retry_hints: List[str]
 
+class InterviewAnalysisOut(BaseModel):
+    contradiction_score: int
+    contradiction_reason: str
+    depth_score: int
+    depth_reason: str
+    reliability_score: int
+    reliability_reason: str
+    positive_aspects: str
+    negative_aspects: str
+    analysis_quality_score: float
+    analysis_needs_retry: bool
+    analysis_retry_hints: List[str]
+
+class TalkSummaryItem(BaseModel):
+    topic: str
+    summary: str
+
+class TalkSummary(BaseModel):
+    items: List[TalkSummaryItem]
+
+class SummaryStatsOut(BaseModel):
+    talkSummary: TalkSummary
+    convStats: List[Dict[str, Any]]
+    interview_stats: Optional[Dict[str, Any]]
+    tag: List[str]
+    headline: Dict[str, Any]  # summary, overall_summary, tag
+    summary_quality_score: float
+    summary_needs_retry: bool
+    summary_retry_hints: List[str]
+
+class FinalRecommendation(BaseModel):
+    final_comment: str
+    hiring_decision: str
+    decision_reasons: List[str]
+
+class ReportOut(BaseModel):
+    comp_eval: CompetencyEvalOut
+    interview_analysis: InterviewAnalysisOut
+    summary_stats: SummaryStatsOut
+    recommendation: FinalRecommendation
+    pass
 
 # ==================== 2-A/B/C. Seg 분석 ====================
+def seg_prep_node(state: ReportState) -> ReportState:
+    return state
 
 def seg_summary_node(state: ReportState) -> ReportState:
     segments = state.get("segments") or []
-    summaries: List[Dict[str, Any]] = []
-
     if not segments:
         state["segment_summaries"] = []
-        state.setdefault("agent_logs", []).append(
-            {"agent": "2-A. 세그 요약", "message": "세그먼트가 없어 요약을 건너뜀"}
-        )
         return state
 
-    system = (
-        "당신은 면접 로그를 요약하는 어시스턴트입니다. "
-        "각 세그먼트(질문/답변)에 대해 한국어로 2~3문장 요약을 생성하세요. "
-        "불필요한 인삿말·장식은 제외하고, 핵심 행동/경험/성과 위주로 정리하세요."
-    )
-
+    system = "면접 세그먼트를 2~3문장으로 요약하세요."
+    summaries = []
     for seg in segments:
-        q_id = seg["q_id"]
-        question = seg.get("question", "")
-        answer = seg.get("answer", "")
+        summary = _solar_chat_text(system, f"[질문] {seg.get('question', '')}\n[답변] {seg.get('answer', '')}")
+        summaries.append({"q_id": seg["q_id"], "summary": summary})
 
-        user = f"""다음 면접 세그먼트를 1~3문장으로 요약하세요.
-
-[질문]
-{question}
-
-[답변]
-{answer}
-"""
-        summary = _solar_chat_text(system, user)
-        summaries.append(
-            {
-                "q_id": q_id,
-                "summary": summary,
-            }
-        )
-
-    return {
-        "segment_summaries": summaries,
-        "agent_logs": [
-            {
-                "agent": "2-A. 세그 요약",
-                "message": f"세그먼트 요약 {len(summaries)}개 생성",
-            }
-        ],
-    }
+    return {"segment_summaries": summaries}
     
 
 
 def seg_emotion_node(state: ReportState) -> ReportState:
     segments = state.get("segments") or []
-    emotions: List[Dict[str, Any]] = []
-
     if not segments:
         state["segment_emotions"] = []
-        state.setdefault("agent_logs", []).append(
-            {"agent": "2-B. 세그 감정", "message": "세그먼트가 없어 감정 분석을 건너뜀"}
-        )
         return state
 
-    system = (
-        "당신은 면접 답변의 감정·톤을 분류하는 분석가입니다. "
-        "각 답변에 대해 다음 라벨 중 하나만 선택해서 한 단어로 출력하세요:\n"
-        "- '차분', '긴장', '자신감', '열정적', '방어적', '모호함'\n"
-        "추가 설명 없이 라벨만 출력하세요."
-    )
-
+    system = "답변의 주된 감정/톤을 한 단어로 분류: 차분/긴장/자신감/열정적/방어적/모호함"
+    emotions = []
     for seg in segments:
-        q_id = seg["q_id"]
-        answer = seg.get("answer", "")
-        user = f"다음 면접 답변의 주된 감정/톤을 한 단어로 분류하세요.\n\n[답변]\n{answer}"
-        label = _solar_chat_text(system, user)
-        emotions.append(
-            {
-                "q_id": q_id,
-                "emotion": label,
-            }
-        )
+        label = _solar_chat_text(system, f"[답변] {seg.get('answer', '')}")
+        emotions.append({"q_id": seg["q_id"], "emotion": label})
 
-    return {
-        "segment_emotions": emotions,
-        "agent_logs": [
-            {
-                "agent": "2-B. 세그 감정",
-                "message": f"세그먼트 감정 레이블 {len(emotions)}개 생성",
-            }
-        ],
-    }
+    return {"segment_emotions": emotions}
 
 
 
 def seg_risk_node(state: ReportState) -> ReportState:
     segments = state.get("segments") or []
-    risks: List[Dict[str, Any]] = []
-
     if not segments:
         state["segment_risks"] = []
-        state.setdefault("agent_logs", []).append(
-            {"agent": "2-C. 세그 리스크", "message": "세그먼트가 없어 리스크 분석을 건너뜀"}
-        )
         return state
 
-    system = (
-        "당신은 면접 답변에서 리스크 신호를 감지하는 분석가입니다. "
-        "각 답변에 대해 다음 분류 중 하나를 선택해 한 단어로 출력하세요:\n"
-        "- '정상', '과장가능성', '회피답변', '모순의심', '경고', '불명확'\n"
-        "추가 설명 없이 라벨만 출력하세요."
-    )
-
+    system = "답변의 리스크 신호를 분류: 정상/과장가능성/회피답변/모순의심/경고/불명확"
+    risks = []
     for seg in segments:
-        q_id = seg["q_id"]
-        question = seg.get("question", "")
-        answer = seg.get("answer", "")
-        user = f"""다음 질문/답변에서 리스크 신호를 분류하세요.
+        label = _solar_chat_text(system, f"[질문] {seg.get('question', '')}\n[답변] {seg.get('answer', '')}")
+        risks.append({"q_id": seg["q_id"], "risk": label})
 
-[질문]
-{question}
-
-[답변]
-{answer}
-"""
-        label = _solar_chat_text(system, user)
-        risks.append(
-            {
-                "q_id": q_id,
-                "risk": label,
-            }
-        )
-
-    return {
-        "segment_risks": risks,
-        "agent_logs": [
-            {
-                "agent": "2-C. 세그 리스크",
-                "message": f"세그먼트 리스크 레이블 {len(risks)}개 생성",
-            }
-        ],
-    }
+    return {"segment_risks": risks}
 
 
 
 # ==================== 3. SegMerge ====================
 
 def seg_merge_node(state: ReportState) -> ReportState:
-    """세그먼트 요약/감정/리스크를 하나의 베이스 요약/인덱스로 통합."""
     segments = state.get("segments") or []
     seg_summaries = {s["q_id"]: s for s in (state.get("segment_summaries") or [])}
     seg_emotions = {e["q_id"]: e for e in (state.get("segment_emotions") or [])}
     seg_risks = {r["q_id"]: r for r in (state.get("segment_risks") or [])}
 
-    # q_id -> index 맵
     segment_index: Dict[str, int] = {}
     segment_cache_keys: List[str] = []
-
     session_id = state.get("session_id", "unknown_session")
 
-    # 인터뷰 전체 요약용 텍스트 구성
     lines: List[str] = []
     for idx, seg in enumerate(segments):
         q_id = seg["q_id"]
         segment_index[q_id] = idx
         segment_cache_keys.append(f"{session_id}:seg:{q_id}")
-
         summary = seg_summaries.get(q_id, {}).get("summary", "")
         emotion = seg_emotions.get(q_id, {}).get("emotion", "")
         risk = seg_risks.get(q_id, {}).get("risk", "")
-
         line = f"[{q_id}] 요약: {summary}\n - 감정: {emotion}, 리스크: {risk}"
         lines.append(line)
 
     long_text = "\n\n".join(lines) if lines else ""
 
-    # 인터뷰 전체 요약 베이스 (LLM 한 번 호출)
     if long_text:
-        system = (
-            "당신은 전체 인터뷰 세그먼트 요약을 바탕으로, "
-            "인터뷰 전반의 핵심 특징을 정리하는 분석가입니다. "
-            "핵심 주제, 강점, 우려 포인트를 포함하여 4~6문장으로 정리하세요."
-        )
+        system = "전체 인터뷰 세그먼트 요약을 바탕으로, 인터뷰 전반의 핵심 특징을 정리하세요. 4~6문장."
         user = f"[세그먼트별 요약/감정/리스크]\n\n{long_text}"
         overall = _solar_chat_text(system, user)
     else:
@@ -1287,13 +1198,6 @@ def seg_merge_node(state: ReportState) -> ReportState:
     state["segment_index"] = segment_index
     state["segment_cache_keys"] = segment_cache_keys
     state["interview_summary_base"] = interview_summary_base
-
-    state.setdefault("agent_logs", []).append(
-        {
-            "agent": "3. 세그 통합",
-            "message": f"세그먼트 메타/캐시 구성 완료 (세그먼트 수: {len(segments)})",
-        }
-    )
     return state
 
 
@@ -1323,88 +1227,65 @@ def _prompt_lens_template() -> ChatPromptTemplate:
 def prompt_lens_node(state: ReportState) -> ReportState:
     axes_keys = state.get("axes_keys") or []
     user_prompt = (state.get("user_prompt") or "").strip()
-    state.setdefault("agent_logs", [])
 
     default_focus = axes_keys[:5] or ["전반적인 직무 적합도"]
 
-    # 사용자 프롬프트 없으면 LLM 호출 안 함
     if not user_prompt:
         opt = OptimizedPrompt(
             original_prompt="사용자 프롬프트 없음",
-            lens_perspective=(
-                f"제출된 이력서, JD, 인터뷰 로그를 바탕으로 "
-                f"{', '.join(default_focus)} 관점에서 후보자의 역량을 평가합니다."
-            ),
+            lens_perspective=f"제출된 이력서, JD, 인터뷰 로그를 바탕으로 {', '.join(default_focus)} 관점에서 후보자의 역량을 평가합니다.",
             key_focus_areas=default_focus,
             reasoning="사용자 프롬프트가 없어 기본 평가 렌즈를 사용했습니다.",
         )
     else:
         prompt = _prompt_lens_template()
-        result = _safe_structured_invoke(
-            prompt,
-            OptimizedPrompt,
-            {
-                "user_prompt": user_prompt,
-                "axes_keys": ", ".join(axes_keys),
-            },
-        )
+        result = _safe_structured_invoke(prompt, OptimizedPrompt, {"user_prompt": user_prompt, "axes_keys": ", ".join(axes_keys)})
 
         if result is None:
             opt = OptimizedPrompt(
                 original_prompt=user_prompt,
-                lens_perspective=(
-                    f"{', '.join(default_focus)} 관점에서 후보자를 평가합니다."
-                ),
+                lens_perspective=f"{', '.join(default_focus)} 관점에서 후보자를 평가합니다.",
                 key_focus_areas=default_focus,
                 reasoning="LLM 호출 실패로 기본 평가 렌즈를 사용했습니다.",
             )
         else:
             opt = result
 
-    state["optimized_prompt"] = opt.model_dump()
-    state["agent_logs"].append(
-        {
-            "agent": "4. 프롬프트 렌즈",
-            "message": f"렌즈 관점 생성: {', '.join(opt.key_focus_areas)}",
-        }
-    )
-    return state
+    return {"optimized_prompt": opt.model_dump()}
 
 
 # ==================== 5. QueryPlanner ====================
 
 def _query_planner_template() -> ChatPromptTemplate:
-    return ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                "당신은 벡터 검색 질의 계획을 설계하는 에이전트입니다.\n"
-                "이력서, JD, 인터뷰 로그에서 필요한 정보를 찾기 위한 질의를 설계하세요.\n"
-                "모든 출력은 한국어 JSON 형식입니다.",
-            ),
-            (
-                "human",
-                "평가 축: {axes_keys}\n"
-                "렌즈 관점: {lens_perspective}\n"
-                "핵심 초점: {key_focus_areas}\n\n"
-                "**[사용자 핵심 지시사항]**\n{user_prompt}\n\n"
-                "위 **[사용자 핵심 지시사항]**을 최우선으로 고려하여 다음 필드를 JSON으로 출력하세요.\n"
-                "- resume_query\n"
-                "- comp_query\n"
-                "- interview_query\n"
-                "- focus_areas (문자열 리스트)\n"
-                "- reasoning\n"
-                "포트폴리오가 필요하면 portfolio_query 필드도 추가하세요."
-            ),
-        ]
-    )
+    return ChatPromptTemplate.from_messages([
+        (
+            "system",
+            "당신은 벡터 검색 질의 계획을 설계하는 에이전트입니다.\n"
+            "이력서, JD, 인터뷰 로그에서 필요한 정보를 찾기 위한 질의를 설계하세요.\n"
+            "모든 출력은 한국어 JSON 형식입니다.\n"
+            "각 필드는 반드시 문자열(str)로 출력하세요. 리스트나 객체가 아닌 쉼표로 구분된 한 문장으로 작성하세요."
+        ),
+        (
+            "human",
+            "평가 축: {axes_keys}\n"
+            "렌즈 관점: {lens_perspective}\n"
+            "핵심 초점: {key_focus_areas}\n\n"
+            "**[사용자 핵심 지시사항]**\n{user_prompt}\n\n"
+            "위 **[사용자 핵심 지시사항]**을 최우선으로 고려하여 다음 필드를 JSON으로 출력하세요.\n"
+            "- resume_query\n"
+            "- comp_query\n"
+            "- interview_query\n"
+            "- focus_areas (문자열 리스트)\n"
+            "- reasoning\n"
+            "포트폴리오가 필요하면 portfolio_query 필드도 추가하세요.\n"
+            "각 필드는 반드시 문자열(str)로 출력하세요. 리스트나 객체가 아닌 쉼표로 구분된 한 문장으로 작성하세요."
+        ),
+    ])
 
 
 
 
 def query_planner_node(state: ReportState) -> ReportState:
-    state.setdefault("agent_logs", [])
-
     opt_raw = state.get("optimized_prompt") or {}
     opt = OptimizedPrompt.model_validate(opt_raw)
 
@@ -1426,7 +1307,6 @@ def query_planner_node(state: ReportState) -> ReportState:
     )
 
     if result is None:
-        # 스키마에 맞는 최소 폴백
         plan = QueryPlan(
             resume_query=f"{lens} 관점에서 후보자의 경력/성과를 확인할 수 있는 내용",
             comp_query=f"{lens} 관점에서 JD 핵심 요구사항과 매칭되는 경험",
@@ -1439,12 +1319,6 @@ def query_planner_node(state: ReportState) -> ReportState:
         plan = result
 
     state["query_plan"] = plan.model_dump()
-    state["agent_logs"].append(
-        {
-            "agent": "5. 질의 설계",
-            "message": "이력서/JD/인터뷰 로그 질의 설계 완료",
-        }
-    )
     return state
 
 
@@ -1510,19 +1384,11 @@ def _retrieve_contexts(session_id: str, query_plan: QueryPlan, axes_keys: List[s
 
 
 def retriever_node(state: ReportState) -> ReportState:
-    state.setdefault("agent_logs", [])
-
     qp_raw = state.get("query_plan") or {}
     try:
         qp = QueryPlan.model_validate(qp_raw)
-    except Exception as e:  # noqa: BLE001
+    except Exception as e:
         state["error"] = f"질의 설계 결과 파싱 실패: {e}"
-        state["agent_logs"].append(
-            {
-                "agent": "6. 리트리버",
-                "message": "QueryPlan 파싱 실패로 리트리버 중단",
-            }
-        )
         return state
 
     ctx = _retrieve_contexts(
@@ -1538,20 +1404,8 @@ def retriever_node(state: ReportState) -> ReportState:
     state["qa_pairs"] = ctx["qa_pairs"]
     state["comp_id_list"] = ctx["comp_id_list"]
     state["eid_list"] = ctx["eid_list"]
-    # 포트폴리오 컨텍스트를 쓰려면 ReportState에 필드만 추가해두면 됨
     state["portfolio_ctx"] = ctx.get("portfolio_ctx", "")
-
     state["retrieval_retry_count"] = state.get("retrieval_retry_count", 0)
-
-    state["agent_logs"].append(
-        {
-            "agent": "6. 리트리버",
-            "message": (
-                f"이력서/JD/포트폴리오/로그 검색 완료 "
-                f"(QA {len(state['qa_pairs'])}개)"
-            ),
-        }
-    )
     return state
 
 
@@ -1599,22 +1453,14 @@ async def evidence_map_node(state: ReportState) -> ReportState:
         state["evidence_quality_score"] = 0.0
         state["evidence_needs_retry"] = False
         state["evidence_retry_hints"] = []
-        state.setdefault("agent_logs", []).append(
-            {"agent": "7. 증거 매핑", "message": "LLM 오류 → 기본값 사용"}
-        )
         return state
 
-    state["evidence_summary"] = result.model_dump()
-    state["evidence_quality_score"] = float(result.quality_score)
-    state["evidence_needs_retry"] = bool(result.needs_retry)
-    state["evidence_retry_hints"] = result.retry_hints
-    state.setdefault("agent_logs", []).append(
-        {
-            "agent": "7. 증거 매핑",
-            "message": f"품질={result.quality_score:.2f}, 재시도={result.needs_retry}",
-        }
-    )
-    return state
+    return {
+        "evidence_summary": result.model_dump(),
+        "evidence_quality_score": float(result.quality_score),
+        "evidence_needs_retry": bool(result.needs_retry),
+        "evidence_retry_hints": result.retry_hints,
+    }
 
 
 
@@ -1625,19 +1471,7 @@ def evidence_router_node(state: ReportState) -> str:
     needs_retry = state.get("evidence_needs_retry", False)
     if needs_retry and retry_count < REPORT_MAX_RETRIEVAL_RETRY:
         state["retrieval_retry_count"] = retry_count + 1
-        state.setdefault("agent_logs", []).append(
-            {
-                "agent": "8. 증거 라우터",
-                "message": f"증거 부족 → 리트리버 재시도 ({state['retrieval_retry_count']})",
-            }
-        )
         return "retry"
-    state.setdefault("agent_logs", []).append(
-        {
-            "agent": "8. 증거 라우터",
-            "message": "증거 충분 또는 재시도 한도 → 교차검증 진행",
-        }
-    )
     return "next"
 
 
@@ -1679,18 +1513,9 @@ async def cross_check_node(state: ReportState) -> ReportState:
     )
     if result is None:
         state["cross_check"] = {}
-        state.setdefault("agent_logs", []).append(
-            {"agent": "9. 교차검증", "message": "LLM 오류 → 기본 교차검증 사용"}
-        )
         return state
 
     state["cross_check"] = result.model_dump()
-    state.setdefault("agent_logs", []).append(
-        {
-            "agent": "9. 교차검증",
-            "message": f"일관성 점수={result.overall_consistency_score}",
-        }
-    )
     return state
 
 
@@ -1699,30 +1524,27 @@ async def cross_check_node(state: ReportState) -> ReportState:
 # ==================== 10-A. CompScore ====================
 
 def _comp_score_template() -> ChatPromptTemplate:
-    return ChatPromptTemplate.from_messages(
-        [
-            ("system",
-             "당신은 면접 핵심역량 평가 전문가 입니다"
-             " 면접 핵심역량 평가 전문가입니다.\n"
-             "이력서와 인터뷰 로그를 기반으로 축별 점수, 헤드라인, 키워드를 생성합니다.\n"
-             "모든 출력은 한국어 JSON입니다."),
-            ("human",
-             "평가 축: {axes_keys}\n렌즈 관점: {lens_perspective}\n\n"
-             "[이력서]\n{resume}\n\n[인터뷰 로그]\n{log}\n\n"
-             "**[사용자 핵심 지시사항]**\n{user_prompt}\n\n"
-             "위 **[사용자 핵심 지시사항]**을 최우선으로 반영하여 다음 필드를 JSON으로 출력하세요.\n\n"
-             "1. **scores**: 각 평가 축별 점수 (0~100점)\n"
-             "2. **headline**: \n"
-             "   - summary: 후보자 특징을 한 문장으로 요약 (예: '리더십과 협업 역량 보유, 커뮤니케이션 강점 있으나 팀 역량 관리 개선 필요')\n"
-             "   - overall_summary: 인터뷰 전반에 대한 평가 (350-400자)\n"
-             "   - tag: 후보자를 대표하는 키워드 3-5개 (예: ['리더십', '협업', '문제해결', '커뮤니케이션'])\n"
-             "3. **reasoning**: 점수 산정 근거 리스트\n"
-             "4. **competency_comments**: 각 역량별 점수 이유 (2-3문장)\n"
-             "5. **scoring_quality_score**: 평가 품질 점수 (0.0~1.0)\n"
-             "6. **scoring_needs_retry**: 재평가 필요 여부\n"
-             "7. **scoring_retry_hints**: 재평가 시 힌트")
-        ]
-    )
+    return ChatPromptTemplate.from_messages([
+        ("system",
+         "역량별 점수/커버리지/근거/코멘트/품질을 평가하는 에이전트입니다.\n"
+         "모든 출력은 한국어 JSON입니다.\n"
+         "각 필드는 반드시 아래 타입으로 출력하세요:\n"
+         "- scores: 리스트[딕셔너리] (각 딕셔너리는 key, value 포함. value는 반드시 정수(int)로 출력하세요. 소수점 없이 0~100 범위의 정수로만 작성하세요.)\n"
+         "- compCoverage: 리스트[딕셔너리] (각 딕셔너리는 cid, requirement, expectation, fulfillment, evidence 포함. evidence는 반드시 리스트(List[str])로 출력하세요. fulfillment는 반드시 문자열(str)로 출력하세요. 점수/숫자 필드는 반드시 정수(int)로 출력하세요.)\n"
+         "- evidence: 리스트[딕셔너리] (각 딕셔너리는 eid, source, content, cid 포함)\n"
+         "- reasoning: 리스트[str]\n"
+         "- competency_comments: 리스트[str]\n"
+         "- scoring_quality_score: float\n"
+         "- scoring_needs_retry: bool\n"
+         "- scoring_retry_hints: 리스트[str]"
+        ),
+        ("human",
+         "평가 축: {axes_keys}\n렌즈 관점: {lens_perspective}\n\n"
+         "[이력서]\n{resume}\n\n[인터뷰 로그]\n{log}\n\n"
+         "**[사용자 핵심 지시사항]**\n{user_prompt}\n\n"
+         "위 타입에 맞춰 JSON으로 출력하세요."
+        ),
+    ])
 
 
 async def comp_score_node(state: ReportState) -> ReportState:
@@ -1742,137 +1564,55 @@ async def comp_score_node(state: ReportState) -> ReportState:
     )
 
     if result is None:
-        # ✅ LLM 실패 시에도 최소 유효 구조 생성
         axes_keys = state.get("axes_keys") or []
-        fallback_scores = (
-            [ScoreItem(key=k, value=0) for k in axes_keys]
-            or [ScoreItem(key="overall", value=0)]
-        )
-        fallback_headline = Headline(
-            summary="평가 생성 실패",
-            overall_summary="LLM 오류로 평가 축/헤드라인을 생성하지 못해 기본값을 사용합니다.",
-            tag=["fallback"],
-        )
+        fallback_scores = [ScoreItem(key=k, value=0) for k in axes_keys] or [ScoreItem(key="overall", value=0)]
         comp = CompetencyEvalOut(
-            scores=fallback_scores,
-            headline=fallback_headline,
-            reasoning=["LLM 평가 생성 실패, 기본 점수 사용"],
-            competency_comments=[],
-            scoring_quality_score=0.0,
-            scoring_needs_retry=False,
-            scoring_retry_hints=["LLM 평가 실패"],
+            scores=fallback_scores, compCoverage=[], evidence=[], reasoning=[],
+            competency_comments=[], scoring_quality_score=0.0, scoring_needs_retry=False, scoring_retry_hints=[]
         )
         return {
             "comp_eval": comp.model_dump(),
-            "scoring_quality_score": comp.scoring_quality_score,
-            "scoring_needs_retry": comp.scoring_needs_retry,
-            "scoring_retry_hints": comp.scoring_retry_hints,
-            "agent_logs": [
-                {"agent": "10-A. 핵심축 점수", "message": "LLM 오류, 기본 점수 사용"}
-            ],
+            "scoring_quality_score": 0.0,
+            "scoring_needs_retry": False,
+            "scoring_retry_hints": [],
+            "debate": [{"agent": "역량 평가", "message": "분석 실패, 재평가 필요"}],
         }
 
-    # ✅ 정상 케이스는 그대로
     return {
         "comp_eval": result.model_dump(),
         "scoring_quality_score": float(result.scoring_quality_score),
         "scoring_needs_retry": bool(result.scoring_needs_retry),
         "scoring_retry_hints": result.scoring_retry_hints,
-        "agent_logs": [
-            {
-                "agent": "10-A. 핵심축 점수",
-                "message": f"축 {len(result.scores)}개, 품질={result.scoring_quality_score:.2f}",
-            }
-        ],
+        "debate": [{"agent": "역량 평가", "message": f"평균 점수 {sum(s.value for s in result.scores) / len(result.scores) if result.scores else 0:.0f}점, 평가 품질 {result.scoring_quality_score:.1f}"}],
     }
 
 
 
 
 
-# ==================== 10-B. JDCover ====================
-
-def _comp_cover_template() -> ChatPromptTemplate:
-    return ChatPromptTemplate.from_messages(
-        [
-            ("system",
-             "당신은 역량(competency) 기준 커버리지를 평가하는 전문가입니다.\n"
-             "각 역량별 요구사항/기대/충족도와 근거를 표 형식으로 정리합니다.\n"
-             "모든 출력은 한국어 JSON입니다."),
-            ("human",
-             "평가 역량 축: {axes_keys}\n"
-             "역량 ID 매핑: {comp_id_list}\n\n"
-             "[JD]\n{jd}\n\n[이력서]\n{resume}\n\n[인터뷰 로그]\n{log}\n\n"
-             "증거 ID 목록: {eid_list}\n\n"
-             "위 평가 역량 축 각각에 대해 다음 필드를 JSON으로 출력하세요.\n"
-             "- compCoverage: {{cid(예: C01, C02...), requirement, expectation, fulfillment, evidence[eid...]}} 리스트 (역량 축 개수만큼)\n"
-             "- evidence: {{eid(예: E01, E02...), source, content, cid}} 리스트\n"
-             "- coverage_quality_score(0.0~1.0)\n- coverage_needs_retry(bool)\n- coverage_retry_hints\n\n"
-             "**중요**: cid는 반드시 comp_id_list에서 제공된 ID(C01, C02 등)를 사용하세요.")
-        ]
-    )
-
-async def jd_cover_node(state: ReportState) -> ReportState:
-    log_short = (state.get("log_ctx") or "")[:SUMMARY_MAX_LOG_CHARS]
-    axes_keys = state.get("axes_keys") or []
-    comp_id_list = state.get("comp_id_list") or []
-    
-    result = await _safe_structured_invoke_async(
-        _comp_cover_template(),
-        CompCoverageOut,
-        {
-            "axes_keys": ", ".join(axes_keys),
-            "comp_id_list": ", ".join(comp_id_list),
-            "jd": state.get("jd_ctx", ""),
-            "resume": state.get("resume_ctx", ""),
-            "log": log_short,
-            "eid_list": ", ".join(state.get("eid_list") or []),
-        },
-    )
-
-    if result is None:
-        return {
-            "comp_cover_result": {},
-            "coverage_quality_score": 0.0,
-            "coverage_needs_retry": False,
-            "coverage_retry_hints": ["커버리지 분석 실패"],
-            "agent_logs": [
-                {"agent": "10-B. 커버리지", "message": "LLM 오류, 기본값 사용"}
-            ],
-        }
-
-    return {
-        "comp_cover_result": result.model_dump(),
-        "coverage_quality_score": float(result.coverage_quality_score),
-        "coverage_needs_retry": bool(result.coverage_needs_retry),
-        "coverage_retry_hints": result.coverage_retry_hints,
-        "agent_logs": [
-            {
-                "agent": "10-B. 커버리지",
-                "message": f"항목 {len(result.compCoverage)}개, 품질={result.coverage_quality_score:.2f}",
-            }
-        ],
-    }
 
 
 # ==================== 10-C. InterviewQuality ====================
 
 def _interview_quality_template() -> ChatPromptTemplate:
-    return ChatPromptTemplate.from_messages(
-        [
-            ("system",
-             "당신은 인터뷰 품질(모순, 깊이, 신뢰도)을 평가하는 전문가입니다.\n"
-             "모든 출력은 한국어 JSON입니다."),
-            ("human",
-             "[인터뷰 로그]\n{log}\n\n"
-             "다음 필드를 JSON으로 출력하세요.\n"
-             "- contradiction_score, contradiction_reason\n"
-             "- depth_score, depth_reason\n"
-             "- reliability_score, reliability_reason\n"
-             "- positive_aspects, negative_aspects, final_comment\n"
-             "- analysis_quality_score(0.0~1.0)\n- analysis_needs_retry(bool)\n- analysis_retry_hints")
-        ]
-    )
+    return ChatPromptTemplate.from_messages([
+        ("system",
+         "당신은 인터뷰 품질을 평가하는 전문가입니다. 인터뷰 로그를 분석하여 모순도, 깊이, 신뢰도를 0~100 점수로 평가하세요."),
+        ("human",
+         "[인터뷰 로그]\n{log}\n\n"
+         "다음 JSON 형식으로 출력하세요:\n"
+         "- contradiction_score: 0~100 (0=일관적, 100=모순많음)\n"
+         "- contradiction_reason: 이유 (1문장)\n"
+         "- depth_score: 0~100 (0=피상적, 100=깊이있음)\n"
+         "- depth_reason: 이유 (1문장)\n"
+         "- reliability_score: 0~100 (0=신뢰낮음, 100=신뢰높음)\n"
+         "- reliability_reason: 이유 (1문장)\n"
+         "- positive_aspects: 긍정 포인트 (50자 이내)\n"
+         "- negative_aspects: 우려 포인트 (50자 이내)\n"
+         "- analysis_quality_score: 0.0~1.0\n"
+         "- analysis_needs_retry: false\n"
+         "- analysis_retry_hints: []")
+    ])
 
 async def interview_quality_node(state: ReportState) -> ReportState:
     log_short = (state.get("log_ctx") or "")[:SUMMARY_MAX_LOG_CHARS]
@@ -1882,50 +1622,41 @@ async def interview_quality_node(state: ReportState) -> ReportState:
         {"log": log_short},
     )
     if result is None:
-        return {
-            "interview_analysis": {},
-            "analysis_quality_score": 0.0,
-            "analysis_needs_retry": False,
-            "analysis_retry_hints": ["인터뷰 품질 분석 실패"],
-            "agent_logs": [
-                {"agent": "10-C. 인터뷰 품질", "message": "LLM 오류, 기본값 사용"}
-            ],
-        }
+        result = InterviewAnalysisOut(
+            contradiction_score=50, contradiction_reason="분석 실패",
+            depth_score=50, depth_reason="분석 실패",
+            reliability_score=50, reliability_reason="분석 실패",
+            positive_aspects="", negative_aspects="",
+            analysis_quality_score=0.0, analysis_needs_retry=False, analysis_retry_hints=[]
+        )
 
     return {
         "interview_analysis": result.model_dump(),
         "analysis_quality_score": float(result.analysis_quality_score),
         "analysis_needs_retry": bool(result.analysis_needs_retry),
         "analysis_retry_hints": result.analysis_retry_hints,
-        "agent_logs": [
-            {
-                "agent": "10-C. 인터뷰 품질",
-                "message": (
-                    f"모순={result.contradiction_score}, "
-                    f"깊이={result.depth_score}, "
-                    f"신뢰도={result.reliability_score}"
-                ),
-            }
-        ],
     }
 
 # ==================== 10-D. SummaryStats ====================
 
 def _summary_stats_template() -> ChatPromptTemplate:
-    return ChatPromptTemplate.from_messages(
-        [
-            ("system",
-             "당신은 인터뷰 요약·통계 전문가입니다.\n"
-             "모든 출력은 한국어 JSON입니다."),
-            ("human",
-             "[인터뷰 로그]\n{log}\n\n"
-             "다음 필드를 JSON으로 출력하세요.\n"
-             "- talkSummary.items[{{topic, summary}}]\n"
-             "- convStats[{{k, v}}]\n"
-             "- interview_stats(optional)\n"
-             "- summary_quality_score(0.0~1.0)\n- summary_needs_retry(bool)\n- summary_retry_hints")
-        ]
-    )
+    return ChatPromptTemplate.from_messages([
+        ("system",
+         "면접 요약·통계 전문가입니다.\n"
+         "모든 출력은 한국어 JSON입니다.\n"
+         "각 필드는 반드시 아래 타입으로 출력하세요:\n"
+         "- talkSummary.items: 리스트[딕셔너리] (각 딕셔너리는 topic, summary 키 포함. score 등 숫자 필드는 반드시 정수(int)로 출력하세요.)\n"
+         "- convStats: 리스트[딕셔너리] (각 딕셔너리는 k, v 키 포함. v가 숫자일 경우 반드시 정수(int)로 출력하세요.)\n"
+         "- interview_stats: 딕셔너리 (모든 숫자 필드는 반드시 정수(int)로 출력하세요.)\n"
+         "- tag: 리스트[str]\n"
+         "- headline: 딕셔너리 (summary, overall_summary, tag 키 포함. score 등 숫자 필드는 반드시 정수(int)로 출력하세요.)\n"
+         "- summary_quality_score: float\n"
+         "- summary_needs_retry: bool\n"
+         "- summary_retry_hints: 리스트[str]"),
+        ("human",
+         "[인터뷰 로그]\n{log}\n\n"
+         "위 타입에 맞춰 JSON으로 출력하세요.")
+    ])
 
 async def summary_stats_node(state: ReportState) -> ReportState:
     log_short = (state.get("log_ctx") or "")[:SUMMARY_MAX_LOG_CHARS]
@@ -1935,45 +1666,25 @@ async def summary_stats_node(state: ReportState) -> ReportState:
         {"log": log_short},
     )
     if result is None:
-        # ✅ LLM 실패 시에도 최소 유효 구조 생성
         fallback_talk = TalkSummary(
-            items=[
-                TalkSummaryItem(
-                    topic="요약 생성 실패",
-                    talkSummary="LLM 오류로 대화 요약/통계를 생성하지 못해 기본값을 사용합니다.",
-                )
-            ]
+            items=[TalkSummaryItem(topic="요약 생성 실패", summary="LLM 오류로 대화 요약을 생성하지 못했습니다.")]
         )
         summary = SummaryStatsOut(
-            talkSummary=fallback_talk,
-            convStats=[],
-            interview_stats=None,
-            summary_quality_score=0.0,
-            summary_needs_retry=False,
-            summary_retry_hints=["요약/통계 생성 실패"],
+            talkSummary=fallback_talk, convStats=[], interview_stats=None, tag=[], headline={},
+            summary_quality_score=0.0, summary_needs_retry=False, summary_retry_hints=[]
         )
         return {
             "summary_stats": summary.model_dump(),
-            "summary_quality_score": summary.summary_quality_score,
-            "summary_needs_retry": summary.summary_needs_retry,
-            "summary_retry_hints": summary.summary_retry_hints,
-            "agent_logs": [
-                {"agent": "10-D. 요약·통계", "message": "LLM 오류, 기본 요약 사용"}
-            ],
+            "summary_quality_score": 0.0,
+            "summary_needs_retry": False,
+            "summary_retry_hints": [],
         }
 
-    # ✅ 정상 케이스
     return {
         "summary_stats": result.model_dump(),
         "summary_quality_score": float(result.summary_quality_score),
         "summary_needs_retry": bool(result.summary_needs_retry),
         "summary_retry_hints": result.summary_retry_hints,
-        "agent_logs": [
-            {
-                "agent": "10-D. 요약·통계",
-                "message": f"요약 항목={len(result.talkSummary.items)}, 품질={result.summary_quality_score:.2f}",
-            }
-        ],
     }
 
 
@@ -2000,17 +1711,7 @@ def debate_node(state: ReportState) -> ReportState:
     if state.get("summary_needs_retry"):
         need_retry.append("요약/통계")
 
-    state["debate_result"] = {
-        "avg_quality_score": avg,
-        "need_retry_sections": need_retry,
-    }
-    state.setdefault("agent_logs", []).append(
-        {
-            "agent": "11. 디베이트 검증",
-            "message": f"평균 품질={avg:.2f}, 재시도={', '.join(need_retry) if need_retry else '없음'}",
-        }
-    )
-    return state
+    return {"debate_result": {"avg_quality_score": avg, "need_retry_sections": need_retry}}
 
 # ==================== 12. QualityRouter (루프 1/2 제어) ====================
 
@@ -2018,32 +1719,18 @@ def quality_router_node(state: ReportState) -> str:
     analysis_retry_count = state.get("analysis_retry_count", 0)
 
     if state.get("evidence_needs_retry") and state.get("retrieval_retry_count", 0) < REPORT_MAX_RETRIEVAL_RETRY:
-        state.setdefault("agent_logs", []).append(
-            {"agent": "12. 품질 라우터", "message": "증거 부족 → 리트리버 재실행"}
-        )
         return "retry_retrieval"
 
-    needs_analysis_retry = any(
-        [
-            state.get("scoring_needs_retry"),
-            state.get("coverage_needs_retry"),
-            state.get("analysis_needs_retry"),
-            state.get("summary_needs_retry"),
-        ]
-    )
+    needs_analysis_retry = any([
+        state.get("scoring_needs_retry"),
+        state.get("coverage_needs_retry"),
+        state.get("analysis_needs_retry"),
+        state.get("summary_needs_retry"),
+    ])
     if needs_analysis_retry and analysis_retry_count < REPORT_MAX_ANALYSIS_RETRY:
         state["analysis_retry_count"] = analysis_retry_count + 1
-        state.setdefault("agent_logs", []).append(
-            {
-                "agent": "12. 품질 라우터",
-                "message": f"섹션 분석 재실행({state['analysis_retry_count']})",
-            }
-        )
         return "retry_analysis"
 
-    state.setdefault("agent_logs", []).append(
-        {"agent": "12. 품질 라우터", "message": "품질 양호/한도 도달 → 최종 권고 진행"}
-    )
     return "ok"
 
 
@@ -2082,7 +1769,7 @@ async def final_rec_node(state: ReportState) -> ReportState:
         "depth_score": qa_raw.get("depth_score"),
         "reliability_score": qa_raw.get("reliability_score"),
     }
-    result = await _safe_structured_invoke_async(
+    result = await _safe_structured_invoke_async_reason(
         _final_rec_template(),
         FinalRecommendation,
         {
@@ -2094,17 +1781,9 @@ async def final_rec_node(state: ReportState) -> ReportState:
         },
     )
     if result is None:
-        state["final_recommendation"] = {}
-        state.setdefault("agent_logs", []).append(
-            {"agent": "13. 최종 권고", "message": "LLM 오류 → 기본 권고 사용"}
-        )
-        return state
+        return {"final_recommendation": {}}
 
-    state["final_recommendation"] = result.model_dump()
-    state.setdefault("agent_logs", []).append(
-        {"agent": "13. 최종 권고", "message": f"최종 결정: {result.hiring_decision}"}
-    )
-    return state
+    return {"final_recommendation": result.model_dump()}
 
 
 
@@ -2125,7 +1804,6 @@ def assemble_node(state: ReportState) -> ReportState:
         axes = [Competency(key=k, label=k) for k in axes_keys]
         
         comp = CompetencyEvalOut.model_validate(state.get("comp_eval") or {})
-        cov = CompCoverageOut.model_validate(state.get("comp_cover_result") or {})
         summary = SummaryStatsOut.model_validate(state.get("summary_stats") or {})
 
         iq_raw = state.get("interview_analysis") or {}
@@ -2154,82 +1832,66 @@ def assemble_node(state: ReportState) -> ReportState:
                 decision_reasons=["LLM 분석 실패로 정확한 판단이 어려움"],
             )
 
-        headline = comp.headline.model_copy(
-            update={
-                "contradiction_score": iq.contradiction_score,
-                "contradiction_reason": iq.contradiction_reason,
-                "depth_score": iq.depth_score,
-                "depth_reason": iq.depth_reason,
-                "reliability_score": iq.reliability_score,
-                "reliability_reason": iq.reliability_reason,
-            }
-        )
+        # headline은 summary_stats.headline에서 가져와야 함
+        headline = summary.headline.copy()
+        headline.update({
+            "contradiction_score": iq.contradiction_score,
+            "contradiction_reason": iq.contradiction_reason,
+            "depth_score": iq.depth_score,
+            "depth_reason": iq.depth_reason,
+            "reliability_score": iq.reliability_score,
+            "reliability_reason": iq.reliability_reason,
+        })
 
         talk_items = list(summary.talkSummary.items)
         if iq.positive_aspects and iq.positive_aspects.strip():
             talk_items.append(
                 TalkSummaryItem(
                     topic="긍정 의견",
-                    talkSummary=iq.positive_aspects.strip()
+                    summary=iq.positive_aspects.strip()
                 )
             )
         if iq.negative_aspects and iq.negative_aspects.strip():
             talk_items.append(
                 TalkSummaryItem(
                     topic="부정 의견",
-                    talkSummary=iq.negative_aspects.strip()
+                    summary=iq.negative_aspects.strip()
                 )
             )
         enhanced_talk_summary = TalkSummary(items=talk_items)
 
-        # cid를 axes.key와 강제 동기화
-        axes_key_map = {f"C{str(i+1).zfill(2)}": ax.key for i, ax in enumerate(axes)}
-        axes_label_map = {ax.key: ax.label for ax in axes}
-
-        # compCoverage cid 보정
-        compCoverage_fixed = []
-        for i, row in enumerate(cov.compCoverage):
-            fixed_cid = axes_key_map.get(row.cid, row.cid)
-            compCoverage_fixed.append(row.model_copy(update={"cid": fixed_cid}))
-
-        # evidence cid 보정
-        evidence_fixed = []
-        for ev in cov.evidence:
-            fixed_cid = axes_key_map.get(ev.cid, ev.cid) if ev.cid else None
-            evidence_fixed.append(ev.model_copy(update={"cid": fixed_cid}))
+        # compCoverage와 evidence는 comp에서 직접 가져옴
+        comp_coverage_rows = comp.compCoverage if hasattr(comp, 'compCoverage') else []
+        evidence_rows = comp.evidence if hasattr(comp, 'evidence') else []
+        conv_stats = summary.convStats if hasattr(summary, 'convStats') else []
 
         report = ReportOut(
             metadata=meta,
+            headline=headline,
             axes=axes,
             scores=comp.scores,
-            headline=headline,
-            talkSummary=enhanced_talk_summary,
-            convStats=summary.convStats,
-            compCoverage=compCoverage_fixed,
-            evidence=evidence_fixed,
             competency_comments=comp.competency_comments,
+            compCoverage=comp_coverage_rows,   # ← comp에서 직접 가져옴
+            evidence=evidence_rows,            # ← comp에서 직접 가져옴
+            talkSummary=enhanced_talk_summary,
+            convStats=conv_stats,
             interview_stats=summary.interview_stats,
             recommendation=rec,
         )
-        state["report"] = report.model_dump(by_alias=True)
-        state.setdefault("agent_logs", []).append(
-            {"agent": "14. 리포트 조립", "message": "ReportOut 조립/검증 완료 (cid/이름 동기화)"}
-        )
-    except Exception as e:
-        logger.error("리포트 조립 실패: %s", e, exc_info=True)
-        state["error"] = f"리포트 조립 실패: {e}"
-    return state
 
+        state["report"] = report.model_dump()
+        return state
+
+    except Exception as e:
+        state["assemble_error"] = str(e)
+        return state
+    
 
 # ==================== 15. Output ====================
 
 def output_node(state: ReportState) -> ReportState:
     if "report" not in state:
         state["error"] = state.get("error") or "리포트 데이터 없음"
-    else:
-        state.setdefault("agent_logs", []).append(
-            {"agent": "15. 출력 어댑터", "message": "리포트 출력 준비 완료"}
-        )
     return state
 
 
@@ -2239,7 +1901,7 @@ def build_report_graph() -> StateGraph:
     workflow = StateGraph(ReportState)
 
     # 노드 등록
-    workflow.add_node("precheck", precheck_node)          # 0
+    workflow.add_node("precheck", cross_check_node)          # 0
     workflow.add_node("seg_prep", seg_prep_node)          # 1
     workflow.add_node("seg_summary", seg_summary_node)    # 2-A
     workflow.add_node("seg_emotion", seg_emotion_node)    # 2-B
@@ -2252,7 +1914,6 @@ def build_report_graph() -> StateGraph:
     workflow.add_node("evidence_router", lambda s: s)     # dummy, conditional uses separate fn
     workflow.add_node("cross_check", cross_check_node)    # 9
     workflow.add_node("comp_score", comp_score_node)      # 10-A
-    workflow.add_node("jd_cover", jd_cover_node)          # 10-B
     workflow.add_node("interview_quality", interview_quality_node)  # 10-C
     workflow.add_node("summary_stats", summary_stats_node)          # 10-D
     workflow.add_node("debate", debate_node)              # 11
@@ -2285,12 +1946,10 @@ def build_report_graph() -> StateGraph:
 
 
     workflow.add_edge("cross_check", "comp_score")
-    workflow.add_edge("cross_check", "jd_cover")
     workflow.add_edge("cross_check", "interview_quality")
     workflow.add_edge("cross_check", "summary_stats")
 
     workflow.add_edge("comp_score", "debate")
-    workflow.add_edge("jd_cover", "debate")
     workflow.add_edge("interview_quality", "debate")
     workflow.add_edge("summary_stats", "debate")
 
@@ -2323,24 +1982,16 @@ async def create_report_async(
     user_prompt: Optional[str] = None,
     has_portfolio: bool = False,
 ) -> AsyncGenerator[Dict[str, Any], None]:
-    """
-    LangGraph 기반 인터뷰 리포트 생성 (스트리밍)
-    """
     initial_state: ReportState = {
         "session_id": session_id,
         "candidate_name": candidate_name,
         "axes_keys": axes_keys,
         "user_prompt": user_prompt or "",
         "meta": {"has_portfolio": has_portfolio},
-        "agent_logs": [],
         "retrieval_retry_count": 0,
         "analysis_retry_count": 0,
     }
 
-    # 로그는 state 안에만 쌓고, SSE로는 안 보낼 거면 카운트도 굳이 필요 없음
-    # last_log_len = 0
-
-    # LangGraph 스트림
     stream = REPORT_GRAPH.astream(initial_state)
     try:
         async for event in stream:
@@ -2351,6 +2002,7 @@ async def create_report_async(
 
                 if state.get("report"):
                     yield {"type": "report", "data": state["report"]}
+                    yield {"type": "done"}
                     return
     finally:
         await stream.aclose()
