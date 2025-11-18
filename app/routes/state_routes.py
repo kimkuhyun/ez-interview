@@ -47,7 +47,7 @@ def update_state():
             questions_data = data.get("questions", [])
             GLOBAL_STATE.questions = questions_data
             print(f"   ✅ 질문 저장: {len(GLOBAL_STATE.questions)}개")
-            for idx, q in enumerate(GLOBAL_STATE.questions[:3], 1):
+            for idx, q in enumerate(GLOBAL_STATE.questions, 1):
                 print(f"      [{idx}] {q[:60]}{'...' if len(q) > 60 else ''}")
         
         # 1-1. session_id 업데이트 (면접 진행 시 전달)

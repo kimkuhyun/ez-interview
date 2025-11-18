@@ -678,23 +678,28 @@
       });
     }
 
-    const items = (r.talkSummary && r.talkSummary.items) ? r.talkSummary.items : [];
-    const overall = items.find(x=>x.주제==='인터뷰 요약');
-    const pos = items.find(x=>x.주제==='긍정 의견');
-    const neg = items.find(x=>x.주제==='부정 의견');
-    const flows = items.filter(x=>x.주제!=='인터뷰 요약' && x.주제!=='긍정 의견' && x.주제!=='부정 의견');
+    const items = (r.talkSummary && Array.isArray(r.talkSummary.items)) ? r.talkSummary.items : [];
+    const topicOf = (item) => (item?.topic ?? item?.주제 ?? '').trim();
+    const summaryOf = (item) => (item?.talkSummary ?? item?.summary ?? item?.발언요약 ?? '').trim();
+    const overall = items.find(x => ['인터뷰 요약', '전체 요약'].includes(topicOf(x)));
+    const pos = items.find(x => ['긍정 의견', '강점'].includes(topicOf(x)));
+    const neg = items.find(x => ['부정 의견', '우려 사항'].includes(topicOf(x)));
+    const flows = items.filter(x => {
+      const topic = topicOf(x);
+      return topic && !['인터뷰 요약','전체 요약','긍정 의견','강점','부정 의견','우려 사항'].includes(topic);
+    });
 
     let flowHTML = '';
-    if (overall && overall.발언요약) {
+    if (overall && summaryOf(overall)) {
       flowHTML += `
         <div class="qa-simple" style="border-left:3px solid #10b981;background:#f0fdf4;">
-          <div class="qa-topic" style="font-weight:600;color:#059669;">전체 요약</div>
-          <div class="qa-summary">${esc(overall.발언요약)}</div>
+          <div class="qa-topic" style="font-weight:600;color:#059669;">인터뷰 요약</div>
+          <div class="qa-summary">${esc(summaryOf(overall))}</div>
         </div>`;
     }
     flowHTML += flows.map(it=>{
-      const topic = it.주제 || '';
-      const content = it.발언요약 || '';
+      const topic = topicOf(it);
+      const content = summaryOf(it);
       return `
         <div class="qa-simple">
           <div class="qa-topic">${esc(topic)}</div>
@@ -707,10 +712,18 @@
     if (flowList) flowList.innerHTML = flowHTML;
 
     const posBox = $("posBox");
-    if (posBox) posBox.innerHTML = pos ? `<p>${esc(pos.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
+    if (posBox) {
+      posBox.innerHTML = pos && summaryOf(pos)
+        ? `<p>${esc(summaryOf(pos))}</p>`
+        : '<div class="empty"><p>없음</p></div>';
+    }
 
     const negBox = $("negBox");
-    if (negBox) negBox.innerHTML = neg ? `<p>${esc(neg.발언요약||'')}</p>` : '<div class="empty"><p>없음</p></div>';
+    if (negBox) {
+      negBox.innerHTML = neg && summaryOf(neg)
+        ? `<p>${esc(summaryOf(neg))}</p>`
+        : '<div class="empty"><p>없음</p></div>';
+    }
 
     const jdBody = document.querySelector("#jdTable tbody");
     if (!jdBody) {
@@ -720,33 +733,20 @@
     const axesMap = {};
     (r.axes||[]).forEach((ax, idx) => { axesMap[`C${String(idx+1).padStart(2,'0')}`] = ax; });
 
-    const competencyNames = {
-      "problem_solving": "문제해결능력",
-      "communication": "커뮤니케이션",
-      "self_driven_initiative": "자기주도성",
-      "collaboration": "협업능력",
-      "professional_expertise": "전문성"
-    };
 
-    jdBody.innerHTML = (r.jdCoverage||[]).map(row=>{
-      const chips = (row.근거||[]).map(e =>
+
+    const jdRows = r.compCoverage || r.jdCoverage || [];
+      jdBody.innerHTML = jdRows.map(row=>{
+      const axInfo = (r.axes||[]).find(ax => ax.key === row.cid) || {};
+      const score = (r.scores||[]).find(s => s.key === axInfo.key)?.value ?? 0;
+      const comment = (r.competency_comments||[]).find(c => c.key === axInfo.key)?.comment ?? "";
+      const chips = (row.evidence||[]).map(e =>
         `<span class="badge badge-indigo eid-link" data-eid="${esc(e)}" onclick="scrollToEvidence('${esc(e)}')">${esc(e)}</span>`
       ).join(" ");
-
-      const axInfo = axesMap[row.jid];
-      let score = 0, competencyName = row.jid;
-      if (axInfo && scoresObj[axInfo.key] !== undefined) {
-        score = scoresObj[axInfo.key];
-        competencyName = competencyNames[axInfo.key] || axInfo.label || axInfo.key;
-      }
-
-      const expect = String(row.기대치 || '').replace(/^\s*(기준[:\s-]*)?/,'').trim();
-      const fulfillBadge = `<div class="fulfillment-badge"><span class="fulfillment-score">${score}점</span></div>`;
-
       return `<tr>
-        <td><strong style="color:#7c3aed;">${esc(competencyName)}</strong></td>
-        <td>${esc(row.요구사항)}<div class="jd-expectation">기준: ${esc(expect)}</div></td>
-        <td>${fulfillBadge}</td>
+        <td><strong style="color:#7c3aed;">${esc(axInfo.label||row.cid)}</strong></td>
+        <td>${esc(row.requirement)}<div class="jd-expectation">기준: ${esc(row.expectation||"")}</div></td>
+        <td>${score}<div class="comment" style="font-size:0.95em;color:#6366f1;margin-top:2px;">${esc(comment)}</div></td>
         <td>${chips||'<span style="color:#9ca3af;">-</span>'}</td>
       </tr>`;
     }).join("");
@@ -754,14 +754,14 @@
     const evBody = document.querySelector("#evTable tbody");
     if (evBody) {
       evBody.innerHTML = (r.evidence||[]).map(ev=>{
-        const axInfo = axesMap[ev.jid];
-        let competencyName = ev.jid;
+        const axInfo = axesMap[ev.cid];
+        let competencyName = ev.cid;
         if (axInfo) competencyName = competencyNames[axInfo.key] || axInfo.label || axInfo.key;
 
         return `<tr id="ev-${esc(ev.eid)}" class="evidence-row">
           <td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td>
-          <td style="color:#6b7280;font-size:0.75rem;">${esc(ev.출처)}</td>
-          <td>${esc(ev.내용)}</td>
+          <td style="color:#6b7280;font-size:0.75rem;">${esc(ev.source)}</td>
+          <td>${esc(ev.content)}</td>
           <td><span class="badge badge-purple">${esc(competencyName)}</span></td>
         </tr>`;
       }).join("");

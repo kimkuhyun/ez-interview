@@ -70,7 +70,9 @@ def embed_docs():
             portfolio_len=embed_result.get("portfolio_len", 0),
             resume_text=embed_result.get("resume_text"),
             jd_text=embed_result.get("jd_text"),
-            portfolio_text=embed_result.get("portfolio_text")
+            portfolio_text=embed_result.get("portfolio_text"),
+            structured_resume=embed_result.get("structured_resume"),
+            structured_jd=embed_result.get("structured_jd")
         )
         print(f"   ✅ State 객체 생성 완료")
         
@@ -88,6 +90,8 @@ def embed_docs():
         GLOBAL_STATE.resume_text = state.resume_text
         GLOBAL_STATE.jd_text = state.jd_text
         GLOBAL_STATE.portfolio_text = state.portfolio_text
+        GLOBAL_STATE.structured_resume = state.structured_resume
+        GLOBAL_STATE.structured_jd = state.structured_jd
         print(f"   ✅ GLOBAL_STATE 업데이트 완료")
 
         end_time = time.perf_counter()
@@ -247,4 +251,81 @@ def generate_questions():
             "error": str(e),
             "questions": [],
             "metrics": [],
+        }), 500
+
+# -------------------------------
+# 개별 질문 재생성 API (2번 기능)
+# -------------------------------
+@question_bp.route("/api/interview-question-single", methods=["POST"])
+def generate_single_question():
+    print("\n" + "="*80)
+    print("🔄 [API] /api/interview-question-single 호출 (개별 질문 재생성)")
+    print("="*80)
+    
+    start_time = time.perf_counter()
+    
+    try:
+        data = request.get_json()
+        session_id = data.get("session_id")
+        existing_questions = data.get("existing_questions", [])
+        
+        print(f"   ✅ session_id: {session_id}")
+        print(f"   ✅ 기존 질문 수: {len(existing_questions)}개")
+        
+        from app.routes.state_routes import GLOBAL_STATE
+        
+        if not session_id:
+            session_id = GLOBAL_STATE.session_id
+        
+        # QuestionAgent로 1개 질문 생성 (기존 질문 제외 명시)
+        agent = QuestionAgent()
+        result = agent.generate_questions_and_metrics(
+            query_text="기존 질문과 겹치지 않는 새로운 면접 질문을 1개만 생성해라.",
+            num_questions=1,
+            num_metrics=0,
+            session_id=session_id,
+            existing_questions=existing_questions  # 기존 질문 제외
+        )
+        
+        if not hasattr(result, 'questions') or not result.questions:
+            raise ValueError("질문 생성 실패")
+        
+        new_question = result.questions[0]
+        
+        # 기존 질문과 중복 체크 (간단한 텍스트 비교)
+        attempts = 0
+        while new_question in existing_questions and attempts < 3:
+            print(f"   ⚠️  중복 질문 감지, 재생성 시도 {attempts + 1}/3")
+            result = agent.generate_questions_and_metrics(
+                query_text="완전히 새로운 면접 질문을 1개만 생성해라.",
+                num_questions=1,
+                num_metrics=0,
+                session_id=session_id
+            )
+            if hasattr(result, 'questions') and result.questions:
+                new_question = result.questions[0]
+            attempts += 1
+        
+        end_time = time.perf_counter()
+        print(f"✅ [API] /api/interview-question-single 완료 ({end_time - start_time:.2f}초)")
+        print(f"   - 생성된 질문: {new_question[:80]}...")
+        print("="*80 + "\n")
+        
+        return jsonify({
+            "status": "ok",
+            "question": new_question
+        })
+        
+    except Exception as e:
+        print(f"❌ [API] 에러 발생: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        end_time = time.perf_counter()
+        print(f"❌ [API] /api/interview-question-single 실패 ({end_time - start_time:.2f}초)")
+        print("="*80 + "\n")
+        
+        return jsonify({
+            "status": "error",
+            "error": str(e)
         }), 500

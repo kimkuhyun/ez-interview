@@ -500,7 +500,7 @@
 {% set headline = report.headline or {} %}
 {% set axes = report.axes or [] %}
 {% set scores = report.scores or [] %}
-{% set jd_rows = report.jdCoverage or [] %}
+{% set jd_rows = report.compCoverage or [] %}
 {% set evidence = report.evidence or [] %}
 {% set talk_items = report.talkSummary["items"] if report.talkSummary is defined and report.talkSummary and "items" in report.talkSummary else [] %}
 {% set conv_stats = report.convStats or [] %}
