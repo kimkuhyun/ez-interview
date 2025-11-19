@@ -2,11 +2,13 @@ let positions = [];
 let uploadedFile = null;
 
 async function loadPositions() {
+  const tbody = document.getElementById('positionList');
+  if (!tbody) return;
+  
   const res = await fetch('/api/positions');
   const data = await res.json();
   positions = data.positions || [];
   
-  const tbody = document.getElementById('positionList');
   if (positions.length === 0) {
     tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:40px;">등록된 포지션이 없습니다.</td></tr>';
     return;
@@ -196,23 +198,13 @@ async function loadKeywordMatchView(positionId) {
   }
 }
 
-loadPositions();
+// 초기 로드
+if (document.getElementById('positionList')) loadPositions();
 
-// ✅ 탭이 활성화될 때마다 자동 새로고침
-if (typeof MutationObserver !== 'undefined') {
-  const observer = new MutationObserver(() => {
-    const positionsTab = document.querySelector('[data-tab="positions"]');
-    if (positionsTab && positionsTab.classList.contains('active')) {
-      loadPositions();
-    }
-  });
-  
-  const tabContainer = document.querySelector('.tabs');
-  if (tabContainer) {
-    observer.observe(tabContainer, { 
-      attributes: true, 
-      subtree: true, 
-      attributeFilter: ['class'] 
-    });
-  }
+// 탭 전환 시 재로드
+if (window.MutationObserver) {
+  new MutationObserver(() => {
+    const tab = document.querySelector('[data-tab="positions"].active');
+    if (tab && document.getElementById('positionList')) loadPositions();
+  }).observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
 }
