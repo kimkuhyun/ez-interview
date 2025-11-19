@@ -1,29 +1,29 @@
 <div class="candidates-tab">
   <div class="toolbar">
-    <div class="toolbar-left">전체 지원자 목록 (<span id="candidate-count">0</span>명)</div>
+    <div class="toolbar-left">전체 지원자 목록 (<span id="candidateCount">0</span>명)</div>
     <div class="toolbar-actions">
-      <button class="btn" id="refresh-btn">🔄 새로고침</button>
-      <button class="btn positive" id="upload-btn">📤 이력서 업로드</button>
+      <button class="btn" id="refresh-btn" onclick="loadCandidates()">🔄 새로고침</button>
+      <button class="btn positive" id="upload-btn" onclick="openUploadModal()">📤 이력서 업로드</button>
     </div>
   </div>
 
   <div class="filters">
-    <select class="select" id="status-filter">
+    <select class="select" id="statusFilter">
       <option value="all">전체 상태</option>
-      <option value="pending">pending</option>
-      <option value="screening">screening</option>
-      <option value="screening_passed">screening_passed</option>
-      <option value="screening_rejected">screening_rejected</option>
-      <option value="interview_ready">interview_ready</option>
-      <option value="interviewed">interviewed</option>
-      <option value="passed">passed</option>
-      <option value="rejected">rejected</option>
+      <option value="pending">서류 대기</option>
+      <option value="screening">서류 심사 중</option>
+      <option value="screening_passed">서류 통과</option>
+      <option value="screening_rejected">서류 불합격</option>
+      <option value="interview_pending">면접 대기</option>
+      <option value="interview_in_progress">면접 진행 중</option>
+      <option value="hired">최종 합격</option>
+      <option value="rejected">최종 불합격</option>
     </select>
-    <input class="input" id="search-input" placeholder="이름 검색..." />
+    <input class="input" id="searchInput" placeholder="이름 검색..." />
   </div>
 
   <div class="table-wrap" style="margin-top: 20px;">
-    <table id="candidates-table">
+    <table id="candidatesTable">
       <thead>
         <tr>
           <th>지원자 이름</th>
@@ -33,14 +33,107 @@
           <th>포트폴리오</th>
         </tr>
       </thead>
-      <tbody id="candidates-tbody">
-        <!-- 데이터가 JavaScript로 렌더링됩니다 -->
+      <tbody id="candidateTableBody">
+        <tr>
+          <td colspan="5" style="text-align: center; padding: 2rem; color: #9ca3af;">
+            데이터를 불러오는 중...
+          </td>
+        </tr>
       </tbody>
     </table>
   </div>
 
-  <div id="pagination-container" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;">
+  <div id="pagination" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;">
     <!-- 페이지네이션이 JavaScript로 렌더링됩니다 -->
+  </div>
+</div>
+
+<!-- 이력서 업로드 모달 -->
+<div id="uploadModal" class="modal">
+  <div class="modal-overlay" onclick="closeUploadModal()"></div>
+  <div class="modal-content" style="max-width: 600px; width: 90%;">
+    <div class="modal-header">
+      <h3 class="modal-title">이력서 일괄 업로드</h3>
+      <button class="modal-close" onclick="closeUploadModal()">×</button>
+    </div>
+    <div class="modal-body" style="padding: 1.5rem;">
+      <div style="margin-bottom: 1.5rem;">
+        <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: #334155;">
+          📁 폴더 선택
+        </label>
+        <input 
+          type="file" 
+          id="folderInput" 
+          webkitdirectory 
+          directory 
+          multiple
+          accept=".pdf"
+          style="display: block; width: 100%; padding: 0.5rem; border: 2px dashed #cbd5e1; border-radius: 0.5rem; cursor: pointer;"
+          onchange="handleFolderSelect(event)"
+        />
+        <p style="font-size: 0.875rem; color: #64748b; margin-top: 0.5rem;">
+          PDF 파일이 포함된 폴더를 선택하세요. 모든 PDF 파일이 자동으로 감지됩니다.
+        </p>
+      </div>
+
+      <div id="fileListContainer" style="display: none;">
+        <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: #334155;">
+          📄 발견된 파일 (<span id="fileCount">0</span>개)
+        </label>
+        <div id="fileList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.75rem;">
+          <!-- 파일 목록이 여기에 표시됩니다 -->
+        </div>
+      </div>
+
+      <div style="margin-top: 1.5rem;">
+        <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: #334155;">
+          지원 포지션
+        </label>
+        <input 
+          type="text" 
+          id="positionInput" 
+          class="input" 
+          placeholder="예: 백엔드 개발자"
+          style="width: 100%;"
+        />
+      </div>
+
+      <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: flex-end;">
+        <button class="btn" onclick="closeUploadModal()">취소</button>
+        <button class="btn positive" id="uploadSubmitBtn" onclick="submitUpload()" disabled>
+          업로드 시작
+        </button>
+      </div>
+
+      <div id="uploadProgress" style="display: none; margin-top: 1rem;">
+        <div style="background-color: #f1f5f9; border-radius: 0.5rem; padding: 1rem;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+            <span style="font-size: 0.875rem; font-weight: 500;">업로드 진행 중...</span>
+            <span id="progressText" style="font-size: 0.875rem; color: #64748b;">0 / 0</span>
+          </div>
+          <div style="background-color: #e2e8f0; height: 8px; border-radius: 4px; overflow: hidden;">
+            <div id="progressBar" style="background-color: #3b82f6; height: 100%; width: 0%; transition: width 0.3s;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PDF 뷰어 모달 -->
+<div id="pdfModal" class="modal">
+  <div class="modal-overlay" onclick="closePdfModal()"></div>
+  <div class="modal-content" style="max-width: 90vw; width: 1200px; height: 90vh;">
+    <div class="modal-header">
+      <h3 class="modal-title" id="pdfModalTitle">지원자 서류</h3>
+      <button class="modal-close" onclick="closePdfModal()">×</button>
+    </div>
+    <div id="pdfTabs" style="display: none; padding: 0 1.5rem; border-bottom: 1px solid #e2e8f0;">
+      <!-- 파일이 여러개일 때 탭으로 표시 -->
+    </div>
+    <div class="modal-body" style="padding: 0; height: calc(90vh - 60px); overflow: hidden;">
+      <iframe id="pdfViewer" style="width: 100%; height: 100%; border: none;"></iframe>
+    </div>
   </div>
 </div>
 
