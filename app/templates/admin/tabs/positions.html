@@ -1,0 +1,32 @@
+<div class="positions-tab">
+  <div class="card">
+    <div style="font-weight: 700; font-size: 18px; margin-bottom: 12px;">📋 포지션 관리 및 서류 전형</div>
+    <p class="text-sm">JD를 업로드하고 키워드를 추출하여 지원자를 자동으로 심사합니다.</p>
+  </div>
+
+  <!-- JD 업로드 섹션 -->
+  <div style="margin-top: 20px;">
+    <div style="font-weight: 600; margin-bottom: 10px;">JD 파일 업로드</div>
+    <input type="file" id="jd-file-input" accept=".pdf,.docx,.txt" />
+    <button class="btn primary" id="jd-upload-btn" style="margin-left: 10px;">JD 업로드</button>
+  </div>
+
+  <!-- 포지션 목록 -->
+  <div style="margin-top: 30px;">
+    <div style="font-weight: 600; margin-bottom: 10px;">등록된 포지션</div>
+    <div id="positions-list" class="text-sm" style="color: var(--subtext);">
+      포지션 목록이 여기에 표시됩니다.
+    </div>
+  </div>
+
+  <!-- 키워드 추출 및 서류 전형 -->
+  <div style="margin-top: 30px;">
+    <div style="font-weight: 600; margin-bottom: 10px;">서류 전형 실행</div>
+    <p class="text-sm" style="color: var(--subtext); margin-bottom: 10px;">
+      포지션을 선택하고 키워드를 추출한 후 서류 전형을 진행하세요.
+    </p>
+    <button class="btn primary" id="screening-btn">서류 전형 시작</button>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/positions.js') }}"></script>

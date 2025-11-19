@@ -1,0 +1,42 @@
+<div class="interviews-tab">
+  <div class="card">
+    <div style="font-weight: 700; font-size: 18px; margin-bottom: 12px;">🎤 면접 관리</div>
+    <p class="text-sm">서류 전형을 통과한 지원자들의 면접을 관리합니다.</p>
+  </div>
+
+  <!-- 면접 세션 목록 -->
+  <div style="margin-top: 20px;">
+    <div style="font-weight: 600; margin-bottom: 10px;">진행 중인 면접</div>
+    <div id="interviews-list" class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>지원자</th>
+            <th>포지션</th>
+            <th>면접 상태</th>
+            <th>면접 일시</th>
+            <th>작업</th>
+          </tr>
+        </thead>
+        <tbody id="interviews-tbody">
+          <tr>
+            <td colspan="5" class="text-sm" style="text-align: center; padding: 40px; color: var(--subtext);">
+              진행 중인 면접이 없습니다.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 면접 생성 -->
+  <div style="margin-top: 30px;">
+    <div style="font-weight: 600; margin-bottom: 10px;">새 면접 세션 생성</div>
+    <p class="text-sm" style="color: var(--subtext); margin-bottom: 10px;">
+      서류 전형을 통과한 지원자를 선택하여 면접 세션을 생성할 수 있습니다.
+    </p>
+    <button class="btn primary" id="create-interview-btn">면접 세션 생성</button>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/interviews.js') }}"></script>

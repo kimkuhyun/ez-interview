@@ -1,0 +1,47 @@
+<div class="candidates-tab">
+  <div class="toolbar">
+    <div class="toolbar-left">전체 지원자 목록 (<span id="candidate-count">0</span>명)</div>
+    <div class="toolbar-actions">
+      <button class="btn" id="refresh-btn">🔄 새로고침</button>
+      <button class="btn positive" id="upload-btn">📤 이력서 업로드</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <select class="select" id="status-filter">
+      <option value="all">전체 상태</option>
+      <option value="pending">pending</option>
+      <option value="screening">screening</option>
+      <option value="screening_passed">screening_passed</option>
+      <option value="screening_rejected">screening_rejected</option>
+      <option value="interview_ready">interview_ready</option>
+      <option value="interviewed">interviewed</option>
+      <option value="passed">passed</option>
+      <option value="rejected">rejected</option>
+    </select>
+    <input class="input" id="search-input" placeholder="이름 검색..." />
+  </div>
+
+  <div class="table-wrap" style="margin-top: 20px;">
+    <table id="candidates-table">
+      <thead>
+        <tr>
+          <th>지원자 이름</th>
+          <th>상태</th>
+          <th>지원 포지션</th>
+          <th>지원 일자</th>
+          <th>포트폴리오</th>
+        </tr>
+      </thead>
+      <tbody id="candidates-tbody">
+        <!-- 데이터가 JavaScript로 렌더링됩니다 -->
+      </tbody>
+    </table>
+  </div>
+
+  <div id="pagination-container" style="display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 20px;">
+    <!-- 페이지네이션이 JavaScript로 렌더링됩니다 -->
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/candidates.js') }}"></script>

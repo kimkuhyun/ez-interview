@@ -13,6 +13,7 @@ from app.routes.stream_routes import stream_bp
 from app.routes.report_routes import report_bp,reports_bp
 from app.routes.state_routes import state_bp
 from app.routes.stt_socket import register_stt_events
+from app.routes.dashboard_routes import dashboard_bp
 
 import os
 
@@ -38,6 +39,7 @@ app.register_blueprint(stream_bp)
 app.register_blueprint(report_bp)
 app.register_blueprint(reports_bp, url_prefix="/reports")
 app.register_blueprint(state_bp)
+app.register_blueprint(dashboard_bp)
 
 socketio = SocketIO(app, cors_allowed_origins="*")
 
@@ -46,6 +48,12 @@ register_stt_events(socketio)
 @app.route("/")
 def load_interview_home():
     return render_template("interview.html")
+
+# Admin 페이지 라우트 (SPA 방식)
+@app.route("/admin")
+def admin_dashboard():
+    return render_template("base.html")
+
 
 # 엔트리
 if __name__ == "__main__":

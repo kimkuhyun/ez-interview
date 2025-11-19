@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}지원자 풀 관리 시스템{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+        }
+        
+        /* 모달 관련 스타일 */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 50;
+            overflow-y: auto;
+        }
+        
+        .modal-overlay.active {
+            display: flex;
+        }
+        
+        .modal-bg {
+            position: fixed;
+            inset: 0;
+            background-color: rgb(15 23 42 / 0.7);
+            transition: opacity 0.3s;
+        }
+        
+        .modal-panel {
+            position: relative;
+            transform: scale(0.95);
+            opacity: 0;
+            transition: all 0.3s;
+            overflow: hidden;
+            border-radius: 0.75rem;
+            background-color: white;
+            text-align: left;
+            box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+            margin: 2rem auto;
+            width: 100%;
+            max-width: 32rem;
+        }
+        
+        .modal-overlay.active .modal-panel {
+            transform: scale(1);
+            opacity: 1;
+        }
+
+        /* 탭 활성화 애니메이션 */
+        .tab-content {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* 상태 Dot 스타일 */
+        .status-dot {
+            display: inline-block;
+            width: 0.625rem;
+            height: 0.625rem;
+            border-radius: 9999px;
+            margin-right: 0.5rem;
+            box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+        }
+
+        .status-dot.pending { background-color: #eab308; }
+        .status-dot.interview_pending { background-color: #6366f1; }
+        .status-dot.hired { background-color: #22c55e; }
+        .status-dot.rejected { background-color: #ef4444; }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="min-h-screen bg-slate-50 py-10 px-4 antialiased">
+    <div class="mx-auto max-w-6xl rounded-xl bg-white p-8 shadow-xl">
+        <header class="border-b border-slate-200 pb-4 mb-6">
+            <h1 class="text-3xl font-bold text-slate-900">
+                지원자 풀 관리 시스템
+            </h1>
+            <p class="mt-1 text-sm text-slate-500">
+                채용 포지션별 키워드 기반 서류 심사 및 면접 워크플로우
+            </p>
+        </header>
+
+        <!-- 탭 네비게이션 -->
+        <div class="mb-6 flex gap-px border-b border-slate-200" id="tab-navigation">
+            <button data-tab="candidates" 
+               class="tab-btn px-4 py-2 text-sm font-medium border-b-4 -mb-px rounded-t-md transition-colors duration-200 border-blue-600 text-blue-700 bg-blue-50/50">
+                👥 지원자 관리
+            </button>
+            <button data-tab="positions" 
+               class="tab-btn px-4 py-2 text-sm font-medium border-b-4 -mb-px rounded-t-md transition-colors duration-200 border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50">
+                📋 포지션 관리 및 서류 전형
+            </button>
+            <button data-tab="interviews" 
+               class="tab-btn px-4 py-2 text-sm font-medium border-b-4 -mb-px rounded-t-md transition-colors duration-200 border-transparent text-slate-500 hover:text-slate-700 hover:bg-slate-50">
+                🎤 면접 관리
+            </button>
+        </div>
+
+        <!-- 탭 컨텐츠 -->
+        <div class="tab-content" id="tab-content">
+            <!-- 동적으로 로드됩니다 -->
+        </div>
+    </div>
+
+    <!-- 공통 JavaScript -->
+    <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>
