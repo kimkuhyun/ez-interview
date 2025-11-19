@@ -14,6 +14,7 @@ from app.routes.report_routes import report_bp,reports_bp
 from app.routes.state_routes import state_bp
 from app.routes.stt_socket import register_stt_events
 from app.routes.dashboard_routes import dashboard_bp
+from app.routes.position_routes import position_bp
 
 import os
 
@@ -40,6 +41,7 @@ app.register_blueprint(report_bp)
 app.register_blueprint(reports_bp, url_prefix="/reports")
 app.register_blueprint(state_bp)
 app.register_blueprint(dashboard_bp)
+app.register_blueprint(position_bp)
 
 socketio = SocketIO(app, cors_allowed_origins="*")
 

@@ -3,10 +3,6 @@ from pathlib import Path
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
-@dashboard_bp.route("/admin")
-def admin_dashboard():
-    return render_template("base.html")
-
 # 탭 HTML 제공 API
 @dashboard_bp.route("/api/admin/tabs/<tab_name>")
 def get_tab_content(tab_name):
@@ -30,3 +26,14 @@ def get_tab_content(tab_name):
     except Exception as e:
         print(f"탭 로드 오류: {e}")
         return Response(f"오류: {str(e)}", status=500)
+
+@dashboard_bp.route("/panel/positions")
+def get_positions_panel():
+    """포지션 목록 패널"""
+    return render_template("admin/tabs/positions.html")
+
+@dashboard_bp.route("/panel/keyword-match")
+def get_keyword_match_panel():
+    """키워드 매칭 패널"""
+    return render_template("admin/tabs/keyword_match.html")
+

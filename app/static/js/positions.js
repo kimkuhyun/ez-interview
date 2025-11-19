@@ -1,290 +1,199 @@
-// 포지션 관리 및 서류 전형 페이지 JavaScript
+let positions = [];
+let uploadedFile = null;
 
-let currentPositionId = null;
-let currentKeywords = [];
-let matchingCandidates = [];
-let currentReviewIndex = -1;
-
-// 뷰 전환
-function showListView() {
-    document.getElementById('positionListView').style.display = 'block';
-    document.getElementById('keywordView').style.display = 'none';
-    document.getElementById('reviewView').style.display = 'none';
-    currentPositionId = null;
-    currentKeywords = [];
-    matchingCandidates = [];
-    currentReviewIndex = -1;
-}
-
-function showKeywordView(positionId) {
-    currentPositionId = positionId;
-    
-    // 포지션 정보 가져오기
-    apiRequest(`/api/positions/${positionId}`)
-        .then(position => {
-            currentKeywords = position.keywords || [];
-            
-            document.getElementById('positionListView').style.display = 'none';
-            document.getElementById('keywordView').style.display = 'block';
-            document.getElementById('reviewView').style.display = 'none';
-            
-            document.getElementById('currentPositionName').textContent = position.name;
-            document.getElementById('keywordPositionName').textContent = position.name;
-            document.getElementById('keywordPositionJD').textContent = position.jd_file;
-            
-            updateKeywordsDisplay();
-            
-            if (currentKeywords.length === 0) {
-                extractKeywords();
-            } else {
-                document.getElementById('llmStatus').textContent = '이미 키워드가 설정되어 있습니다. 다시 추천 받으시려면 버튼을 누르세요.';
-                renderLLMKeywords(currentKeywords);
-            }
-            
-            // pending 상태 지원자 수 업데이트
-            updatePendingCount();
-        });
-}
-
-function updateKeywordsDisplay() {
-    const display = currentKeywords.length > 0 
-        ? currentKeywords.join(', ') 
-        : '키워드 미설정';
-    document.getElementById('currentKeywordsDisplay').textContent = display;
-    
-    renderSelectedKeywords();
-}
-
-function updatePendingCount() {
-    apiRequest('/api/candidates?status=pending')
-        .then(data => {
-            document.getElementById('pendingCount').textContent = data.candidates.length;
-        });
-}
-
-// LLM 키워드 추출 (목업)
-function extractKeywords() {
-    if (!currentPositionId) return;
-    
-    document.getElementById('llmStatus').textContent = '키워드 추출 중... (LLM API 호출 시뮬레이션)';
-    document.getElementById('llmKeywordsContainer').innerHTML = '<span class="text-[11px] text-slate-500/80">추천 중...</span>';
-    
-    setTimeout(() => {
-        apiRequest(`/api/positions/${currentPositionId}/extract-keywords`, 'POST')
-            .then(data => {
-                document.getElementById('llmStatus').textContent = '추천 완료. 클릭하여 최종 키워드에 추가하거나 직접 입력하세요.';
-                renderLLMKeywords(data.keywords);
-            });
-    }, 800);
-}
-
-function renderLLMKeywords(keywords) {
-    const container = document.getElementById('llmKeywordsContainer');
-    
-    if (keywords.length === 0) {
-        container.innerHTML = '<span class="text-[11px] text-slate-500/80">추천 키워드가 없습니다.</span>';
-        return;
-    }
-    
-    container.innerHTML = keywords.map(kw => {
-        const disabled = currentKeywords.includes(kw) ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer hover:bg-blue-200';
-        return `<button onclick="addKeywordFromLLM('${kw}')" class="inline-flex items-center rounded-full bg-blue-100 px-3 py-1 text-[11px] font-medium text-blue-800 shadow-sm ${disabled} transition-colors">${kw}</button>`;
-    }).join('');
-}
-
-function renderSelectedKeywords() {
-    const container = document.getElementById('selectedKeywords');
-    
-    if (currentKeywords.length === 0) {
-        container.innerHTML = '<span class="text-xs text-slate-500">키워드를 추가하여 심사 매칭률을 높이세요.</span>';
-        return;
-    }
-    
-    container.innerHTML = currentKeywords.map(kw => `
-        <span class="inline-flex items-center rounded-full bg-indigo-100 px-3 py-1 text-xs font-medium text-indigo-800">
-            ${kw}
-            <button type="button" onclick="removeKeyword('${kw}')" class="ml-2 inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-indigo-400 hover:bg-indigo-200 hover:text-indigo-500 transition-colors">
-                <svg class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-                    <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
-                </svg>
-            </button>
+async function loadPositions() {
+  const res = await fetch('/api/positions');
+  const data = await res.json();
+  positions = data.positions || [];
+  
+  const tbody = document.getElementById('positionList');
+  if (positions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:40px;">등록된 포지션이 없습니다.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = positions.map(p => `
+    <tr>
+      <td>
+        <div class="position-name-cell">
+          <strong>${p.name}</strong>
+          <div class="delete-icon" onclick="deletePosition('${p.id}', event)">×</div>
+        </div>
+      </td>
+      <td class="jd-file-cell" onclick="editJdFile('${p.id}')">
+        <span class="edit-hint">클릭하여 파일 변경</span>
+        ${p.jd_file ? p.jd_file.split('/').pop().split('\\').pop() : '-'}
+      </td>
+      <td>
+        <span class="keyword-badge ${(p.keywords && p.keywords.length > 0) ? 'set' : 'not-set'}">
+          ${(p.keywords && p.keywords.length > 0) ? p.keywords.length + '개 설정됨' : '미설정'}
         </span>
-    `).join('');
+      </td>
+      <td>
+        <button class="btn-action" onclick="openKeywordModal('${p.id}')">
+          키워드 설정 및 심사 시작
+        </button>
+      </td>
+    </tr>
+  `).join('');
 }
 
-function addKeywordFromLLM(keyword) {
-    if (currentKeywords.includes(keyword)) return;
-    addKeyword(keyword);
-}
-
-function addKeyword(keyword) {
-    const kw = keyword || document.getElementById('keywordInput').value.trim();
-    const errorEl = document.getElementById('keywordError');
-    
-    errorEl.style.display = 'none';
-    
-    if (kw.length < 2) {
-        errorEl.textContent = '키워드는 2자 이상 입력해야 합니다.';
-        errorEl.style.display = 'block';
-        return;
-    }
-    
-    if (currentKeywords.includes(kw)) {
-        document.getElementById('keywordInput').value = '';
-        return;
-    }
-    
-    currentKeywords.push(kw);
-    updateKeywordsDisplay();
-    document.getElementById('keywordInput').value = '';
-}
-
-function removeKeyword(keyword) {
-    currentKeywords = currentKeywords.filter(k => k !== keyword);
-    updateKeywordsDisplay();
-}
-
-// 서류 심사 시작
-function startReview() {
-    if (!currentPositionId) {
-        alert('포지션을 먼저 선택하세요.');
-        return;
-    }
-    
-    if (currentKeywords.length === 0) {
-        alert('최소한 하나 이상의 키워드를 설정해야 심사를 진행할 수 있습니다.');
-        return;
-    }
-    
-    // 키워드 저장
-    apiRequest(`/api/positions/${currentPositionId}/keywords`, 'PUT', {
-        keywords: currentKeywords
-    }).then(() => {
-        // 매칭 지원자 조회
-        return apiRequest(`/api/positions/${currentPositionId}/matching-candidates`, 'POST', {
-            keywords: currentKeywords
-        });
-    }).then(data => {
-        matchingCandidates = data.candidates;
-        
-        if (matchingCandidates.length === 0) {
-            alert('설정된 키워드와 매칭되는 지원자가 없습니다. 키워드를 수정해주세요.');
-            return;
-        }
-        
-        currentReviewIndex = 0;
-        showReviewView();
+function setupDragDrop() {
+  const area = document.getElementById('fileUploadArea');
+  const input = document.getElementById('jdFileInput');
+  const placeholder = document.getElementById('uploadPlaceholder');
+  const filename = document.getElementById('uploadFilename');
+  
+  area.onclick = () => input.click();
+  
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+    area.addEventListener(e, evt => {
+      evt.preventDefault();
+      evt.stopPropagation();
     });
+  });
+  
+  ['dragenter', 'dragover'].forEach(e => {
+    area.addEventListener(e, () => area.classList.add('dragover'));
+  });
+  
+  ['dragleave', 'drop'].forEach(e => {
+    area.addEventListener(e, () => area.classList.remove('dragover'));
+  });
+  
+  area.addEventListener('drop', e => {
+    const files = e.dataTransfer.files;
+    if (files.length) handleFile(files[0]);
+  });
+  
+  input.addEventListener('change', e => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+  
+  function handleFile(file) {
+    uploadedFile = file;
+    placeholder.style.display = 'none';
+    filename.style.display = 'block';
+    filename.textContent = '✓ ' + file.name;
+  }
 }
 
-function showReviewView() {
-    document.getElementById('keywordView').style.display = 'none';
-    document.getElementById('reviewView').style.display = 'block';
-    
-    // 포지션 정보 표시
-    apiRequest(`/api/positions/${currentPositionId}`)
-        .then(position => {
-            document.getElementById('reviewPositionName').textContent = position.name;
-            document.getElementById('totalReviewCount').textContent = matchingCandidates.length;
-            document.getElementById('totalReviewCount2').textContent = matchingCandidates.length;
-            
-            loadCandidateForReview();
-        });
+function openModal() {
+  document.getElementById('modal').classList.add('active');
+  setupDragDrop();
 }
 
-function loadCandidateForReview() {
-    if (currentReviewIndex < 0 || currentReviewIndex >= matchingCandidates.length) {
-        document.getElementById('reviewCandidateCard').style.display = 'none';
-        document.getElementById('reviewCompleteMessage').style.display = 'block';
-        document.getElementById('reviewMessage').style.display = 'block';
-        document.getElementById('reviewMessage').className = 'p-3 mb-4 rounded-md text-sm font-medium bg-indigo-100 text-indigo-700';
-        document.getElementById('reviewMessage').textContent = '모든 심사가 완료되었습니다! 포지션 목록으로 돌아가세요.';
-        return;
-    }
-    
-    const candidate = matchingCandidates[currentReviewIndex];
-    
-    document.getElementById('reviewCandidateCard').style.display = 'block';
-    document.getElementById('reviewCompleteMessage').style.display = 'none';
-    document.getElementById('currentReviewNumber').textContent = currentReviewIndex + 1;
-    
-    document.getElementById('reviewCandidateName').textContent = candidate.name;
-    document.getElementById('reviewCandidateScore').textContent = candidate.score;
-    document.getElementById('reviewCandidateResume').textContent = candidate.resume_url;
-    document.getElementById('reviewCandidateContent').textContent = candidate.resume_content;
-    
-    // 상태 배지
-    const statusBadge = document.getElementById('reviewCandidateStatusBadge');
-    const statusClass = candidate.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                       candidate.status === 'interview_pending' ? 'bg-indigo-100 text-indigo-800' :
-                       'bg-red-100 text-red-800';
-    statusBadge.className = `inline-flex items-center ml-3 rounded-full px-3 py-0.5 text-xs font-semibold ${statusClass}`;
-    statusBadge.textContent = STATUS_LABELS[candidate.status];
-    
-    document.getElementById('reviewerNotes').value = '';
-    document.getElementById('reviewMessage').style.display = 'none';
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+  document.getElementById('positionName').value = '';
+  document.getElementById('uploadPlaceholder').style.display = 'block';
+  document.getElementById('uploadFilename').style.display = 'none';
+  uploadedFile = null;
 }
 
-function reviewAction(action) {
-    if (currentReviewIndex < 0 || currentReviewIndex >= matchingCandidates.length) {
-        alert('심사할 지원자를 먼저 선택하거나 다음 지원자를 로드해주세요.');
-        return;
-    }
+async function submitPosition() {
+  const name = document.getElementById('positionName').value.trim();
+  if (!name) return alert('포지션명을 입력하세요.');
+  if (!uploadedFile) return alert('JD 파일을 업로드하세요.');
+  
+  const formData = new FormData();
+  formData.append('name', name);
+  formData.append('file', uploadedFile);
+  
+  const res = await fetch('/api/positions', {
+    method: 'POST',
+    body: formData
+  });
+  
+  if (res.ok) {
+    const data = await res.json();
+    alert(`'${name}' 포지션이 등록되었습니다.`);
+    closeModal();
+    loadPositions();
+  } else {
+    alert('등록 실패');
+  }
+}
+
+async function deletePosition(id, event) {
+  event.stopPropagation();
+  if (!confirm('정말 삭제하시겠습니까?')) return;
+  
+  const res = await fetch(`/api/positions/${id}`, {method: 'DELETE'});
+  if (res.ok) {
+    alert('삭제되었습니다.');
+    loadPositions();
+  } else {
+    alert('삭제 실패');
+  }
+}
+
+function editJdFile(id) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,.docx,.txt';
+  input.onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
     
-    const candidate = matchingCandidates[currentReviewIndex];
-    const newStatus = action === 'pass' ? 'interview_pending' : 'rejected';
+    const formData = new FormData();
+    formData.append('file', file);
     
-    apiRequest(`/api/candidates/${candidate.id}/status`, 'PUT', {
-        status: newStatus,
-        position_id: currentPositionId
-    }).then(() => {
-        // 로컬 상태 업데이트
-        matchingCandidates[currentReviewIndex].status = newStatus;
-        
-        // 메시지 표시
-        const messageEl = document.getElementById('reviewMessage');
-        messageEl.style.display = 'block';
-        messageEl.className = `p-3 mb-4 rounded-md text-sm font-medium ${action === 'pass' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`;
-        messageEl.textContent = `${candidate.name} 지원자가 '서류 ${action === 'pass' ? '합격' : '불합격'}' 처리되었습니다.`;
-        
-        // 다음 지원자로 이동
-        setTimeout(() => {
-            currentReviewIndex++;
-            loadCandidateForReview();
-        }, 700);
+    const res = await fetch(`/api/positions/${id}/jd`, {
+      method: 'PUT',
+      body: formData
     });
-}
-
-// 새 포지션 등록 모달
-function openNewPositionModal() {
-    openModal('newPositionModal');
-}
-
-function closeNewPositionModal() {
-    closeModal('newPositionModal');
-    document.getElementById('newPositionName').value = '';
-    document.getElementById('newPositionFileName').value = '';
-}
-
-async function submitNewPosition() {
-    const name = document.getElementById('newPositionName').value.trim();
-    const fileName = document.getElementById('newPositionFileName').value.trim();
     
-    if (!name || !fileName) {
-        alert('포지션명과 JD 파일명을 모두 입력해야 합니다.');
-        return;
+    if (res.ok) {
+      alert('JD 파일이 변경되었습니다.');
+      loadPositions();
+    } else {
+      alert('변경 실패');
+    }
+  };
+  input.click();
+}
+
+function openKeywordModal(id) {
+  // SPA 방식으로 키워드 매칭 화면 로드
+  loadKeywordMatchView(id);
+}
+
+async function loadKeywordMatchView(positionId) {
+  const rightPanel = document.querySelector('#right-panel') || document.querySelector('.tab-content');
+  
+  if (!rightPanel) {
+    console.error('Right panel not found');
+    return;
+  }
+  
+  try {
+    const res = await fetch(`/panel/keyword-match?position_id=${positionId}`);
+    const html = await res.text();
+    
+    rightPanel.innerHTML = html;
+    
+    // ✅ position ID를 data attribute로 저장
+    const container = rightPanel.querySelector('.keyword-match-container');
+    if (container) {
+      container.setAttribute('data-position-id', positionId);
     }
     
-    try {
-        await apiRequest('/api/positions', 'POST', {
-            name: name,
-            jd_file: fileName
-        });
-        
-        alert(`'${name}' 포지션이 등록되었습니다. 이제 키워드를 설정해 주세요.`);
-        closeNewPositionModal();
-        location.reload();
-    } catch (error) {
-        // 에러는 apiRequest에서 처리됨
-    }
+    // 스크립트 재실행
+    const scripts = rightPanel.querySelectorAll('script');
+    scripts.forEach(old => {
+      const s = document.createElement('script');
+      if (old.src) {
+        s.src = old.src;
+      } else {
+        s.textContent = old.textContent;
+      }
+      document.body.appendChild(s);
+      old.remove();
+    });
+  } catch (error) {
+    console.error('Failed to load keyword match view:', error);
+  }
 }
+
+loadPositions();
