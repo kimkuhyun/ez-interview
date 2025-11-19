@@ -60,6 +60,7 @@ def get_candidates():
     try:
         # Query Parameters
         status = request.args.get('status', 'all')
+        position = request.args.get('position', 'all')
         search = request.args.get('search', '')
         page = int(request.args.get('page', 1))
         limit = int(request.args.get('limit', 10))
@@ -82,6 +83,10 @@ def get_candidates():
         if status != 'all':
             where_clauses.append("status = %s")
             params.append(status)
+        
+        if position != 'all':
+            where_clauses.append("position = %s")
+            params.append(position)
         
         if search:
             where_clauses.append("name ILIKE %s")
@@ -348,24 +353,39 @@ def upload_candidate():
         )
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # 새 세션 생성 (동명이인 가능성 고려)
-        session_id = str(uuid.uuid4())
+        # 프론트엔드에서 전달한 session_id 확인 (같은 그룹의 두 번째 파일부터)
+        provided_session_id = request.form.get('session_id', '')
         
-        # candidates 테이블에 삽입
-        cur.execute("""
-            INSERT INTO interview.candidates (
-                session_id, name, uploaded_at, status, created_at, position
-            ) VALUES (%s, %s, %s, %s, %s, %s)
-        """, (
-            session_id,
-            candidate_name,
-            datetime.now(),
-            'pending',
-            datetime.now(),
-            position or None
-        ))
-        
-        print(f"✓ [업로드] 새 지원자 생성: {candidate_name} ({session_id})")
+        if provided_session_id:
+            # 제공된 session_id 사용 (같은 사람의 두 번째 파일)
+            session_id = provided_session_id
+            print(f"✓ [업로드] 기존 세션 사용: {candidate_name} ({session_id})")
+            
+            # uploaded_at 업데이트
+            cur.execute("""
+                UPDATE interview.candidates 
+                SET uploaded_at = %s 
+                WHERE session_id = %s
+            """, (datetime.now(), session_id))
+        else:
+            # 새 세션 생성
+            session_id = str(uuid.uuid4())
+            
+            # candidates 테이블에 삽입
+            cur.execute("""
+                INSERT INTO interview.candidates (
+                    session_id, name, uploaded_at, status, created_at, position
+                ) VALUES (%s, %s, %s, %s, %s, %s)
+            """, (
+                session_id,
+                candidate_name,
+                datetime.now(),
+                'pending',
+                datetime.now(),
+                position or None
+            ))
+            
+            print(f"✓ [업로드] 새 지원자 생성: {candidate_name} ({session_id})")
         
         # 파일 저장
         BASE_DIR = Path(__file__).parent.parent.parent
@@ -402,6 +422,74 @@ def upload_candidate():
         
         print(f"✓ [업로드] 파일 저장 완료: {relative_path}")
         
+        # 임베딩 처리 (비동기로 처리하여 업로드 응답 속도 유지)
+        try:
+            from app.agents.embedding_agent import EmbeddingAgent
+            from app.utils.file_utils import extract_text
+            
+            print(f"📚 [업로드] 임베딩 시작: {candidate_name}")
+            
+            # 파일 다시 열기
+            with open(str(file_path), 'rb') as f:
+                file_content = f.read()
+            
+            # 임시 파일 객체 생성
+            from io import BytesIO
+            from werkzeug.datastructures import FileStorage
+            file_obj = FileStorage(
+                stream=BytesIO(file_content),
+                filename=original_filename,
+                content_type=file.content_type
+            )
+            
+            # 파일 타입에 따라 임베딩 처리
+            if file_type == 'resume':
+                # 이력서만 있는 경우 - JD는 나중에 매칭 시 처리
+                text = extract_text(file_obj)
+                if text:
+                    from app.utils.rag_indexer import insert_resume_jd_embeddings
+                    from app.utils.document_structurer import structure_resume
+                    from app.utils.semantic_chunker import chunk_structured_resume, chunks_to_text_with_metadata
+                    
+                    try:
+                        # Resume 구조화 및 청킹
+                        structured_resume = structure_resume(text)
+                        resume_chunks = chunk_structured_resume(structured_resume)
+                        resume_chunks_with_metadata = chunks_to_text_with_metadata(resume_chunks)
+                        
+                        # 임베딩 저장
+                        doc_id = insert_resume_jd_embeddings(
+                            session_id, "resume_upload", "resume",
+                            chunks_with_metadata=resume_chunks_with_metadata
+                        )
+                        print(f"✅ [업로드] 이력서 임베딩 완료: doc_id={doc_id}")
+                    except:
+                        # 구조화 실패 시 기존 방식
+                        doc_id = insert_resume_jd_embeddings(
+                            session_id, "resume_upload", "resume", text=text
+                        )
+                        print(f"✅ [업로드] 이력서 임베딩 완료 (폴백): doc_id={doc_id}")
+                        
+            elif file_type == 'portfolio':
+                # 포트폴리오는 멀티모달 분석
+                from app.utils.file_utils import extract_portfolio_multimodal
+                from app.utils.rag_indexer import insert_resume_jd_embeddings
+                
+                try:
+                    portfolio_text = extract_portfolio_multimodal(file_obj)
+                    if portfolio_text:
+                        doc_id = insert_resume_jd_embeddings(
+                            session_id, "portfolio_upload", "portfolio", text=portfolio_text
+                        )
+                        print(f"✅ [업로드] 포트폴리오 임베딩 완료: doc_id={doc_id}")
+                except Exception as e:
+                    print(f"⚠️  [업로드] 포트폴리오 임베딩 실패: {e}")
+                    
+        except Exception as e:
+            print(f"⚠️  [업로드] 임베딩 처리 오류 (업로드는 성공): {e}")
+            import traceback
+            traceback.print_exc()
+        
         return jsonify({
             "success": True,
             "session_id": session_id,
@@ -418,6 +506,79 @@ def upload_candidate():
             "success": False,
             "error": str(e)
         }), 500
+
+
+# ============================================
+# 포지션 관리 API
+# ============================================
+
+@dashboard_bp.route("/api/positions/active", methods=['GET'])
+def get_active_positions():
+    """
+    활성 포지션 목록 조회 (is_active = true)
+    
+    Returns:
+    {
+        "success": true,
+        "positions": [
+            {
+                "jd_id": 1,
+                "title": "백엔드 개발자",
+                "company": "회사명"
+            }
+        ]
+    }
+    """
+    from flask import jsonify
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    import os
+    
+    try:
+        # DB 연결
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "postgres"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "")
+        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 활성 포지션 조회
+        cur.execute("""
+            SELECT jd_id, title
+            FROM interview.job_descriptions
+            WHERE is_active = true
+            ORDER BY created_at DESC
+        """)
+        
+        rows = cur.fetchall()
+        
+        positions = []
+        for row in rows:
+            positions.append({
+                'jd_id': row['jd_id'],
+                'title': row['title']
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "positions": positions
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [포지션 조회] 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 
 @dashboard_bp.route("/panel/positions")
 def get_positions_panel():

@@ -5,6 +5,7 @@ if (!window.candidatesState) {
     window.candidatesState = {
         currentPage: 1,
         currentStatus: 'all',
+        currentPosition: 'all',
         currentSearch: '',
         itemsPerPage: 10
     };
@@ -14,11 +15,15 @@ if (!window.candidatesState) {
 (function initCandidates() {
     console.log('[Candidates] 초기화 시작');
     
+    // 포지션 목록 로드
+    loadPositionFilter();
+    
     // 데이터 로드
     loadCandidates();
     
     // 필터 이벤트 리스너
     const statusFilter = document.getElementById('statusFilter');
+    const positionFilter = document.getElementById('positionFilter');
     const searchInput = document.getElementById('searchInput');
     
     if (statusFilter) {
@@ -28,6 +33,15 @@ if (!window.candidatesState) {
             loadCandidates();
         });
         console.log('[Candidates] 상태 필터 이벤트 연결됨');
+    }
+    
+    if (positionFilter) {
+        positionFilter.addEventListener('change', () => {
+            window.candidatesState.currentPosition = positionFilter.value;
+            window.candidatesState.currentPage = 1;
+            loadCandidates();
+        });
+        console.log('[Candidates] 포지션 필터 이벤트 연결됨');
     }
     
     if (searchInput) {
@@ -44,14 +58,44 @@ if (!window.candidatesState) {
     }
 })();
 
+// 포지션 필터 로드 함수
+async function loadPositionFilter() {
+    const positionFilter = document.getElementById('positionFilter');
+    if (!positionFilter) return;
+    
+    try {
+        const response = await fetch('/api/positions/active');
+        const data = await response.json();
+        
+        if (data.success && data.positions) {
+            // 기본 옵션 유지하고 포지션 추가
+            positionFilter.innerHTML = '<option value="all">전체 포지션</option>';
+            
+            data.positions.forEach(pos => {
+                const option = document.createElement('option');
+                option.value = pos.title;
+                option.textContent = pos.title;
+                positionFilter.appendChild(option);
+            });
+            
+            console.log('[Candidates] 포지션 필터 로드 완료:', data.positions.length, '개');
+        } else {
+            console.error('[Candidates] 포지션 필터 로드 실패:', data.error);
+        }
+    } catch (error) {
+        console.error('[Candidates] 포지션 필터 로드 오류:', error);
+    }
+}
+
 // 지원자 데이터 로드
 async function loadCandidates() {
     const state = window.candidatesState;
-    console.log('[Candidates] 데이터 로드 시작:', { status: state.currentStatus, search: state.currentSearch, page: state.currentPage });
+    console.log('[Candidates] 데이터 로드 시작:', { status: state.currentStatus, position: state.currentPosition, search: state.currentSearch, page: state.currentPage });
     
     try {
         const params = new URLSearchParams({
             status: state.currentStatus,
+            position: state.currentPosition,
             search: state.currentSearch,
             page: state.currentPage,
             limit: state.itemsPerPage
@@ -176,33 +220,32 @@ async function openCandidateDetail(sessionId, name) {
         
         modalTitle.textContent = `${name} - 지원 서류`;
         
-        // 파일이 여러 개인 경우 탭 표시
-        if (data.files.length > 1) {
-            pdfTabs.style.display = 'flex';
-            pdfTabs.style.gap = '0.5rem';
-            pdfTabs.style.paddingTop = '0.75rem';
-            
-            const resumeFile = data.files.find(f => f.type === 'resume');
-            const portfolioFile = data.files.find(f => f.type === 'portfolio');
-            
-            let tabsHtml = '';
-            if (resumeFile) {
-                tabsHtml += `<button class="pdf-tab active" onclick="switchPdfFile('${resumeFile.file_path}', this)">📄 이력서</button>`;
-            }
-            if (portfolioFile) {
-                tabsHtml += `<button class="pdf-tab ${!resumeFile ? 'active' : ''}" onclick="switchPdfFile('${portfolioFile.file_path}', this)">📁 포트폴리오</button>`;
-            }
-            
-            pdfTabs.innerHTML = tabsHtml;
-            
-            // 첫 번째 파일 표시
-            pdfViewer.src = `/api/files/${data.files[0].file_path}`;
-        } else {
-            // 파일이 1개만 있는 경우 탭 숨김
-            pdfTabs.style.display = 'none';
-            const fileType = data.files[0].type === 'resume' ? '이력서' : '포트폴리오';
-            modalTitle.textContent = `${name} - ${fileType}`;
-            pdfViewer.src = `/api/files/${data.files[0].file_path}`;
+        // 파일 정보 확인
+        const resumeFile = data.files.find(f => f.type === 'resume');
+        const portfolioFile = data.files.find(f => f.type === 'portfolio');
+        
+        // 탭 표시
+        pdfTabs.style.display = 'flex';
+        pdfTabs.style.gap = '0.5rem';
+        pdfTabs.style.paddingTop = '0.75rem';
+        
+        let tabsHtml = '';
+        if (resumeFile) {
+            tabsHtml += `<button class="pdf-tab active" onclick="switchPdfFile('${resumeFile.file_path}', this)">📄 이력서</button>`;
+        }
+        // 포트폴리오 제출한 경우만 포트폴리오 탭 표시
+        if (portfolioFile) {
+            const isActive = !resumeFile ? 'active' : '';
+            tabsHtml += `<button class="pdf-tab ${isActive}" onclick="switchPdfFile('${portfolioFile.file_path}', this)">📁 포트폴리오</button>`;
+        }
+        
+        pdfTabs.innerHTML = tabsHtml;
+        
+        // 파일 표시 (이력서 우선, 없으면 포트폴리오)
+        if (resumeFile) {
+            pdfViewer.src = `/api/files/${resumeFile.file_path}`;
+        } else if (portfolioFile) {
+            pdfViewer.src = `/api/files/${portfolioFile.file_path}`;
         }
         
         // 모달 열기
@@ -246,12 +289,10 @@ function closePdfModal() {
 // 상태 배지 생성
 function getStatusBadge(status) {
     const badges = {
-        'pending': '<span class="badge badge-warning">서류 대기</span>',
-        'screening': '<span class="badge badge-info">서류 심사 중</span>',
-        'interview_pending': '<span class="badge badge-primary">면접 대기</span>',
-        'interview_in_progress': '<span class="badge badge-info">면접 진행 중</span>',
-        'hired': '<span class="badge badge-success">최종 합격</span>',
-        'rejected': '<span class="badge badge-danger">최종 불합격</span>'
+        'pending': '<span class="badge badge-warning">대기</span>',
+        'interview_pending': '<span class="badge badge-success">서류 통과</span>',
+        'rejected': '<span class="badge badge-danger">불합격</span>',
+        'passed': '<span class="badge badge-success">합격</span>'
     };
     
     return badges[status] || `<span class="badge badge-secondary">${status}</span>`;
@@ -327,11 +368,40 @@ if (!window.uploadState) {
     };
 }
 
-function openUploadModal() {
+async function openUploadModal() {
     const modal = document.getElementById('uploadModal');
     if (modal) {
         modal.classList.add('active');
         resetUploadModal();
+        await loadActivePositions();
+    }
+}
+
+async function loadActivePositions() {
+    const positionSelect = document.getElementById('positionSelect');
+    if (!positionSelect) return;
+    
+    try {
+        const response = await fetch('/api/positions/active');
+        const data = await response.json();
+        
+        if (data.success && data.positions) {
+            // 기본 옵션 유지하고 포지션 추가
+            positionSelect.innerHTML = '<option value="">포지션을 선택하세요</option>';
+            
+            data.positions.forEach(pos => {
+                const option = document.createElement('option');
+                option.value = pos.title;
+                option.textContent = pos.title;
+                positionSelect.appendChild(option);
+            });
+            
+            console.log('[Upload] 활성 포지션 로드 완료:', data.positions.length, '개');
+        } else {
+            console.error('[Upload] 포지션 로드 실패:', data.error);
+        }
+    } catch (error) {
+        console.error('[Upload] 포지션 로드 오류:', error);
     }
 }
 
@@ -350,14 +420,14 @@ function resetUploadModal() {
     const folderInput = document.getElementById('folderInput');
     const fileListContainer = document.getElementById('fileListContainer');
     const fileList = document.getElementById('fileList');
-    const positionInput = document.getElementById('positionInput');
+    const positionSelect = document.getElementById('positionSelect');
     const uploadSubmitBtn = document.getElementById('uploadSubmitBtn');
     const uploadProgress = document.getElementById('uploadProgress');
     
     if (folderInput) folderInput.value = '';
     if (fileListContainer) fileListContainer.style.display = 'none';
     if (fileList) fileList.innerHTML = '';
-    if (positionInput) positionInput.value = '';
+    if (positionSelect) positionSelect.value = '';
     if (uploadSubmitBtn) uploadSubmitBtn.disabled = true;
     if (uploadProgress) uploadProgress.style.display = 'none';
 }
@@ -463,11 +533,11 @@ function updateFileItemStatus(index, status) {
 }
 
 async function submitUpload() {
-    const positionInput = document.getElementById('positionInput');
-    const position = positionInput ? positionInput.value.trim() : '';
+    const positionSelect = document.getElementById('positionSelect');
+    const position = positionSelect ? positionSelect.value.trim() : '';
     
     if (!position) {
-        alert('지원 포지션을 입력해주세요.');
+        alert('지원 포지션을 선택해주세요.');
         return;
     }
     
@@ -476,83 +546,97 @@ async function submitUpload() {
         return;
     }
     
-    const uploadProgress = document.getElementById('uploadProgress');
-    const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progressText');
     const uploadSubmitBtn = document.getElementById('uploadSubmitBtn');
+    const cancelBtn = document.getElementById('cancelBtn');
     
-    if (uploadSubmitBtn) uploadSubmitBtn.disabled = true;
-    if (uploadProgress) uploadProgress.style.display = 'block';
+    // 버튼을 "확인"으로 변경하고 비활성화
+    if (uploadSubmitBtn) {
+        uploadSubmitBtn.textContent = '확인';
+        uploadSubmitBtn.disabled = true;
+        uploadSubmitBtn.onclick = closeUploadModalAndRefresh;
+    }
+    
+    // 취소 버튼 비활성화
+    if (cancelBtn) cancelBtn.disabled = true;
+    
+    // 파일들을 이름별로 그룹화
+    const fileGroups = {};
+    window.uploadState.selectedFiles.forEach((file, index) => {
+        const match = file.name.match(/^(.+)_(이력서|포트폴리오)\.(pdf|doc|docx)$/i);
+        if (match) {
+            const candidateName = match[1];
+            if (!fileGroups[candidateName]) {
+                fileGroups[candidateName] = { files: [], indices: [] };
+            }
+            fileGroups[candidateName].files.push(file);
+            fileGroups[candidateName].indices.push(index);
+        }
+    });
     
     const totalFiles = window.uploadState.selectedFiles.length;
     let successCount = 0;
     let failCount = 0;
     
-    for (let i = 0; i < totalFiles; i++) {
-        const file = window.uploadState.selectedFiles[i];
+    // 그룹별로 처리
+    for (const candidateName in fileGroups) {
+        const group = fileGroups[candidateName];
+        let groupSessionId = null;
         
-        // 현재 파일 로딩 상태로 변경
-        updateFileItemStatus(i, 'loading');
-        
-        // 진행률 업데이트
-        if (progressText) progressText.textContent = `${i + 1} / ${totalFiles}`;
-        if (progressBar) progressBar.style.width = `${((i + 1) / totalFiles) * 100}%`;
-        
-        try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('position', position);
+        // 같은 그룹의 파일들을 순차 업로드
+        for (let i = 0; i < group.files.length; i++) {
+            const file = group.files[i];
+            const fileIndex = group.indices[i];
             
-            const response = await fetch('/api/candidates/upload', {
-                method: 'POST',
-                body: formData
-            });
+            // 현재 파일 로딩 상태로 변경
+            updateFileItemStatus(fileIndex, 'loading');
             
-            const result = await response.json();
-            
-            if (result.success) {
-                successCount++;
-                updateFileItemStatus(i, 'success');
-                console.log(`[Upload] 성공: ${file.name}`);
-            } else {
-                failCount++;
-                updateFileItemStatus(i, 'error');
-                console.error(`[Upload] 실패: ${file.name}`, result.error);
-                // 첫 번째 에러만 상세히 표시
-                if (failCount === 1) {
-                    console.error(`[Upload] 첫 번째 에러 상세:`, result);
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('position', position);
+                
+                // 같은 그룹의 두 번째 파일부터는 session_id 전달
+                if (groupSessionId) {
+                    formData.append('session_id', groupSessionId);
                 }
+                
+                const response = await fetch('/api/candidates/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 첫 번째 파일 업로드 성공 시 session_id 저장
+                    if (!groupSessionId) {
+                        groupSessionId = result.session_id;
+                    }
+                    
+                    successCount++;
+                    updateFileItemStatus(fileIndex, 'success');
+                    console.log(`[Upload] 성공: ${file.name} (session: ${result.session_id})`);
+                } else {
+                    failCount++;
+                    updateFileItemStatus(fileIndex, 'error');
+                    console.error(`[Upload] 실패: ${file.name}`, result.error);
+                    // 첫 번째 에러만 상세히 표시
+                    if (failCount === 1) {
+                        console.error(`[Upload] 첫 번째 에러 상세:`, result);
+                    }
+                }
+            } catch (error) {
+                failCount++;
+                updateFileItemStatus(fileIndex, 'error');
+                console.error(`[Upload] 오류: ${file.name}`, error);
             }
-        } catch (error) {
-            failCount++;
-            updateFileItemStatus(i, 'error');
-            console.error(`[Upload] 오류: ${file.name}`, error);
         }
     }
     
-    // 완료 메시지 UI 표시
-    const uploadProgressDiv = document.getElementById('uploadProgress');
-    if (uploadProgressDiv) {
-        let resultColor = successCount > 0 && failCount === 0 ? '#10b981' : '#3b82f6';
-        if (failCount > 0 && successCount === 0) resultColor = '#ef4444';
-        
-        uploadProgressDiv.innerHTML = `
-            <div style="background-color: ${resultColor}; border-radius: 0.5rem; padding: 1.5rem; color: white; text-align: center;">
-                <div style="font-size: 2rem; margin-bottom: 0.5rem;">${successCount > 0 && failCount === 0 ? '✓' : '📊'}</div>
-                <div style="font-weight: 600; font-size: 1.125rem; margin-bottom: 0.5rem;">업로드 완료</div>
-                <div style="font-size: 0.875rem; margin-bottom: 1rem;">
-                    성공: ${successCount}개 / 실패: ${failCount}개
-                    ${failCount > 0 ? '<br><span style="font-size: 0.75rem; opacity: 0.9;">콘솔(F12)에서 실패 정보 확인 가능</span>' : ''}
-                </div>
-                <button 
-                    onclick="closeUploadModalAndRefresh()" 
-                    class="btn" 
-                    style="background-color: white; color: ${resultColor}; font-weight: 600; padding: 0.5rem 1.5rem;"
-                >
-                    확인
-                </button>
-            </div>
-        `;
+    // 업로드 완료 후 버튼 활성화
+    if (uploadSubmitBtn) {
+        uploadSubmitBtn.disabled = false;
+        uploadSubmitBtn.style.cursor = 'pointer';
     }
 }
 
