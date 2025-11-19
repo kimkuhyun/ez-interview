@@ -197,3 +197,22 @@ async function loadKeywordMatchView(positionId) {
 }
 
 loadPositions();
+
+// ✅ 탭이 활성화될 때마다 자동 새로고침
+if (typeof MutationObserver !== 'undefined') {
+  const observer = new MutationObserver(() => {
+    const positionsTab = document.querySelector('[data-tab="positions"]');
+    if (positionsTab && positionsTab.classList.contains('active')) {
+      loadPositions();
+    }
+  });
+  
+  const tabContainer = document.querySelector('.tabs');
+  if (tabContainer) {
+    observer.observe(tabContainer, { 
+      attributes: true, 
+      subtree: true, 
+      attributeFilter: ['class'] 
+    });
+  }
+}
