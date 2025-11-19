@@ -323,9 +323,16 @@ def match_candidates(jd_id):
     combined_query = " ".join(keywords)
     print(f"🔍 매칭 쿼리: {combined_query}")
     
-    # pending 지원자 조회
-    cur.execute("SELECT session_id, name FROM interview.candidates WHERE status = 'pending'")
+    # ✅ pending 지원자 조회 (해당 포지션에 지원한 사람만)
+    cur.execute("""
+        SELECT session_id, name 
+        FROM interview.candidates 
+        WHERE status = 'pending' 
+          AND jd_id = %s::uuid
+    """, (jd_id,))
     candidates = cur.fetchall()
+    
+    print(f"   📋 매칭 대상 지원자: {len(candidates)}명 (포지션: {jd_id})")
     
     results = []
     for session_id, name in candidates:
