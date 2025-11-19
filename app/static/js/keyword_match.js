@@ -370,24 +370,25 @@ function closeKeywordView() {
     });
 }
 
-// ✅ 자동 초기화: data-position-id에서 ID 읽기
-document.addEventListener('DOMContentLoaded', () => {
-  const container = document.querySelector('.keyword-match-container');
-  if (container) {
-    const positionId = container.getAttribute('data-position-id');
-    if (positionId && positionId !== 'null') {
-      console.log('🚀 Initializing keyword match with position ID:', positionId);
-      initKeywordMatch(positionId);
-    }
+// 초기화
+(function() {
+  const c = document.querySelector('.keyword-match-container');
+  if (c) {
+    const id = c.getAttribute('data-position-id');
+    if (id && id !== 'null') initKeywordMatch(id);
   }
-});
+})();
 
-// 즉시 실행 (DOMContentLoaded가 이미 발생한 경우 대비)
-const container = document.querySelector('.keyword-match-container');
-if (container) {
-  const positionId = container.getAttribute('data-position-id');
-  if (positionId && positionId !== 'null') {
-    console.log('🚀 Initializing keyword match immediately with position ID:', positionId);
-    initKeywordMatch(positionId);
-  }
+// 재진입 감지
+if (window.MutationObserver) {
+  new MutationObserver(() => {
+    const c = document.querySelector('.keyword-match-container');
+    if (c && c.offsetParent) {
+      const id = c.getAttribute('data-position-id');
+      if (id && id !== 'null' && id !== currentPositionId) {
+        currentPositionId = id;
+        loadPositionData();
+      }
+    }
+  }).observe(document.body, { childList: true, subtree: true });
 }
