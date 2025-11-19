@@ -1,5 +1,6 @@
 let currentPositionId = null;
-let keywords = [];
+let keywordPool = []; // 후보군 (DB 저장된 것 + AI 추천 + 수동 입력)
+let selectedKeywords = []; // 실제 검색에 사용할 키워드
 let candidates = [];
 let currentCandidateId = null;
 
@@ -13,46 +14,115 @@ async function loadPositionData() {
   const data = await res.json();
   
   document.getElementById('positionTitle').textContent = `${data.name} - 키워드 설정`;
-  keywords = data.keywords || [];
+  
+  // DB에 저장된 키워드를 후보군으로 로드
+  keywordPool = data.keywords || [];
+  selectedKeywords = []; // 초기에는 선택 안 함
+  
   renderKeywords();
 }
 
-function addKeyword() {
+// 후보군에 키워드 추가
+function addKeywordToPool() {
   const input = document.getElementById('keywordInput');
   const keyword = input.value.trim();
   
   if (!keyword) return;
-  if (keywords.includes(keyword)) {
-    alert('이미 추가된 키워드입니다.');
+  if (keywordPool.includes(keyword)) {
+    alert('이미 존재하는 키워드입니다.');
     return;
   }
   
-  keywords.push(keyword);
+  keywordPool.push(keyword);
   input.value = '';
   renderKeywords();
   saveKeywords();
 }
 
-function removeKeyword(keyword) {
-  keywords = keywords.filter(k => k !== keyword);
+// 후보군에서 선택 (검색용으로 이동)
+function selectKeyword(keyword) {
+  if (selectedKeywords.includes(keyword)) {
+    // 이미 선택됨 → 선택 해제
+    selectedKeywords = selectedKeywords.filter(k => k !== keyword);
+  } else {
+    // 선택 추가
+    selectedKeywords.push(keyword);
+  }
+  renderKeywords();
+}
+
+// 후보군에서 완전 삭제
+function removeFromPool(keyword, event) {
+  event.stopPropagation(); // 선택 이벤트 방지
+  
+  keywordPool = keywordPool.filter(k => k !== keyword);
+  selectedKeywords = selectedKeywords.filter(k => k !== keyword);
+  
   renderKeywords();
   saveKeywords();
 }
 
-function renderKeywords() {
-  const container = document.getElementById('keywordsDisplay');
+// 드래그 앤 드롭으로 선택 해제
+function handleDragStart(event, keyword) {
+  event.dataTransfer.setData('keyword', keyword);
+  event.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragOver(event) {
+  event.preventDefault();
+  event.dataTransfer.dropEffect = 'move';
+}
+
+function handleDrop(event) {
+  event.preventDefault();
+  const keyword = event.dataTransfer.getData('keyword');
   
-  if (keywords.length === 0) {
-    container.innerHTML = '<span class="empty-text">키워드를 추가하거나 AI 추천을 받아보세요</span>';
-    return;
+  // 선택된 키워드에서 제거
+  if (selectedKeywords.includes(keyword)) {
+    selectedKeywords = selectedKeywords.filter(k => k !== keyword);
+    renderKeywords();
+  }
+}
+
+function renderKeywords() {
+  // 1️⃣ 후보군 렌더링
+  const poolContainer = document.getElementById('keywordsPool');
+  
+  if (keywordPool.length === 0) {
+    poolContainer.innerHTML = '<span class="empty-text">키워드를 입력하거나 AI 추천을 받아보세요</span>';
+  } else {
+    poolContainer.innerHTML = keywordPool.map(kw => {
+      const isSelected = selectedKeywords.includes(kw);
+      return `
+        <div class="keyword-pool-tag ${isSelected ? 'selected' : ''}" 
+             onclick="selectKeyword('${kw}')"
+             title="클릭하여 ${isSelected ? '선택 해제' : '선택'}">
+          ${kw}
+          <span class="keyword-pool-remove" onclick="removeFromPool('${kw}', event)">×</span>
+        </div>
+      `;
+    }).join('');
   }
   
-  container.innerHTML = keywords.map(kw => `
-    <div class="keyword-tag">
-      ${kw}
-      <span class="keyword-remove" onclick="removeKeyword('${kw}')">×</span>
-    </div>
-  `).join('');
+  // 2️⃣ 선택된 키워드 렌더링
+  const selectedContainer = document.getElementById('keywordsSelected');
+  const countDisplay = document.getElementById('selectedCount');
+  
+  countDisplay.textContent = `${selectedKeywords.length}개`;
+  
+  if (selectedKeywords.length === 0) {
+    selectedContainer.innerHTML = '<span class="empty-text">위 후보에서 키워드를 선택하세요</span>';
+  } else {
+    selectedContainer.innerHTML = selectedKeywords.map(kw => `
+      <div class="keyword-selected-tag"
+           draggable="true"
+           ondragstart="handleDragStart(event, '${kw}')"
+           title="드래그하여 박스 밖으로 빼면 선택 해제">
+        ${kw}
+        <span class="keyword-selected-remove" onclick="selectKeyword('${kw}')">×</span>
+      </div>
+    `).join('');
+  }
 }
 
 async function recommendKeywords() {
@@ -66,10 +136,10 @@ async function recommendKeywords() {
     });
     const data = await res.json();
     
-    // 중복 제거하고 추가
+    // AI 추천 키워드를 후보군에 추가 (중복 제거)
     data.keywords.forEach(kw => {
-      if (!keywords.includes(kw)) {
-        keywords.push(kw);
+      if (!keywordPool.includes(kw)) {
+        keywordPool.push(kw);
       }
     });
     
@@ -84,16 +154,17 @@ async function recommendKeywords() {
 }
 
 async function saveKeywords() {
+  // 후보군 전체를 DB에 저장
   await fetch(`/api/positions/${currentPositionId}/keywords`, {
     method: 'PUT',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({keywords})
+    body: JSON.stringify({keywords: keywordPool})
   });
 }
 
 async function startMatching() {
-  if (keywords.length === 0) {
-    alert('키워드를 최소 1개 이상 추가해주세요.');
+  if (selectedKeywords.length === 0) {
+    alert('검색할 키워드를 최소 1개 이상 선택해주세요.');
     return;
   }
   
@@ -102,8 +173,11 @@ async function startMatching() {
   btn.textContent = '⏳ 매칭 중...';
   
   try {
+    // 선택된 키워드만 매칭에 사용
     const res = await fetch(`/api/positions/${currentPositionId}/match`, {
-      method: 'POST'
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({keywords: selectedKeywords})
     });
     const data = await res.json();
     

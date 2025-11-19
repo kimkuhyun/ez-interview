@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, Response
+from flask import Blueprint, render_template, Response, request
 from pathlib import Path
 
 dashboard_bp = Blueprint('dashboard', __name__)
@@ -701,6 +701,7 @@ def get_positions_panel():
 @dashboard_bp.route("/panel/keyword-match")
 def get_keyword_match_panel():
     """키워드 매칭 패널"""
-    return render_template("admin/tabs/keyword_match.html")
+    position_id = request.args.get('position_id')
+    return render_template("admin/tabs/keyword_match.html", position_id=position_id)
 
 

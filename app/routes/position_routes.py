@@ -309,19 +309,24 @@ def match_candidates(jd_id):
     conn = get_connection()
     cur = conn.cursor()
     
-    # 포지션 키워드 조회
-    cur.execute("SELECT keywords FROM interview.job_descriptions WHERE jd_id = %s::uuid", (jd_id,))
-    row = cur.fetchone()
-    if not row or not row[0]:
-        cur.close()
-        conn.close()
-        return jsonify({"error": "키워드가 설정되지 않았습니다"}), 400
+    # 요청 바디에서 선택된 키워드 받기
+    data = request.get_json()
+    keywords = data.get('keywords', [])
     
-    keywords = row[0]
+    if not keywords:
+        # 바디에 없으면 DB에서 조회 (하위 호환)
+        cur.execute("SELECT keywords FROM interview.job_descriptions WHERE jd_id = %s::uuid", (jd_id,))
+        row = cur.fetchone()
+        if not row or not row[0]:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "키워드가 설정되지 않았습니다"}), 400
+        keywords = row[0]
     
     # ✅ 키워드를 하나의 쿼리로 합침 (API 호출 최소화)
     combined_query = " ".join(keywords)
     print(f"🔍 매칭 쿼리: {combined_query}")
+    print(f"   📝 선택된 키워드 {len(keywords)}개: {keywords}")
     
     # ✅ pending 지원자 조회 (해당 포지션에 지원한 사람만)
     cur.execute("""

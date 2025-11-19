@@ -58,58 +58,74 @@ body {
   gap: 20px;
 }
 
-.keyword-input-group {
+/* 키워드 후보군 영역 */
+.keyword-pool-section {
+  border: 2px dashed #cbd5e1;
+  border-radius: 12px;
+  padding: 16px;
+  background: #fefefe;
+}
+
+.pool-header {
   display: flex;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
-.keyword-input-group input {
+.pool-header h4 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: #475569;
+}
+
+.pool-actions {
+  display: flex;
+  gap: 8px;
   flex: 1;
-  padding: 12px 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  font-size: 14px;
+  max-width: 500px;
 }
 
-.keyword-input-group input:focus {
+.pool-actions input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.pool-actions input:focus {
   outline: none;
   border-color: #6366f1;
   box-shadow: 0 0 0 3px rgba(99,102,241,0.1);
 }
 
-.btn-add-kw,
-.btn-recommend {
-  padding: 12px 20px;
+.btn-pool-add {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: #6366f1;
+  color: white;
   border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
+  border-radius: 6px;
+  font-size: 18px;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.btn-add-kw {
-  background: #6366f1;
-  color: white;
-}
-
-.btn-add-kw:hover {
+.btn-pool-add:hover {
   background: #4f46e5;
+  transform: scale(1.05);
 }
 
-.btn-recommend {
-  background: #8b5cf6;
-  color: white;
-}
-
-.btn-recommend:hover {
-  background: #7c3aed;
-}
-
-.keywords-display {
-  min-height: 80px;
-  padding: 16px;
-  background: #f8fafc;
+.keywords-pool {
+  min-height: 60px;
+  padding: 12px;
+  background: white;
   border-radius: 8px;
   display: flex;
   flex-wrap: wrap;
@@ -117,36 +133,136 @@ body {
   align-items: center;
 }
 
+.keywords-selected {
+  min-height: 60px;
+  padding: 12px;
+  background: white;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+/* 드래그 앤 드롭 영역 (선택 해제용) */
+.keywords-selected[ondragover] {
+  background: #dcfce7;
+  border: 2px dashed #10b981;
+}
+
 .empty-text {
   color: #94a3b8;
   font-size: 13px;
 }
 
-.keyword-tag {
+.keyword-pool-tag {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   padding: 8px 12px;
-  background: #6366f1;
-  color: white;
+  background: #e0e7ff;
+  color: #4338ca;
+  border: 2px solid transparent;
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
 }
 
-.keyword-tag.recommended {
-  background: #8b5cf6;
+.keyword-pool-tag:hover {
+  background: #c7d2fe;
+  transform: translateY(-2px);
 }
 
-.keyword-remove {
+.keyword-pool-tag.selected {
+  background: #6366f1;
+  color: white;
+  border-color: #4f46e5;
+}
+
+.keyword-pool-remove {
   cursor: pointer;
   font-size: 16px;
   line-height: 1;
-  opacity: 0.8;
+  opacity: 0.6;
   transition: opacity 0.2s;
+  margin-left: 2px;
 }
 
-.keyword-remove:hover {
+.keyword-pool-remove:hover {
+  opacity: 1;
+}
+
+/* 선택된 키워드 영역 */
+.keyword-selected-section {
+  border: 1px solid #d1d5db;
+  padding: 12px;
+  background: #ffffff;
+  min-height: 80px;
+}
+
+.selected-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.selected-header h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.selected-count {
+  background: #6b7280;
+  color: white;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.keywords-selected {
+  min-height: 50px;
+  padding: 8px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.keyword-selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  background: #374151;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: move;
+  user-select: none;
+}
+
+.keyword-selected-tag:hover {
+  background: #4b5563;
+}
+
+.keyword-selected-remove {
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.keyword-selected-remove:hover {
   opacity: 1;
 }
 
