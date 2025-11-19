@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, AsyncGenerator
 import asyncio
 
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.output_parsers import PydanticOutputParser
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field, ConfigDict
 from typing_extensions import TypedDict, Literal
@@ -325,29 +326,33 @@ class ReportState(TypedDict):
     retry_mode: Optional[str]
 #========================== 프롬프트 에이전트 노드 ===========================
 def node_optimize_prompt(state: ReportState) -> Dict[str, Any]:
+    parser = PydanticOutputParser(pydantic_object=OptimizedPrompt)
     prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("optimized_agent")),
-        ("user", "user_prompt: {user_prompt}\naxes: {axes}\njd_text: {jd_text}")
+        ("user", "user_prompt: {user_prompt}\naxes: {axes}\njd_text: {jd_text}\n\n{format_instructions}")
     ])
-    chain = prompt | _llm_gpt_chat().with_structured_output(OptimizedPrompt)
+    chain = prompt | _llm_solar_chat() | parser
     result = chain.invoke({
         "user_prompt": state["user_prompt"],
         "axes": state["axes"],
-        "jd_text": state.get("jd_text") or ""
+        "jd_text": state.get("jd_text") or "",
+        "format_instructions": parser.get_format_instructions()
     })
     return {"optimized_prompt": result}
 #========================== 쿼리플랜 에이전트 노드 ===========================
 def node_query_plan(state: ReportState) -> Dict[str, Any]:
+    parser = PydanticOutputParser(pydantic_object=QueryPlan)
     opt = state["optimized_prompt"]
     prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("queryPlan_agent")),
-        ("user", "OptimizedPrompt: {opt}\naxes: {axes}\njd_text: {jd_text}")
+        ("user", "OptimizedPrompt: {opt}\naxes: {axes}\njd_text: {jd_text}\n\n{format_instructions}")
     ])
-    chain = prompt | _llm_gpt_chat().with_structured_output(QueryPlan)
+    chain = prompt | _llm_solar_chat() | parser
     result = chain.invoke({
         "opt": opt.model_dump_json(),
         "axes": state["axes"],
-        "jd_text": state.get("jd_text") or ""
+        "jd_text": state.get("jd_text") or "",
+        "format_instructions": parser.get_format_instructions()
     })
     return {"query_plan": result}
 #========================== 리트리버 에이전트 노드 ===========================
@@ -371,29 +376,34 @@ async def node_parallel_analysis(state: ReportState) -> Dict[str, Any]:
     resume = state.get("resume_ctx") or state.get("resume_text") or ""
     portfolio = state.get("portfolio_ctx") or state.get("portfolio_text") or ""
     interview = state.get("interview_ctx") or state.get("interview_logs") or ""
+    jd = state.get("jd_ctx") or state.get("jd_text") or ""
     axes = state["axes"]
+    
+    comp_parser = PydanticOutputParser(pydantic_object=CompAgentOut)
+    summary_parser = PydanticOutputParser(pydantic_object=SummaryAgentOut)
+    quality_parser = PydanticOutputParser(pydantic_object=QualityAgentOut)
     
     comp_prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("comp_agent")),
-        ("user", "resume: {resume}\nportfolio: {portfolio}\ninterview: {interview}\naxes: {axes}")
+        ("user", "resume: {resume}\nportfolio: {portfolio}\ninterview: {interview}\naxes: {axes}\njd_text: {jd}\n\n{format_instructions}")
     ])
     summary_prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("summary_agent")),
-        ("user", "interview: {interview}\naxes: {axes}")
+        ("user", "interview: {interview}\naxes: {axes}\njd_text: {jd}\n\n{format_instructions}")
     ])
     quality_prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("quality_agent")),
-        ("user", "interview: {interview}")
+        ("user", "interview: {interview}\njd_text: {jd}\n\n{format_instructions}")
     ])
     
-    comp_chain = comp_prompt | _llm_gpt_chat().with_structured_output(CompAgentOut)
-    summary_chain = summary_prompt | _llm_gpt_chat().with_structured_output(SummaryAgentOut)
-    quality_chain = quality_prompt | _llm_gpt_chat().with_structured_output(QualityAgentOut)
+    comp_chain = comp_prompt | _llm_solar_reasoning() | comp_parser
+    summary_chain = summary_prompt | _llm_solar_chat() | summary_parser
+    quality_chain = quality_prompt | _llm_solar_reasoning() | quality_parser
     
     # 병렬 실행
-    comp_task = asyncio.create_task(comp_chain.ainvoke({"resume": resume, "portfolio": portfolio, "interview": interview, "axes": axes}))
-    summary_task = asyncio.create_task(summary_chain.ainvoke({"interview": interview, "axes": axes}))
-    quality_task = asyncio.create_task(quality_chain.ainvoke({"interview": interview}))
+    comp_task = asyncio.create_task(comp_chain.ainvoke({"resume": resume, "portfolio": portfolio, "interview": interview, "axes": axes, "jd": jd, "format_instructions": comp_parser.get_format_instructions()}))
+    summary_task = asyncio.create_task(summary_chain.ainvoke({"interview": interview, "axes": axes, "jd": jd, "format_instructions": summary_parser.get_format_instructions()}))
+    quality_task = asyncio.create_task(quality_chain.ainvoke({"interview": interview, "jd": jd, "format_instructions": quality_parser.get_format_instructions()}))
     
     comp_out, summary_out, quality_out = await asyncio.gather(comp_task, summary_task, quality_task)
     
@@ -447,6 +457,7 @@ async def node_retry_quality_full(state: ReportState) -> Dict[str, Any]:
     interview = state.get("interview_ctx") or state.get("interview_logs") or ""
     resume = state.get("resume_ctx") or state.get("resume_text") or ""
     portfolio = state.get("portfolio_ctx") or state.get("portfolio_text") or ""
+    jd = state.get("jd_ctx") or state.get("jd_text") or ""
     axes = state["axes"]
     
     all_hints = comp.hints + summary.hints + quality.hints
@@ -458,28 +469,31 @@ async def node_retry_quality_full(state: ReportState) -> Dict[str, Any]:
     tasks = []
     
     if comp.quality_score < 0.7:
+        comp_parser = PydanticOutputParser(pydantic_object=CompAgentOut)
         comp_prompt = ChatPromptTemplate.from_messages([
             ("system", build_system_prompt("comp_agent") + hint_context),
-            ("user", "resume: {resume}\nportfolio: {portfolio}\ninterview: {interview}\naxes: {axes}")
+            ("user", "resume: {resume}\nportfolio: {portfolio}\ninterview: {interview}\naxes: {axes}\njd_text: {jd}\n\n{format_instructions}")
         ])
-        comp_chain = comp_prompt | _llm_gpt_chat().with_structured_output(CompAgentOut)
-        tasks.append(("comp_out", comp_chain.ainvoke({"resume": resume, "portfolio": portfolio, "interview": interview, "axes": axes})))
+        comp_chain = comp_prompt | _llm_solar_reasoning() | comp_parser
+        tasks.append(("comp_out", comp_chain.ainvoke({"resume": resume, "portfolio": portfolio, "interview": interview, "axes": axes, "jd": jd, "format_instructions": comp_parser.get_format_instructions()})))
     
     if summary.quality_score < 0.7:
+        summary_parser = PydanticOutputParser(pydantic_object=SummaryAgentOut)
         summary_prompt = ChatPromptTemplate.from_messages([
             ("system", build_system_prompt("summary_agent") + hint_context),
-            ("user", "interview: {interview}\naxes: {axes}")
+            ("user", "interview: {interview}\naxes: {axes}\njd_text: {jd}\n\n{format_instructions}")
         ])
-        summary_chain = summary_prompt | _llm_gpt_chat().with_structured_output(SummaryAgentOut)
-        tasks.append(("summary_out", summary_chain.ainvoke({"interview": interview, "axes": axes})))
+        summary_chain = summary_prompt | _llm_solar_reasoning() | summary_parser
+        tasks.append(("summary_out", summary_chain.ainvoke({"interview": interview, "axes": axes, "jd": jd, "format_instructions": summary_parser.get_format_instructions()})))
     
     if quality.quality_score < 0.7:
+        quality_parser = PydanticOutputParser(pydantic_object=QualityAgentOut)
         quality_prompt = ChatPromptTemplate.from_messages([
             ("system", build_system_prompt("quality_agent") + hint_context),
-            ("user", "interview: {interview}")
+            ("user", "interview: {interview}\njd_text: {jd}\n\n{format_instructions}")
         ])
-        quality_chain = quality_prompt | _llm_gpt_chat().with_structured_output(QualityAgentOut)
-        tasks.append(("quality_out", quality_chain.ainvoke({"interview": interview})))
+        quality_chain = quality_prompt | _llm_solar_reasoning() | quality_parser
+        tasks.append(("quality_out", quality_chain.ainvoke({"interview": interview, "jd": jd, "format_instructions": quality_parser.get_format_instructions()})))
     
     if tasks:
         keys, coros = zip(*tasks)
@@ -490,24 +504,36 @@ async def node_retry_quality_full(state: ReportState) -> Dict[str, Any]:
     return updates
 
 #========================== 최종 에이전트 노드 ===========================
+# ========== 최종 에이전트 노드 ===========================
 def node_final_agent(state: ReportState) -> Dict[str, Any]:
     comp = state["comp_out"]
     summary = state["summary_out"]
     opt = state["optimized_prompt"]
     jd = state.get("jd_text") or ""
-    
+    position = state.get("position_applied", "")
+
     final_prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("final_agent")),
-        ("user", "comp: {comp}\nsummary: {summary}\nopt: {opt}\njd: {jd}")
+        (
+            "user",
+            "position_applied: {position}\n"
+            "jd: {jd}\n"
+            "comp: {comp}\n"
+            "summary: {summary}\n"
+            "opt: {opt}"
+        ),
     ])
     final_chain = final_prompt | _llm_gpt().with_structured_output(FinalAgentOut)
-    final_out = final_chain.invoke({
-        "comp": comp.model_dump_json(),
-        "summary": summary.model_dump_json(),
-        "opt": opt.model_dump_json(),
-        "jd": jd
-    })
-    
+    final_out = final_chain.invoke(
+        {
+            "position": position,
+            "jd": jd,
+            "comp": comp.model_dump_json(),
+            "summary": summary.model_dump_json(),
+            "opt": opt.model_dump_json(),
+        }
+    )
+
     return {"final_out": final_out}
 #========================== 보고서 조립 노드 ===========================
 def node_assemble_report(state: ReportState) -> Dict[str, Any]:

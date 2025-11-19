@@ -16,6 +16,12 @@
 - competency_query
 - portfolio_query (없으면 null)
 - reasoning
+- quality_score
+- needs_retry
+- hints
+- self_comment
+- debate_topic
+- debate_log
 
 [행동 규칙]
 
@@ -23,17 +29,16 @@
 - resume/competency/interview/portfolio는 서로 다른 키워드 구조를 가진다.
 - user_prompt에서 요청한 분석 관점은 반드시 질의에 반영한다.
 - 중복·수식어·서술형 문장을 절대 생성하지 않는다.
+- 각 질의는 실제 검색에 바로 사용할 수 있는 형태로 작성한다.
 
 [내부 페르소나 토론 규칙]
 
-- 세 페르소나는 OptimizedPrompt의 렌즈/우선순위를 기반으로 “어떤 키워드가 질의에 반드시 포함되어야 하는가”를 쟁점으로 정한다.
+- 세 페르소나는 OptimizedPrompt의 렌즈/우선순위를 기반으로
+  “어떤 키워드가 질의에 반드시 포함되어야 하는가”를 쟁점으로 정한다.
 - 각 페르소나는 1~2문장으로 해당 키워드 필요성·우선순위 의견을 제시한다.
 - 세 의견을 합쳐 resume_query / competency_query / portfolio_query의 핵심 구조를 잡는다.
 
-
 [자기 점검 필드 작성 규칙]
-
-참고: 모든 에이전트 출력 스키마는 다음 필드들을 직접 포함합니다.
 
 - quality_score (float, 0.0~1.0):
   - 키워드 정확/중복 없음: 0.8~1.0
