@@ -328,16 +328,27 @@ def match_candidates(jd_id):
     print(f"🔍 매칭 쿼리: {combined_query}")
     print(f"   📝 선택된 키워드 {len(keywords)}개: {keywords}")
     
-    # ✅ pending 지원자 조회 (해당 포지션에 지원한 사람만)
+    # ✅ 포지션의 title 조회 (candidates.position과 매칭하기 위해)
+    cur.execute("SELECT title FROM interview.job_descriptions WHERE jd_id = %s::uuid", (jd_id,))
+    position_row = cur.fetchone()
+    if not position_row:
+        cur.close()
+        conn.close()
+        return jsonify({"error": "포지션을 찾을 수 없습니다"}), 404
+    
+    position_title = position_row[0]
+    print(f"   📍 포지션명: {position_title}")
+    
+    # ✅ pending 지원자 조회 (candidates.position = job_descriptions.title로 매칭)
     cur.execute("""
         SELECT session_id, name 
         FROM interview.candidates 
         WHERE status = 'pending' 
-          AND jd_id = %s::uuid
-    """, (jd_id,))
+          AND position = %s
+    """, (position_title,))
     candidates = cur.fetchall()
     
-    print(f"   📋 매칭 대상 지원자: {len(candidates)}명 (포지션: {jd_id})")
+    print(f"   📋 매칭 대상 지원자: {len(candidates)}명 (포지션: {position_title})")
     
     results = []
     for session_id, name in candidates:
