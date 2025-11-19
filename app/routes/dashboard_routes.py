@@ -509,6 +509,119 @@ def upload_candidate():
 
 
 # ============================================
+# 면접 관리 API
+# ============================================
+
+@dashboard_bp.route("/api/interviews/pending", methods=['GET'])
+def get_pending_interviews():
+    """
+    면접 대기 중인 지원자 목록 조회 (status = interview_pending)
+    
+    Returns:
+    {
+        "success": true,
+        "interviews": [
+            {
+                "session_id": "uuid",
+                "name": "홍길동",
+                "position": "백엔드 개발자",
+                "status": "interview_pending",
+                "scheduled_at": "2025-01-15T14:00:00",
+                "created_at": "2025-01-10T10:00:00"
+            }
+        ]
+    }
+    """
+    from flask import jsonify
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    import os
+    
+    try:
+        # DB 연결
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "postgres"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "")
+        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # interview_pending 상태의 지원자 조회
+        query = """
+            SELECT 
+                session_id,
+                name,
+                position,
+                status,
+                created_at,
+                uploaded_at
+            FROM interview.candidates
+            WHERE status = 'interview_pending'
+            ORDER BY created_at DESC
+        """
+        
+        cur.execute(query)
+        rows = cur.fetchall()
+        
+        # 결과 포맷팅
+        interviews = []
+        for row in rows:
+            interviews.append({
+                'session_id': row['session_id'],
+                'name': row['name'],
+                'position': row['position'] or '-',
+                'status': row['status'],
+                'created_at': row['created_at'].isoformat() if row['created_at'] else None,
+                'uploaded_at': row['uploaded_at'].isoformat() if row['uploaded_at'] else None
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "interviews": interviews
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [면접 목록 조회] 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+@dashboard_bp.route("/api/interviews/<session_id>/schedule", methods=['PUT'])
+def update_interview_schedule(session_id):
+    """
+    면접 일시 변경 (로컬 저장용)
+    """
+    from flask import request, jsonify
+    
+    try:
+        data = request.get_json()
+        scheduled_date = data.get('scheduled_date')
+        
+        print(f"✓ [면접 일시 설정] {session_id}: {scheduled_date}")
+        
+        return jsonify({
+            "success": True,
+            "message": "면접 일시가 설정되었습니다."
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [면접 일시 설정] 실패: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
+# ============================================
 # 포지션 관리 API
 # ============================================
 
