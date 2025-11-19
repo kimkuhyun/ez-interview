@@ -47,18 +47,13 @@
             // 탭 활성화 상태 업데이트
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 if (btn.dataset.tab === tabName) {
-                    btn.classList.remove('border-transparent', 'text-slate-500');
-                    btn.classList.add('border-blue-600', 'text-blue-700', 'bg-blue-50/50');
+                    btn.classList.add('active');
                 } else {
-                    btn.classList.remove('border-blue-600', 'text-blue-700', 'bg-blue-50/50');
-                    btn.classList.add('border-transparent', 'text-slate-500');
+                    btn.classList.remove('active');
                 }
             });
 
             currentTab = tabName;
-
-            // URL 업데이트 (페이지 새로고침 없이)
-            history.pushState({ tab: tabName }, '', `/admin/${tabName}`);
             
             console.log(`✅ ${tabName} 탭 로드 완료`);
 

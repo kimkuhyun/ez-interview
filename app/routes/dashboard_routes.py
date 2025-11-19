@@ -11,7 +11,9 @@ def admin_dashboard():
 @dashboard_bp.route("/api/admin/tabs/<tab_name>")
 def get_tab_content(tab_name):
     try:
-        # templates/admin/tabs/ 경로에서 HTML 파일 읽기
+        # render_template_string을 사용하여 템플릿 렌더링
+        from flask import render_template_string
+        
         BASE_DIR = Path(__file__).parent.parent
         tab_file = BASE_DIR / "templates" / "admin" / "tabs" / f"{tab_name}.html"
         
@@ -21,7 +23,10 @@ def get_tab_content(tab_name):
         with open(tab_file, 'r', encoding='utf-8') as f:
             content = f.read()
         
-        return Response(content.strip(), mimetype='text/html')
+        # Flask 템플릿 엔진으로 렌더링하여 {{ url_for() }} 처리
+        rendered_content = render_template_string(content)
+        
+        return Response(rendered_content.strip(), mimetype='text/html')
     except Exception as e:
         print(f"탭 로드 오류: {e}")
         return Response(f"오류: {str(e)}", status=500)
