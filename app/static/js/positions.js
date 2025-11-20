@@ -22,6 +22,9 @@ async function loadPositions() {
           <div class="delete-icon" onclick="deletePosition('${p.id}', event)">×</div>
         </div>
       </td>
+      <td>
+        <span class="candidate-count-badge">${p.candidate_count || 0}명</span>
+      </td>
       <td class="jd-file-cell" onclick="editJdFile('${p.id}')">
         <span class="edit-hint">클릭하여 파일 변경</span>
         ${p.jd_file ? p.jd_file.split('/').pop().split('\\').pop() : '-'}

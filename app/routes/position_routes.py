@@ -27,21 +27,30 @@ def get_positions():
         ORDER BY created_at DESC
     """)
     rows = cur.fetchall()
+    
+    positions = []
+    for row in rows:
+        # 각 포지션의 지원자 수 조회
+        cur.execute("""
+            SELECT COUNT(*) 
+            FROM interview.candidates 
+            WHERE position = %s AND status = 'pending'
+        """, (row[1],))
+        candidate_count = cur.fetchone()[0]
+        
+        positions.append({
+            "id": str(row[0]),
+            "name": row[1],
+            "jd_file": row[2],
+            "keywords": row[3] or [],
+            "created_at": row[5].isoformat() if row[5] else None,
+            "candidate_count": candidate_count
+        })
+    
     cur.close()
     conn.close()
     
-    return jsonify({
-        "positions": [
-            {
-                "id": str(row[0]),
-                "name": row[1],
-                "jd_file": row[2],
-                "keywords": row[3] or [],
-                "created_at": row[5].isoformat() if row[5] else None
-            }
-            for row in rows
-        ]
-    })
+    return jsonify({"positions": positions})
 
 @position_bp.route('', methods=['POST'])
 def create_position():
