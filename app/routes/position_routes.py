@@ -65,28 +65,36 @@ def create_position():
     jd_id = str(uuid.uuid4())
     
     jd_file_path = None
+    content = None
+    embedding = None
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
         file_ext = filename.rsplit('.', 1)[1] if '.' in filename else 'pdf'
-        # jd_id를 파일명으로 사용
         unique_filename = f"JD_{jd_id}.{file_ext}"
         file_path = UPLOAD_FOLDER / unique_filename
         file.save(file_path)
-        jd_file_path = f"jds/{unique_filename}"  # 상대 경로만 저장
+        jd_file_path = f"jds/{unique_filename}"
+        # 컨텐트 추출
+        from app.utils.file_utils import extract_text
+        from werkzeug.datastructures import FileStorage
+        with open(file_path, 'rb') as f:
+            file_storage = FileStorage(stream=f, filename=unique_filename, content_type='application/octet-stream')
+            content = extract_text(file_storage)
+        # 임베딩 생성
+        if content and len(content) > 10:
+            from app.utils.embedding import get_embedding
+            embedding = get_embedding(content)
     
     conn = get_connection()
     cur = conn.cursor()
-    
     cur.execute("""
-        INSERT INTO interview.job_descriptions (jd_id, title, file_path, is_active)
-        VALUES (%s, %s, %s, true)
+        INSERT INTO interview.job_descriptions (jd_id, title, file_path, is_active, content, embedding)
+        VALUES (%s, %s, %s, true, %s, %s)
         RETURNING jd_id
-    """, (jd_id, name, jd_file_path))
-    
+    """, (jd_id, name, jd_file_path, content, embedding))
     conn.commit()
     cur.close()
     conn.close()
-    
     return jsonify({"jd_id": jd_id, "message": "포지션 등록 완료", "file_path": jd_file_path})
 
 @position_bp.route('/<jd_id>', methods=['GET'])

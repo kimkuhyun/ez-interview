@@ -46,13 +46,15 @@ app.register_blueprint(position_bp)
 socketio = SocketIO(app, cors_allowed_origins="*")
 
 register_stt_events(socketio)
-
+"""
 @app.route("/")
 def load_interview_home():
     return render_template("interview.html")
+"""
+
 
 # Admin 페이지 라우트 (SPA 방식)
-@app.route("/admin")
+@app.route("/")
 def admin_dashboard():
     return render_template("base.html")
 

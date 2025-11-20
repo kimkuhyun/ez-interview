@@ -286,6 +286,11 @@ function closePdfModal() {
     }
 }
 
+// 면접 시작
+function startInterview(sessionId, name, jdId) {
+    window.location.href = `/panel/interview?session_id=${sessionId}&name=${encodeURIComponent(name)}&jd_id=${jdId}`;
+}
+
 // 상태 배지 생성
 function getStatusBadge(status) {
     const badges = {

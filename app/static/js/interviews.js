@@ -72,7 +72,7 @@ function renderInterviews(interviews) {
                 <td>
                     <button 
                         class="btn btn-sm primary" 
-                        onclick="startInterview('${interview.session_id}', '${escapeHtml(interview.name)}')"
+                        onclick="startInterview('${interview.session_id}', '${escapeHtml(interview.name)}', '${interview.jd_id}')"
                         style="padding: 0.5rem 1rem; font-size: 0.875rem;"
                     >
                         면접 시작
@@ -131,12 +131,11 @@ async function updateInterviewDate(sessionId, newDate) {
 }
 
 // 면접 시작
-function startInterview(sessionId, name) {
-    console.log('[Interviews] 면접 시작:', sessionId, name);
+function startInterview(sessionId, name, jdId) {
+    console.log('[Interviews] 면접 시작:', sessionId, name, jdId);
     
     if (confirm(`${name}님의 면접을 시작하시겠습니까?`)) {
-        // 면접 페이지로 이동 (stream.html 또는 다른 면접 UI)
-        window.location.href = `/agents/stream?session_id=${sessionId}`;
+        window.location.href = `/panel/interview?session_id=${sessionId}&name=${encodeURIComponent(name)}&jd_id=${jdId}`;
     }
 }
 
