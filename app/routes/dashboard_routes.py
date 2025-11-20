@@ -555,6 +555,7 @@ def get_pending_interviews():
                 name,
                 position,
                 status,
+                interview_at,
                 created_at,
                 uploaded_at
             FROM interview.candidates
@@ -573,6 +574,7 @@ def get_pending_interviews():
                 'name': row['name'],
                 'position': row['position'] or '-',
                 'status': row['status'],
+                'interview_at': row['interview_at'].isoformat() if row['interview_at'] else None,
                 'created_at': row['created_at'].isoformat() if row['created_at'] else None,
                 'uploaded_at': row['uploaded_at'].isoformat() if row['uploaded_at'] else None
             })
@@ -598,23 +600,57 @@ def get_pending_interviews():
 @dashboard_bp.route("/api/interviews/<session_id>/schedule", methods=['PUT'])
 def update_interview_schedule(session_id):
     """
-    면접 일시 변경 (로컬 저장용)
+    면접 일시 변경 - candidates.interview_at 업데이트
+    
+    Body:
+    {
+        "interview_at": "2025-01-15T14:00"
+    }
     """
     from flask import request, jsonify
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    import os
     
     try:
         data = request.get_json()
-        scheduled_date = data.get('scheduled_date')
+        interview_at = data.get('interview_at')
         
-        print(f"✓ [면접 일시 설정] {session_id}: {scheduled_date}")
+        if not interview_at:
+            return jsonify({"success": False, "error": "interview_at이 필요합니다."}), 400
+        
+        # DB 연결
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "postgres"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "")
+        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # interview_at 업데이트
+        cur.execute("""
+            UPDATE interview.candidates
+            SET interview_at = %s
+            WHERE session_id = %s
+        """, (interview_at, session_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        print(f"✓ [면접 일시 저장] {session_id}: {interview_at}")
         
         return jsonify({
             "success": True,
-            "message": "면접 일시가 설정되었습니다."
+            "message": "면접 일시가 저장되었습니다."
         }), 200
         
     except Exception as e:
-        print(f"❌ [면접 일시 설정] 실패: {e}")
+        print(f"❌ [면접 일시 저장] 실패: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "success": False,
             "error": str(e)

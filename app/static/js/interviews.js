@@ -62,7 +62,8 @@ function renderInterviews(interviews) {
                 <td>${escapeHtml(interview.position || '-')}</td>
                 <td>
                     <input 
-                        type="date" 
+                        type="datetime-local" 
+                        value="${interview.interview_at ? interview.interview_at.slice(0, 16) : ''}"
                         onchange="updateInterviewDate('${interview.session_id}', this.value)"
                         style="padding: 0.5rem; border: 1px solid #e2e8f0; border-radius: 0.375rem; font-size: 0.875rem;"
                     />
@@ -70,7 +71,7 @@ function renderInterviews(interviews) {
                 <td>${statusBadge}</td>
                 <td>
                     <button 
-                        class="btn btn-sm positive" 
+                        class="btn btn-sm primary" 
                         onclick="startInterview('${interview.session_id}', '${escapeHtml(interview.name)}')"
                         style="padding: 0.5rem 1rem; font-size: 0.875rem;"
                     >
@@ -96,15 +97,37 @@ function getInterviewStatusBadge(status) {
 
 // 면접 일시 변경
 async function updateInterviewDate(sessionId, newDate) {
-    console.log('[Interviews] 면접 일시 설정:', sessionId, newDate);
+    console.log('[Interviews] 면접 일시 변경:', sessionId, newDate);
     
     if (!newDate) {
         alert('면접 일시를 선택해주세요.');
         return;
     }
     
-    // 로컬에만 저장 (실제로는 면접 시작 시 사용)
-    console.log('[Interviews] 면접 일시가 설정되었습니다:', newDate);
+    try {
+        const response = await fetch(`/api/interviews/${sessionId}/schedule`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                interview_at: newDate
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('[Interviews] 면접 일시 저장 완료');
+            // 새로고침 없이 조용히 저장
+        } else {
+            console.error('[Interviews] 면접 일시 저장 실패:', data.error);
+            alert('면접 일시 저장에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
+        }
+    } catch (error) {
+        console.error('[Interviews] 오류:', error);
+        alert('네트워크 오류: ' + error.message);
+    }
 }
 
 // 면접 시작

@@ -1,37 +1,36 @@
 <!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}지원자 풀 관리 시스템{% endblock %}</title>
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
+
     <!-- Admin CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
-    
+
     {% block extra_css %}{% endblock %}
 </head>
+
 <body>
     <div class="container">
-        <header class="header">
-            <h1 class="header-title">지원자 풀 관리 시스템</h1>
-            <p class="header-subtitle">채용 포지션별 키워드 기반 서류 심사 및 면접 워크플로우</p>
-        </header>
+
 
         <!-- 탭 네비게이션 -->
         <div class="tab-navigation" id="tab-navigation">
             <button data-tab="candidates" class="tab-btn active">
-                👥 지원자 관리
+                지원자 관리
             </button>
             <button data-tab="positions" class="tab-btn">
-                📋 포지션 관리 및 서류 전형
+                포지션 관리 및 서류 전형
             </button>
             <button data-tab="interviews" class="tab-btn">
-                🎤 면접 관리
+                면접 관리
             </button>
         </div>
 
@@ -45,4 +44,5 @@
     <script src="{{ url_for('static', filename='js/common.js') }}"></script>
     <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
+
 </html>

@@ -162,8 +162,8 @@ function renderCandidates(candidates) {
         const statusBadge = getStatusBadge(candidate.status);
         const createdDate = candidate.created_at ? new Date(candidate.created_at).toLocaleDateString('ko-KR') : '-';
         const portfolioBadge = candidate.has_portfolio 
-            ? '<span class="badge badge-success" style="font-size: 0.75rem;">제출 완료</span>' 
-            : '<span class="badge badge-secondary" style="font-size: 0.75rem;">미제출</span>';
+            ? '<span class="badge green">제출 완료</span>' 
+            : '<span class="badge">미제출</span>';
         
         return `
             <tr onclick="openCandidateDetail('${candidate.session_id}', '${escapeHtml(candidate.name)}')" style="cursor: pointer;">
@@ -231,12 +231,12 @@ async function openCandidateDetail(sessionId, name) {
         
         let tabsHtml = '';
         if (resumeFile) {
-            tabsHtml += `<button class="pdf-tab active" onclick="switchPdfFile('${resumeFile.file_path}', this)">📄 이력서</button>`;
+            tabsHtml += `<button class="pdf-tab active" onclick="switchPdfFile('${resumeFile.file_path}', this)">이력서</button>`;
         }
         // 포트폴리오 제출한 경우만 포트폴리오 탭 표시
         if (portfolioFile) {
             const isActive = !resumeFile ? 'active' : '';
-            tabsHtml += `<button class="pdf-tab ${isActive}" onclick="switchPdfFile('${portfolioFile.file_path}', this)">📁 포트폴리오</button>`;
+            tabsHtml += `<button class="pdf-tab ${isActive}" onclick="switchPdfFile('${portfolioFile.file_path}', this)">포트폴리오</button>`;
         }
         
         pdfTabs.innerHTML = tabsHtml;
@@ -289,13 +289,13 @@ function closePdfModal() {
 // 상태 배지 생성
 function getStatusBadge(status) {
     const badges = {
-        'pending': '<span class="badge badge-warning">대기</span>',
-        'interview_pending': '<span class="badge badge-success">서류 통과</span>',
-        'rejected': '<span class="badge badge-danger">불합격</span>',
-        'passed': '<span class="badge badge-success">합격</span>'
+        'pending': '<span class="badge yellow">대기</span>',
+        'interview_pending': '<span class="badge indigo">서류 통과</span>',
+        'rejected': '<span class="badge red">불합격</span>',
+        'passed': '<span class="badge green">합격</span>'
     };
     
-    return badges[status] || `<span class="badge badge-secondary">${status}</span>`;
+    return badges[status] || `<span class="badge">${status}</span>`;
 }
 
 // 페이지네이션 업데이트

@@ -18,11 +18,11 @@
         <!-- 키워드 후보군 -->
         <div class="keyword-pool-section">
           <div class="pool-header">
-            <h4> 키워드 후보 (클릭하여 추가)</h4>
+            <h4>키워드 후보 (클릭하여 추가)</h4>
             <div class="pool-actions">
               <input type="text" id="keywordInput" placeholder="직접 입력..." onkeypress="if(event.key==='Enter') addKeywordToPool()">
               <button onclick="addKeywordToPool()" class="btn-pool-add">+</button>
-              <button onclick="recommendKeywords()" class="btn-recommend"> AI 추천</button>
+              <button onclick="recommendKeywords()" class="btn-recommend">AI 추천</button>
             </div>
           </div>
           <div class="keywords-pool" id="keywordsPool">
@@ -35,7 +35,7 @@
              ondragover="handleDragOver(event)" 
              ondrop="handleDrop(event)">
           <div class="selected-header">
-            <h4> 선택된 키워드 (이 키워드로 검색)</h4>
+            <h4>선택된 키워드 (이 키워드로 검색)</h4>
             <span class="selected-count" id="selectedCount">0개</span>
           </div>
           <div class="keywords-selected" id="keywordsSelected">
@@ -43,7 +43,7 @@
           </div>
         </div>
         
-        <button onclick="startMatching()" class="btn-match" id="matchBtn">✓ 지원자 매칭 시작</button>
+        <button onclick="startMatching()" class="btn-match" id="matchBtn">지원자 매칭 시작</button>
       </div>
     </div>
 
@@ -78,8 +78,8 @@
       
       <div class="modal-body">
         <div class="tabs">
-          <button class="tab-btn active" onclick="switchTab('resume')">📄 이력서</button>
-          <button class="tab-btn" onclick="switchTab('portfolio')" id="portfolioTab" style="display:none;">📁 포트폴리오</button>
+          <button class="tab-btn active" onclick="switchTab('resume')">이력서</button>
+          <button class="tab-btn" onclick="switchTab('portfolio')" id="portfolioTab" style="display:none;">포트폴리오</button>
         </div>
         
         <div class="tab-content">
@@ -92,8 +92,8 @@
         </div>
         
         <div class="modal-actions">
-          <button onclick="updateCandidateStatus('interview_pending')" class="btn-pass">✓ 합격</button>
-          <button onclick="updateCandidateStatus('rejected')" class="btn-reject">× 불합격</button>
+          <button onclick="updateCandidateStatus('interview_pending')" class="btn-pass">합격</button>
+          <button onclick="updateCandidateStatus('rejected')" class="btn-reject">불합격</button>
         </div>
       </div>
     </div>
