@@ -867,7 +867,97 @@ def get_keyword_match_panel():
 
 @dashboard_bp.route("/interview-session")
 def interview_session():
-    """면접 진행 페이지"""
+    """면접 진행 페이지 - URL 파라미터를 GLOBAL_STATE에 저장"""
+    from app.routes.state_routes import GLOBAL_STATE
+    from app.db.db_connection import get_connection
+    
+    # URL 파라미터 가져오기
+    session_id = request.args.get('session_id')
+    name = request.args.get('name')
+    jd_id = request.args.get('jd_id')
+    position = request.args.get('position')
+    
+    print("\n" + "="*80)
+    print("🎯 [INTERVIEW SESSION] 면접 페이지 로드")
+    print("="*80)
+    print(f"📥 URL 파라미터:")
+    print(f"   - session_id: {session_id}")
+    print(f"   - name: {name}")
+    print(f"   - jd_id: {jd_id}")
+    print(f"   - position: {position}")
+    
+    # ✅ GLOBAL_STATE에 저장
+    if session_id:
+        GLOBAL_STATE.session_id = session_id
+        print(f"   ✅ GLOBAL_STATE.session_id = {session_id}")
+    
+    if name:
+        GLOBAL_STATE.candidate_name = name
+        print(f"   ✅ GLOBAL_STATE.candidate_name = {name}")
+    
+    if jd_id:
+        GLOBAL_STATE.jd_id = jd_id
+        print(f"   ✅ GLOBAL_STATE.jd_id = {jd_id}")
+    
+    if position:
+        GLOBAL_STATE.position = position
+        print(f"   ✅ GLOBAL_STATE.position = {position}")
+    
+    # ✅ DB에서 문서 존재 여부 확인
+    if session_id and jd_id:
+        try:
+            print(f"\n📊 DB에서 문서 확인 중...")
+            conn = get_connection()
+            cur = conn.cursor()
+            
+            # 이력서/포트폴리오 확인 (rag.documents)
+            cur.execute("""
+                SELECT doc_type, COUNT(*) as chunk_count
+                FROM rag.documents
+                WHERE session_id = %s::uuid
+                GROUP BY doc_type
+            """, (session_id,))
+            doc_counts = cur.fetchall()
+            
+            resume_chunks = 0
+            portfolio_chunks = 0
+            for doc_type, count in doc_counts:
+                if doc_type == 'resume':
+                    resume_chunks = count
+                    print(f"   ✅ 이력서: {count}개 청크")
+                elif doc_type == 'portfolio':
+                    portfolio_chunks = count
+                    print(f"   ✅ 포트폴리오: {count}개 청크")
+            
+            # JD 확인 (interview.job_descriptions)
+            cur.execute("""
+                SELECT jd_id, title, LENGTH(content) as content_len
+                FROM interview.job_descriptions
+                WHERE jd_id = %s::uuid AND embedding IS NOT NULL
+            """, (jd_id,))
+            jd_row = cur.fetchone()
+            
+            if jd_row:
+                jd_title = jd_row[1]
+                jd_len = jd_row[2]
+                print(f"   ✅ JD: {jd_title}, {jd_len}자")
+                GLOBAL_STATE.jd_len = jd_len
+            else:
+                print(f"   ⚠️  JD 없음 (jd_id={jd_id})")
+            
+            GLOBAL_STATE.resume_len = resume_chunks
+            GLOBAL_STATE.portfolio_len = portfolio_chunks
+            
+            cur.close()
+            conn.close()
+            
+        except Exception as e:
+            print(f"   ⚠️  DB 확인 실패: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    print("="*80 + "\n")
+    
     return render_template("admin/interview_session.html")
 
 @dashboard_bp.route("/api/candidates/<session_id>/info", methods=['GET'])

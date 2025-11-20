@@ -12,9 +12,9 @@ class EmbeddingAgent:
     def run(self, resume_file, jd_file, portfolio_file=None, session_id: str = None):
         print("\n📚 [EmbeddingAgent] 시작")
         
-        # Session ID 생성 (없으면 새로 생성)
+        # ✅ Session ID는 필수 (외부에서 전달받아야 함)
         if not session_id:
-            session_id = str(uuid.uuid4())
+            raise ValueError("session_id가 필요합니다. 외부에서 전달해주세요.")
         print(f"   📌 Session ID: {session_id}")
         
         # 1️⃣ PDF 텍스트 추출
