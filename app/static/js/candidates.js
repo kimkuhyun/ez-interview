@@ -177,10 +177,28 @@ function renderCandidates(candidates) {
             ? '<span class="badge green">제출 완료</span>' 
             : '<span class="badge">미제출</span>';
         
+        // 면접 완료 또는 보류 상태인 경우 결과 선택 드롭다운 표시
+        let resultDropdown = '';
+        if (candidate.status === 'interview_completed' || candidate.status === 'on_hold') {
+            const currentStatus = candidate.status === 'on_hold' ? 'on_hold' : '';
+            resultDropdown = `
+                <select 
+                    class="result-select" 
+                    onchange="updateCandidateResult('${candidate.session_id}', this.value)" 
+                    onclick="event.stopPropagation()"
+                >
+                    <option value="">결과 선택</option>
+                    <option value="passed" ${currentStatus === 'passed' ? 'selected' : ''}>✓ 합격</option>
+                    <option value="on_hold" ${currentStatus === 'on_hold' ? 'selected' : ''}>⏸ 보류</option>
+                    <option value="rejected" ${currentStatus === 'rejected' ? 'selected' : ''}>✗ 불합격</option>
+                </select>
+            `;
+        }
+        
         return `
             <tr onclick="openCandidateDetail('${candidate.session_id}', '${escapeHtml(candidate.name)}')" style="cursor: pointer;">
                 <td>${escapeHtml(candidate.name || '-')}</td>
-                <td>${statusBadge}</td>
+                <td>${statusBadge} ${resultDropdown}</td>
                 <td>${escapeHtml(candidate.position || '-')}</td>
                 <td>${createdDate}</td>
                 <td style="text-align: center;">${portfolioBadge}</td>
@@ -210,7 +228,7 @@ async function openCandidateDetail(sessionId, name) {
             return;
         }
         
-        if (data.files.length === 0) {
+        if (data.files.length === 0 && !data.report_path) {
             alert('제출된 서류가 없습니다.');
             return;
         }
@@ -218,6 +236,7 @@ async function openCandidateDetail(sessionId, name) {
         // 전역 객체에 저장
         window.candidatePdfState.currentFiles = data.files;
         window.candidatePdfState.currentName = name;
+        window.candidatePdfState.reportPath = data.report_path;
         
         // PDF 모달 열기
         const modal = document.getElementById('pdfModal');
@@ -235,6 +254,7 @@ async function openCandidateDetail(sessionId, name) {
         // 파일 정보 확인
         const resumeFile = data.files.find(f => f.type === 'resume');
         const portfolioFile = data.files.find(f => f.type === 'portfolio');
+        const reportPath = data.report_path;
         
         // 탭 표시
         pdfTabs.style.display = 'flex';
@@ -242,22 +262,32 @@ async function openCandidateDetail(sessionId, name) {
         pdfTabs.style.paddingTop = '0.75rem';
         
         let tabsHtml = '';
+        let firstFile = null;
+        
         if (resumeFile) {
             tabsHtml += `<button class="pdf-tab active" onclick="switchPdfFile('${resumeFile.file_path}', this)">이력서</button>`;
+            firstFile = resumeFile.file_path;
         }
+        
         // 포트폴리오 제출한 경우만 포트폴리오 탭 표시
         if (portfolioFile) {
             const isActive = !resumeFile ? 'active' : '';
             tabsHtml += `<button class="pdf-tab ${isActive}" onclick="switchPdfFile('${portfolioFile.file_path}', this)">포트폴리오</button>`;
+            if (!firstFile) firstFile = portfolioFile.file_path;
+        }
+        
+        // 리포트가 있는 경우 리포트 탭 추가
+        if (reportPath) {
+            const isActive = !resumeFile && !portfolioFile ? 'active' : '';
+            tabsHtml += `<button class="pdf-tab ${isActive}" onclick="switchPdfFile('${reportPath}', this)">면접 리포트</button>`;
+            if (!firstFile) firstFile = reportPath;
         }
         
         pdfTabs.innerHTML = tabsHtml;
         
-        // 파일 표시 (이력서 우선, 없으면 포트폴리오)
-        if (resumeFile) {
-            pdfViewer.src = `/api/files/${resumeFile.file_path}`;
-        } else if (portfolioFile) {
-            pdfViewer.src = `/api/files/${portfolioFile.file_path}`;
+        // 첫 번째 파일 표시
+        if (firstFile) {
+            pdfViewer.src = `/api/files/${firstFile}`;
         }
         
         // 모달 열기
@@ -308,11 +338,49 @@ function getStatusBadge(status) {
     const badges = {
         'pending': '<span class="badge yellow">대기</span>',
         'interview_pending': '<span class="badge indigo">서류 통과</span>',
-        'rejected': '<span class="badge red">불합격</span>',
-        'passed': '<span class="badge green">합격</span>'
+        'interview_in_progress': '<span class="badge" style="background: #3b82f6; color: white;">진행 중</span>',
+        'interview_completed': '<span class="badge" style="background: #8b5cf6; color: white;">완료</span>',
+        'passed': '<span class="badge green">합격</span>',
+        'on_hold': '<span class="badge" style="background: #f59e0b; color: white;">보류</span>',
+        'rejected': '<span class="badge red">불합격</span>'
     };
     
     return badges[status] || `<span class="badge">${status}</span>`;
+}
+
+// 면접 결과 업데이트 (지원자 관리 탭)
+async function updateCandidateResult(sessionId, status) {
+    if (!status) return;
+    
+    if (!confirm(`면접 결과를 "${status === 'passed' ? '합격' : status === 'on_hold' ? '보류' : '불합격'}"로 변경하시겠습니까?`)) {
+        // 선택 취소 시 드롭다운 초기화
+        event.target.value = '';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/interviews/${sessionId}/result`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ status: status })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('[Candidates] 면접 결과 업데이트 완료:', status);
+            // 목록 새로고침
+            loadCandidates();
+        } else {
+            console.error('[Candidates] 면접 결과 업데이트 실패:', data.error);
+            alert('면접 결과 저장에 실패했습니다: ' + (data.error || '알 수 없는 오류'));
+        }
+    } catch (error) {
+        console.error('[Candidates] 오류:', error);
+        alert('네트워크 오류: ' + error.message);
+    }
 }
 
 // 페이지네이션 업데이트

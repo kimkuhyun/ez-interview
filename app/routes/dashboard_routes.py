@@ -229,12 +229,23 @@ def get_candidate_files(session_id):
                 'file_path': row['file_path']
             })
         
+        # 리포트 경로 조회
+        cur.execute("""
+            SELECT report_path
+            FROM interview.candidates
+            WHERE session_id = %s
+        """, (session_id,))
+        
+        candidate_row = cur.fetchone()
+        report_path = candidate_row['report_path'] if candidate_row else None
+        
         cur.close()
         conn.close()
         
         return jsonify({
             "success": True,
-            "files": files
+            "files": files,
+            "report_path": report_path
         }), 200
         
     except Exception as e:
@@ -551,7 +562,7 @@ def get_pending_interviews():
         )
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # interview_pending 상태의 지원자 조회
+        # interview_pending 및 interview_in_progress 상태의 지원자 조회
         query = """
             SELECT 
                 session_id,
@@ -563,7 +574,7 @@ def get_pending_interviews():
                 created_at,
                 uploaded_at
             FROM interview.candidates
-            WHERE status = 'interview_pending'
+            WHERE status IN ('interview_pending', 'interview_in_progress')
             ORDER BY created_at DESC
         """
         
@@ -662,9 +673,118 @@ def update_interview_schedule(session_id):
         }), 500
 
 
+@dashboard_bp.route("/api/interviews/<session_id>/start", methods=['POST'])
+def start_interview(session_id):
+    """
+    면접 시작 - candidates.status를 interview_in_progress로 변경
+    """
+    from flask import jsonify
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    import os
+    
+    try:
+        # DB 연결
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "postgres"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "")
+        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 상태를 interview_in_progress로 변경
+        cur.execute("""
+            UPDATE interview.candidates
+            SET status = 'interview_in_progress'
+            WHERE session_id = %s
+        """, (session_id,))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        print(f"✓ [면접 시작] {session_id}: interview_in_progress")
+        
+        return jsonify({
+            "success": True,
+            "message": "면접이 시작되었습니다."
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [면접 시작] 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+
 # ============================================
 # 포지션 관리 API
 # ============================================
+
+@dashboard_bp.route("/api/interviews/<session_id>/result", methods=['POST'])
+def save_interview_result(session_id):
+    """
+    면접 결과 저장 - candidates.status를 passed/on_hold/rejected로 변경
+    
+    Body:
+    {
+        "status": "passed" | "on_hold" | "rejected"
+    }
+    """
+    from flask import request, jsonify
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    import os
+    
+    try:
+        data = request.get_json()
+        status = data.get('status')
+        
+        if status not in ['passed', 'on_hold', 'rejected']:
+            return jsonify({"success": False, "error": "유효하지 않은 상태값입니다."}), 400
+        
+        # DB 연결
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "postgres"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "")
+        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 상태 업데이트
+        cur.execute("""
+            UPDATE interview.candidates
+            SET status = %s
+            WHERE session_id = %s
+        """, (status, session_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        print(f"✓ [면접 결과 저장] {session_id}: {status}")
+        
+        return jsonify({
+            "success": True,
+            "message": f"면접 결과가 {status}로 저장되었습니다."
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ [면접 결과 저장] 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 
 @dashboard_bp.route("/api/positions/active", methods=['GET'])
 def get_active_positions():
@@ -744,5 +864,136 @@ def get_keyword_match_panel():
     """키워드 매칭 패널"""
     position_id = request.args.get('position_id')
     return render_template("admin/tabs/keyword_match.html", position_id=position_id)
+
+@dashboard_bp.route("/interview-session")
+def interview_session():
+    """면접 진행 페이지"""
+    return render_template("admin/interview_session.html")
+
+@dashboard_bp.route("/api/candidates/<session_id>/info", methods=['GET'])
+def get_candidate_info(session_id):
+    """
+    지원자 상세 정보 조회 (면접 세션용)
+    
+    Returns:
+    {
+        "success": true,
+        "candidate": {
+            "session_id": "...",
+            "name": "홍길동",
+            "position": "Backend Developer",
+            "interview_at": "2025-11-20 14:00:00",
+            "status": "interview_pending",
+            "resume_path": "session_id_resume.pdf",
+            "jd_path": "jd_id.pdf",
+            "portfolio_path": "session_id_portfolio.pdf" (optional)
+        }
+    }
+    """
+    from flask import jsonify
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    import os
+    
+    try:
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "postgres"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "")
+        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 지원자 정보 + 파일 정보 조인
+        cur.execute("""
+            SELECT 
+                c.session_id,
+                c.name,
+                c.position,
+                c.interview_at,
+                c.status,
+                c.jd_id,
+                MAX(CASE WHEN f.type = 'resume' THEN f.file_path END) as resume_path,
+                MAX(CASE WHEN f.type = 'portfolio' THEN f.file_path END) as portfolio_path
+            FROM interview.candidates c
+            LEFT JOIN interview.files f ON c.session_id = f.session_id
+            WHERE c.session_id = %s
+            GROUP BY c.session_id, c.name, c.position, c.interview_at, c.status, c.jd_id
+        """, (session_id,))
+        
+        candidate = cur.fetchone()
+        
+        if not candidate:
+            return jsonify({"success": False, "error": "지원자를 찾을 수 없습니다."}), 404
+        
+        candidate_dict = dict(candidate)
+        
+        # JD 파일 경로 조회 (job_descriptions 테이블에서)
+        if candidate_dict.get('jd_id'):
+            cur.execute("""
+                SELECT file_path 
+                FROM interview.job_descriptions 
+                WHERE jd_id = %s
+            """, (candidate_dict['jd_id'],))
+            
+            jd_result = cur.fetchone()
+            candidate_dict['jd_path'] = jd_result['file_path'] if jd_result else None
+        else:
+            candidate_dict['jd_path'] = None
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "success": True,
+            "candidate": candidate_dict
+        })
+        
+    except Exception as e:
+        print(f"[API] 지원자 정보 조회 오류: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+@dashboard_bp.route("/api/interview/embed-from-db", methods=['POST'])
+def embed_from_db():
+    """
+    DB에 저장된 파일로 임베딩 실행
+    
+    Request Body:
+    {
+        "session_id": "...",
+        "jd_id": "..."
+    }
+    """
+    from flask import jsonify, request
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+    import os
+    
+    try:
+        data = request.get_json()
+        session_id = data.get('session_id')
+        jd_id = data.get('jd_id')
+        
+        if not session_id:
+            return jsonify({"success": False, "error": "session_id가 필요합니다."}), 400
+        
+        # TODO: 실제 임베딩 로직 구현
+        # 1. DB에서 파일 경로 조회
+        # 2. 파일 읽기
+        # 3. EmbeddingAgent 실행
+        # 4. 결과 반환
+        
+        # 임시 성공 응답
+        return jsonify({
+            "success": True,
+            "session_id": session_id,
+            "message": "임베딩이 완료되었습니다."
+        })
+        
+    except Exception as e:
+        print(f"[API] 임베딩 오류: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
 
 

@@ -55,7 +55,7 @@ function ensureSocketConnected(callback) {
 
   if (!state.socket) {
     console.log("🔌 [STT 최적화] 웹소켓 연결 시작...");
-    state.socket = io("http://127.0.0.1:5000");
+    state.socket = io();
     
     // 🔒 연결 완료 전까지 STT 버튼 비활성화
     const sttBtn = document.getElementById("stt-btn");
@@ -432,10 +432,16 @@ function endInterview() {
   // 면접 종료 알림
   console.log("🎬 면접 종료 중...");
 
+  // 부모 창(interview_session.html)에서 session_id 가져오기
+  const sessionId = window.parent?.INTERVIEW_SESSION_ID || window.INTERVIEW_SESSION_ID;
+  
+  console.log("📍 Session ID:", sessionId);
+
   // 면접 로그를 DB에 저장하고 리포트 페이지로 이동
   fetch("/end_interview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId })
   })
     .then((res) => res.json())
     .then((data) => {

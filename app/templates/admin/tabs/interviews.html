@@ -1,14 +1,21 @@
 <div class="interviews-tab">
+  <div class="toolbar">
+    <div class="toolbar-left">진행 중인 면접</div>
+  </div>
 
-  <!-- 면접 세션 목록 -->
-  <div style="margin-top: 20px;">
-    <div style="font-weight: 600; margin-bottom: 10px;">진행 중인 면접</div>
-    <div id="interviews-list" class="table-wrap">
+  <div class="filters">
+    <select class="select" id="position-filter" onchange="filterInterviews()" style="max-width: 200px;">
+      <option value="">전체 포지션</option>
+    </select>
+    <input class="input" id="search-input" placeholder="이름 검색..." oninput="filterInterviews()" style="max-width: 200px;" />
+  </div>
+
+  <div class="table-wrap">
       <table>
         <thead>
           <tr>
             <th>지원자</th>
-            <th>포지션</th>
+            <th>지원 포지션</th>
             <th>면접 일시</th>
             <th>면접 상태</th>
             <th>인터뷰 진행</th>

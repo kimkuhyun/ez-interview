@@ -82,11 +82,11 @@ def report_view():
     return render_template("agents/report_view.html")
 
 
-@reports_bp.route("/pdf", methods=["GET", "POST"])
+@report_bp.route("/reports/pdf", methods=["GET", "POST"])
 def report_pdf():
     """
     리포트 PDF 다운로드용 엔드포인트 (Playwright 사용)
-    - POST(JSON): {"report": <ReportOut 딕셔너리>} → 재생성 없이 바로 PDF 변환
+    - POST(JSON): {"report": <ReportOut 딕셔너리>, "session_id": "...", "save_to_server": true} → 서버에 저장 및 DB 업데이트
     - GET: session_id, axes_keys, user_prompt 로 에이전트를 다시 호출해 PDF 생성
     """
     if sync_playwright is None:
@@ -99,9 +99,14 @@ def report_pdf():
 
     # 1) report JSON이 직접 넘어온 경우: 재생성 없이 그대로 사용
     report = None
+    session_id_from_request = None
+    save_to_server = False
+    
     if request.method == "POST" and request.is_json:
         data = request.get_json(silent=True) or {}
         report = data.get("report") or None
+        session_id_from_request = data.get("session_id")
+        save_to_server = data.get("save_to_server", False)
 
     # 2) JSON이 없으면 기존처럼 에이전트를 호출해 생성
     if report is None:
@@ -189,14 +194,72 @@ def report_pdf():
         }
         return jsonify(err), 500
 
-    # 파일명용 세션 ID는 report 메타데이터에서 우선 사용
+    # 파일명용 세션 ID 결정
     meta = report.get("metadata", {}) if isinstance(report, dict) else {}
-    filename_session = meta.get("session_id")
-    if not filename_session:
-        # GET 방식 호출에서만 session_id가 정의되어 있음
-        filename_session = locals().get("session_id", "report")
-
-    filename = f"interview_report_{filename_session}.pdf"
+    filename_session = session_id_from_request or meta.get("session_id") or locals().get("session_id", "report")
+    
+    filename = f"{filename_session}_report.pdf"
+    
+    # 서버에 저장 요청이 있는 경우
+    if save_to_server and filename_session:
+        import os
+        from pathlib import Path
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        
+        # uploads/reports 디렉토리 생성
+        reports_dir = Path("uploads/reports")
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        
+        # PDF 파일 저장
+        pdf_path = reports_dir / filename
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
+        
+        print(f"✅ PDF 저장 완료: {pdf_path}")
+        
+        # DB에 report_path 업데이트
+        try:
+            conn = psycopg2.connect(
+                host=os.getenv("DB_HOST", "localhost"),
+                port=os.getenv("DB_PORT", "5432"),
+                database=os.getenv("DB_NAME", "postgres"),
+                user=os.getenv("DB_USER", "postgres"),
+                password=os.getenv("DB_PASSWORD", "")
+            )
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            
+            relative_path = f"reports/{filename}"
+            cur.execute("""
+                UPDATE interview.candidates
+                SET report_path = %s
+                WHERE session_id = %s
+            """, (relative_path, filename_session))
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            print(f"✅ DB 업데이트 완료: report_path = {relative_path}")
+            
+            # JSON 응답 반환 (다운로드 URL 포함)
+            return jsonify({
+                "success": True,
+                "message": "PDF가 서버에 저장되었습니다.",
+                "file_path": str(pdf_path),
+                "download_url": f"/api/files/{relative_path}"
+            }), 200
+            
+        except Exception as e:
+            print(f"❌ DB 업데이트 실패: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({
+                "success": False,
+                "error": f"DB 업데이트 실패: {str(e)}"
+            }), 500
+    
+    # 일반 다운로드 (save_to_server=false인 경우)
     resp = Response(pdf_bytes, mimetype="application/pdf")
     resp.headers["Content-Disposition"] = f"attachment; filename={filename}"
     return resp

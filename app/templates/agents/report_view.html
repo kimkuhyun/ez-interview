@@ -248,9 +248,22 @@ async function startStreaming(){
     });
     es.addEventListener('error',e=>{try{const d=JSON.parse(e.data);showError({code:'AGENT_ERROR',message:d.message});}catch(err){showError({code:'AGENT_ERROR',message:'에이전트 오류 발생'});}es.close();});
     es.addEventListener('report',e=>{const ed=JSON.parse(e.data);const rd=ed.data||ed;currentReportData=rd;renderReport(rd);});
-    es.addEventListener('done',e=>{if($("loadingOverlay"))$("loadingOverlay").style.display="none";es.close();});
+    es.addEventListener('done',e=>{
+      if($("loadingOverlay"))$("loadingOverlay").style.display="none";
+      // 리포트 생성 완료 시 서버에 PDF 저장
+      if(currentReportData){
+        savePDFToServer(sid);
+      }
+      es.close();
+    });
     es.onerror=e=>{if(es.readyState===EventSource.CLOSED)console.log('EventSource 연결 종료');else showError({code:'STREAM_ERROR',message:'스트리밍 연결 오류'});es.close();};
   }catch(e){showError({code:'NETWORK',message:'네트워크 오류'});}
+}
+
+function savePDFToServer(sessionId){
+  if(!currentReportData||!sessionId){console.error('리포트 데이터 또는 세션 ID 없음');return;}
+  console.log('📄 서버에 PDF 저장 중...');
+  fetch('/reports/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({report:currentReportData,session_id:sessionId,save_to_server:true})}).then(res=>res.json()).then(data=>{if(data.success){console.log('✅ PDF 서버 저장 완료:',data.file_path);}else{console.error('❌ PDF 서버 저장 실패:',data.error);}}).catch(e=>{console.error('❌ PDF 저장 오류:',e);});
 }
 
 (function(){

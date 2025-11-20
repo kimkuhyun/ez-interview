@@ -55,6 +55,14 @@ def success_response(data=None):
 @stream_bp.route("/panel/stream")
 def stream_panel():
     """면접 페이지 로드"""
+    from flask import request
+    
+    # URL 파라미터에서 session_id 가져오기 (interview_session.html에서 전달)
+    session_id_param = request.args.get('session_id')
+    if session_id_param:
+        GLOBAL_STATE.session_id = session_id_param
+        print(f"🔄 GLOBAL_STATE.session_id 설정: {session_id_param}")
+    
     # GLOBAL_STATE의 questions 사용 (필수)
     if not GLOBAL_STATE.questions or len(GLOBAL_STATE.questions) == 0:
         return error_response("질문이 생성되지 않았습니다. Question Agent를 먼저 실행하세요.", 400)
@@ -227,10 +235,16 @@ def question_activated():
 def end_interview():
     """면접 종료 및 interview_logs DB 저장"""
     import json
+    from flask import request
     from app.utils.interview_store import save_interview_logs
+    
+    # 요청에서 session_id 가져오기
+    data = request.get_json() or {}
+    session_id_from_request = data.get('session_id')
     
     print("\n" + "="*80)
     print("📋 면접 종료 - Interview Logs")
+    print(f"📍 요청받은 Session ID: {session_id_from_request}")
     print("="*80)
     
     # GLOBAL_STATE.interview_logs 사용
@@ -250,10 +264,48 @@ def end_interview():
     
     print("="*80 + "\n")
     
-    # DB에 interview_logs 저장 (GLOBAL_STATE의 session_id 사용)
+    # DB에 interview_logs 저장 (요청에서 받은 session_id 사용)
     try:
-        session_id = save_interview_logs(interview_logs, GLOBAL_STATE.session_id)
+        # 요청에서 받은 session_id를 우선 사용, 없으면 GLOBAL_STATE 사용
+        session_id = session_id_from_request or GLOBAL_STATE.session_id
+        
+        if not session_id:
+            return error_response("Session ID가 없습니다.", 400)
+        
+        session_id = save_interview_logs(interview_logs, session_id)
         print(f"✅ DB 저장 완료 - Session ID: {session_id}\n")
+        
+        # 면접 상태를 'interview_completed'로 변경
+        import psycopg2
+        from psycopg2.extras import RealDictCursor
+        import os
+        
+        db_host = os.getenv("DB_HOST", "localhost")
+        db_port = os.getenv("DB_PORT", "5432")
+        db_name = os.getenv("DB_NAME", "postgres")
+        
+        print(f"🔍 DB 연결 정보: {db_host}:{db_port}/{db_name}")
+        
+        conn = psycopg2.connect(
+            host=db_host,
+            port=db_port,
+            database=db_name,
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "")
+        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            UPDATE interview.candidates
+            SET status = 'interview_completed'
+            WHERE session_id = %s
+        """, (session_id,))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        print(f"✅ 면접 상태 변경 완료: interview_completed\n")
         
         return success_response({
             "message": "면접 종료 및 DB 저장 완료",

@@ -633,6 +633,55 @@ tr:last-child td {
     background-color: var(--color-primary-light);
 }
 
+/* =========================================
+   Result Select (면접 결과 선택 드롭다운)
+   ========================================= */
+.result-select {
+    padding: 0.375rem 0.75rem;
+    font-size: 0.813rem;
+    border: 1.5px solid var(--color-border-dark);
+    border-radius: 0.5rem;
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 110px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23394867' d='M6 8L2 4h8z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.5rem center;
+    padding-right: 1.75rem;
+    appearance: none;
+}
+
+.result-select:hover {
+    border-color: var(--color-primary);
+    background-color: var(--color-bg-secondary);
+}
+
+.result-select:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.result-select option {
+    padding: 0.5rem;
+    font-weight: 500;
+}
+
+.result-select option[value="passed"] {
+    color: var(--color-success-dark);
+}
+
+.result-select option[value="on_hold"] {
+    color: var(--color-warning-dark);
+}
+
+.result-select option[value="rejected"] {
+    color: var(--color-danger-dark);
+}
+
 /* 로딩 스피너 애니메이션 */
 @keyframes spin {
     from {
