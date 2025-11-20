@@ -2,10 +2,11 @@ from app.db.db_connection import get_connection
 from app.utils.embedding import get_embedding
 from typing import Optional, Dict, List
 
-def search_similar_chunks(query: str, session_id: str = None, doc_type: str = None, top_k=3, metadata_filter: Optional[Dict] = None):
+def search_similar_chunks(query: str, session_id: str = None, jd_id: str = None, doc_type: str = None, top_k=3, metadata_filter: Optional[Dict] = None):
     print(f"\n📚 [RAG Retriever] 검색 시작")
     print(f"   - Query: {query[:100]}...")
     print(f"   - Session ID: {session_id}")
+    print(f"   - JD ID: {jd_id}")
     print(f"   - Doc Type: {doc_type}")
     print(f"   - Top-K: {top_k}")
     if metadata_filter:
@@ -26,42 +27,59 @@ def search_similar_chunks(query: str, session_id: str = None, doc_type: str = No
         # 3️⃣ 유사도 검색 쿼리 실행
         print(f"   3️⃣ 유사도 검색 쿼리 실행 중...")
         
-        # 🆕 Priority 2: 메타데이터 필터링 추가
-        where_conditions = []
-        params_list = []
-        
-        if session_id:
-            where_conditions.append("session_id = %s")
-            params_list.append(session_id)
-        
-        if doc_type:
-            where_conditions.append("doc_type = %s")
-            params_list.append(doc_type)
-        
-        # 🆕 섹션 필터링 (metadata->>'section')
-        if metadata_filter and "sections" in metadata_filter:
-            sections = metadata_filter["sections"]
-            if sections:
-                section_conditions = " OR ".join([f"metadata->>'section' = '{s}'" for s in sections])
-                where_conditions.append(f"({section_conditions})")
-                print(f"      🆕 섹션 필터: {sections}")
-        
-        where_clause = " AND ".join(where_conditions) if where_conditions else "TRUE"
-        
-        # PostgreSQL 쿼리
-        query_sql = f"""
-            SELECT content, doc_type, metadata, 1 - (embedding <=> %s::vector) AS score
-            FROM rag.documents
-            WHERE {where_clause}
-            ORDER BY embedding <-> %s::vector
-            LIMIT %s;
-        """
-        
-        # 파라미터 순서: emb, [session_id], [doc_type], emb, top_k
-        final_params = [emb] + params_list + [emb, top_k]
+        # 테이블 분기: JD vs Resume/Portfolio
+        if doc_type == "jd":
+            # JD는 interview.job_descriptions에서 조회
+            where_conditions = []
+            params_list = []
+            
+            if jd_id:
+                where_conditions.append("jd_id = %s::uuid")
+                params_list.append(jd_id)
+            
+            where_clause = " AND ".join(where_conditions) if where_conditions else "TRUE"
+            
+            query_sql = f"""
+                SELECT content, 'jd' as doc_type, NULL as metadata, 1 - (embedding <=> %s::vector) AS score
+                FROM interview.job_descriptions
+                WHERE {where_clause} AND embedding IS NOT NULL
+                ORDER BY embedding <-> %s::vector
+                LIMIT %s;
+            """
+            final_params = [emb] + params_list + [emb, top_k]
+        else:
+            # Resume/Portfolio는 rag.documents에서 조회
+            where_conditions = []
+            params_list = []
+            
+            if session_id:
+                where_conditions.append("session_id = %s::uuid")
+                params_list.append(session_id)
+            
+            if doc_type:
+                where_conditions.append("doc_type = %s")
+                params_list.append(doc_type)
+            
+            # 섹션 필터링 (metadata->>'section')
+            if metadata_filter and "sections" in metadata_filter:
+                sections = metadata_filter["sections"]
+                if sections:
+                    section_conditions = " OR ".join([f"metadata->>'section' = '{s}'" for s in sections])
+                    where_conditions.append(f"({section_conditions})")
+                    print(f"      🆕 섹션 필터: {sections}")
+            
+            where_clause = " AND ".join(where_conditions) if where_conditions else "TRUE"
+            
+            query_sql = f"""
+                SELECT content, doc_type, metadata, 1 - (embedding <=> %s::vector) AS score
+                FROM rag.documents
+                WHERE {where_clause}
+                ORDER BY embedding <-> %s::vector
+                LIMIT %s;
+            """
+            final_params = [emb] + params_list + [emb, top_k]
         
         cur.execute(query_sql, final_params)
-        
         results = cur.fetchall()
         print(f"      ✅ 검색 완료: {len(results)}개 결과 반환")
         
@@ -69,7 +87,8 @@ def search_similar_chunks(query: str, session_id: str = None, doc_type: str = No
         result_dicts = []
         if results:
             for idx, (content, dtype, metadata, score) in enumerate(results):
-                print(f"      [{idx+1}] doc_type={dtype}, score={score:.4f}, content_len={len(content)}, metadata={metadata}")
+                metadata_str = str(metadata) if metadata else "None"
+                print(f"      [{idx+1}] doc_type={dtype}, score={score:.4f}, content_len={len(content)}, metadata={metadata_str}")
                 result_dicts.append({
                     "content": content,
                     "doc_type": dtype,

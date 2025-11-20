@@ -7,8 +7,12 @@ import time
 question_bp = Blueprint("question", __name__)
 
 @question_bp.route("/panel/question")
-def question_panel():
+def question_page():
     return render_template("agents/question.html")
+
+@question_bp.route("/panel/interview")
+def interview_page():
+    return render_template("interview.html")
 
 # -------------------------------
 # 1️⃣ 문서 임베딩 단계
@@ -138,16 +142,23 @@ def generate_questions():
         num_questions = data.get("num_questions", 10)
         num_metrics = data.get("num_metrics", 10)
         session_id = data.get("session_id", None)
+        jd_id = data.get("jd_id", None)
         
         # session_id가 None이면 GLOBAL_STATE에서 가져오기
         if session_id is None:
             session_id = GLOBAL_STATE.session_id
             print(f"   ℹ️  session_id가 요청에 없음 → GLOBAL_STATE에서 조회")
         
+        # jd_id를 GLOBAL_STATE에 저장
+        if jd_id:
+            GLOBAL_STATE.jd_id = jd_id
+            print(f"   ✅ jd_id를 GLOBAL_STATE에 저장: {jd_id}")
+        
         print(f"   ✅ query_text: {query_text[:100]}...")
         print(f"   ✅ num_questions: {num_questions}")
         print(f"   ✅ num_metrics: {num_metrics}")
         print(f"   ✅ session_id: {session_id}")
+        print(f"   ✅ jd_id: {jd_id}")
         
         # 2️⃣ QuestionAgent 초기화 및 실행
         print("\n2️⃣ QuestionAgent 초기화")
