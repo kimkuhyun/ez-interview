@@ -233,6 +233,8 @@ async function startStreaming(){
   if(!sid){showError({code:'NO_SESSION',message:'session_id가 없습니다'});return;}
   const payload=new URLSearchParams();
   if(sid)payload.set('session_id',sid);
+  if(params.get('name'))payload.set('name',params.get('name'));
+  if(params.get('position'))payload.set('position',params.get('position'));
   if(params.get('axes_keys'))payload.set('axes_keys',params.get('axes_keys'));
   if(params.get('user_prompt'))payload.set('user_prompt',params.get('user_prompt'));
   try{

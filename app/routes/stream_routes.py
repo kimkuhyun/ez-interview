@@ -311,6 +311,8 @@ def end_interview():
             "message": "면접 종료 및 DB 저장 완료",
             "total_questions": len(interview_logs),
             "session_id": session_id,
+            "candidate_name": GLOBAL_STATE.candidate_name or "지원자",
+            "position": GLOBAL_STATE.position or "-",
             "redirect": "/panel/report"
         })
         

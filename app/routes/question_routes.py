@@ -12,6 +12,43 @@ def question_page():
 
 @question_bp.route("/panel/interview")
 def interview_page():
+    """면접 페이지 - URL 파라미터를 GLOBAL_STATE에 저장"""
+    from app.routes.state_routes import GLOBAL_STATE
+    
+    # URL 파라미터 가져오기
+    session_id = request.args.get('session_id')
+    name = request.args.get('name')
+    jd_id = request.args.get('jd_id')
+    position = request.args.get('position')
+    
+    print("\n" + "="*80)
+    print("🎯 [INTERVIEW PAGE] 면접 페이지 로드")
+    print("="*80)
+    print(f"📥 URL 파라미터:")
+    print(f"   - session_id: {session_id}")
+    print(f"   - name: {name}")
+    print(f"   - jd_id: {jd_id}")
+    print(f"   - position: {position}")
+    
+    # GLOBAL_STATE에 저장
+    if session_id:
+        GLOBAL_STATE.session_id = session_id
+        print(f"   ✅ GLOBAL_STATE.session_id = {session_id}")
+    
+    if name:
+        GLOBAL_STATE.candidate_name = name
+        print(f"   ✅ GLOBAL_STATE.candidate_name = {name}")
+    
+    if jd_id:
+        GLOBAL_STATE.jd_id = jd_id
+        print(f"   ✅ GLOBAL_STATE.jd_id = {jd_id}")
+    
+    if position:
+        GLOBAL_STATE.position = position
+        print(f"   ✅ GLOBAL_STATE.position = {position}")
+    
+    print("="*80 + "\n")
+    
     return render_template("interview.html")
 
 # -------------------------------
@@ -141,24 +178,18 @@ def generate_questions():
         query_text = data.get("query_text", "지원자 이력서 및 JD를 기반으로 면접 질문을 생성해라.")
         num_questions = data.get("num_questions", 10)
         num_metrics = data.get("num_metrics", 10)
-        session_id = data.get("session_id", None)
-        jd_id = data.get("jd_id", None)
         
-        # session_id가 None이면 GLOBAL_STATE에서 가져오기
-        if session_id is None:
-            session_id = GLOBAL_STATE.session_id
-            print(f"   ℹ️  session_id가 요청에 없음 → GLOBAL_STATE에서 조회")
-        
-        # jd_id를 GLOBAL_STATE에 저장
-        if jd_id:
-            GLOBAL_STATE.jd_id = jd_id
-            print(f"   ✅ jd_id를 GLOBAL_STATE에 저장: {jd_id}")
+        # session_id, jd_id, position은 GLOBAL_STATE에서만 가져오기 (새로 생성하지 않음)
+        session_id = GLOBAL_STATE.session_id
+        jd_id = GLOBAL_STATE.jd_id
+        position = GLOBAL_STATE.position
         
         print(f"   ✅ query_text: {query_text[:100]}...")
         print(f"   ✅ num_questions: {num_questions}")
         print(f"   ✅ num_metrics: {num_metrics}")
-        print(f"   ✅ session_id: {session_id}")
-        print(f"   ✅ jd_id: {jd_id}")
+        print(f"   ✅ session_id (GLOBAL_STATE): {session_id}")
+        print(f"   ✅ jd_id (GLOBAL_STATE): {jd_id}")
+        print(f"   ✅ position (GLOBAL_STATE): {position}")
         
         # 2️⃣ QuestionAgent 초기화 및 실행
         print("\n2️⃣ QuestionAgent 초기화")
@@ -173,7 +204,8 @@ def generate_questions():
             query_text=query_text, 
             num_questions=num_questions,
             num_metrics=num_metrics,
-            session_id=session_id
+            session_id=session_id,
+            jd_id=jd_id
         )
         step3_elapsed = time.perf_counter() - step3_start
         print(f"   ✅ Agent 실행 완료 ({step3_elapsed:.2f}초)")

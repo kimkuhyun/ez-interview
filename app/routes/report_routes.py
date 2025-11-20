@@ -115,7 +115,10 @@ def report_pdf():
         session_id = request.args.get("session_id") or GLOBAL_STATE.session_id
         metrics = GLOBAL_STATE.metrics
         user_prompt = request.args.get("user_prompt", "")
-        candidate_name = GLOBAL_STATE.candidate_name or "지원자"
+        
+        # URL 파라미터에서 우선 가져오고, 없으면 GLOBAL_STATE에서
+        candidate_name = request.args.get("name") or GLOBAL_STATE.candidate_name or "지원자"
+        position = request.args.get("position") or GLOBAL_STATE.position or "-"
 
         FALLBACK_SESSION_ID = "7ac7d019-0c29-4af8-abd3-8bf18f4544bf"
         if not session_id:
@@ -160,6 +163,7 @@ def report_pdf():
             report = create_report(
                 session_id=session_id,
                 candidate_name=candidate_name,
+                position_applied=position,
                 axes_keys=axes_keys,
                 user_prompt=user_prompt,
                 has_portfolio=bool(getattr(GLOBAL_STATE, "portfolio_len", 0)),
@@ -281,7 +285,10 @@ def generate_stream():
     session_id = request.args.get('session_id') or GLOBAL_STATE.session_id
     metrics = GLOBAL_STATE.metrics
     user_prompt = request.args.get('user_prompt', '')
-    candidate_name = GLOBAL_STATE.candidate_name or "지원자"
+    
+    # URL 파라미터에서 우선 가져오고, 없으면 GLOBAL_STATE에서
+    candidate_name = request.args.get('name') or GLOBAL_STATE.candidate_name or "지원자"
+    position = request.args.get('position') or GLOBAL_STATE.position or "-"
 
     # 폴백 session_id 처리
     FALLBACK_SESSION_ID = "7ac7d019-0c29-4af8-abd3-8bf18f4544bf"
@@ -323,8 +330,15 @@ def generate_stream():
     print(f"\n[스트리밍 파라미터]")
     print(f"   - session_id: {session_id}")
     print(f"   - candidate_name: {candidate_name}")
+    print(f"   - position: {position}")
     print(f"   - axes_keys: {axes_keys}")
     print(f"   - user_prompt: {user_prompt[:100] if user_prompt else '(없음)'}")
+    print(f"\n[🔑 GLOBAL_STATE 확인]")
+    print(f"   - GLOBAL_STATE.session_id: {GLOBAL_STATE.session_id}")
+    print(f"   - GLOBAL_STATE.jd_id: {getattr(GLOBAL_STATE, 'jd_id', None)}")
+    print(f"   - GLOBAL_STATE.candidate_name: {getattr(GLOBAL_STATE, 'candidate_name', None)}")
+    print(f"   - GLOBAL_STATE.position: {getattr(GLOBAL_STATE, 'position', None)}")
+    print()
 
     async def async_generate():
         """비동기 SSE 이벤트 생성기"""
@@ -335,6 +349,7 @@ def generate_stream():
             async for event in create_report_async(
                 session_id=session_id,
                 candidate_name=candidate_name,
+                position_applied=position,
                 axes_keys=axes_keys,
                 user_prompt=user_prompt,
                 has_portfolio=bool(getattr(GLOBAL_STATE, "portfolio_len", 0)),
