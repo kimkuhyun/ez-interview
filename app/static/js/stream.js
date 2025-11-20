@@ -55,7 +55,9 @@ function ensureSocketConnected(callback) {
 
   if (!state.socket) {
     console.log("🔌 [STT 최적화] 웹소켓 연결 시작...");
-    state.socket = io("http://127.0.0.1:5000");
+    const socketUrl = window.location.origin;
+    console.log(`   🌐 연결 주소: ${socketUrl}`);
+    state.socket = io(socketUrl);
     
     // 🔒 연결 완료 전까지 STT 버튼 비활성화
     const sttBtn = document.getElementById("stt-btn");
