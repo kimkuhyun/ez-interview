@@ -99,7 +99,7 @@ class QuestionAgent:
         self.chain = self.prompt | self.llm | self.parser
 
     # 메인 로직
-    def generate_questions_and_metrics(self, query_text: str, num_questions: int = 10, num_metrics: int = 10, session_id: str = None, existing_questions: list = None) -> InterviewState:
+    def generate_questions_and_metrics(self, query_text: str, num_questions: int = 10, num_metrics: int = 10, session_id: str = None, jd_id: str = None, existing_questions: list = None) -> InterviewState:
         """
         RAG로 필요한 문서 부분만 검색하여 질문 및 평가지표 생성
         
@@ -107,7 +107,8 @@ class QuestionAgent:
             query_text: 검색 쿼리 (기본값 사용)
             num_questions: 생성할 질문 개수 (기본값: 10)
             num_metrics: 생성할 평가지표 개수 (기본값: 10)
-            session_id: 세션 UUID
+            session_id: 세션 UUID (이력서/포트폴리오 검색용)
+            jd_id: JD ID (JD 검색용)
             existing_questions: 기존 질문 리스트 (중복 방지용)
         """
         
@@ -197,14 +198,16 @@ class QuestionAgent:
         rag_start = time.time()
         print(f"\n🔍 [Step 1] RAG 검색 (메타데이터 필터링 적용)")
         print(f"   - Session ID: {session_id}")
+        print(f"   - JD ID: {jd_id}")
         print(f"   - Portfolio 제출 여부: {has_portfolio}")
         
         try:
-            # JD 중심 검색 (top 3) - 필수
+            # JD 중심 검색 (top 3) - 필수, jd_id 사용
             jd_query = "JD 필수 역량, 우대 사항, 주요 업무"
             jd_chunks = search_similar_chunks(
                 query=jd_query,
                 session_id=session_id,
+                jd_id=jd_id,
                 doc_type="jd",
                 top_k=3,
                 metadata_filter=None  # JD는 필터 없음

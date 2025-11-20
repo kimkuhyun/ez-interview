@@ -303,6 +303,7 @@ class ReportState(TypedDict):
     position_applied: str
     user_prompt: str
     axes: List[str]
+    jd_id: Optional[str]  # 🆕 JD ID 추가
 
     resume_text: Optional[str]
     jd_text: Optional[str]
@@ -359,11 +360,31 @@ def node_query_plan(state: ReportState) -> Dict[str, Any]:
 def node_retrieve(state: ReportState) -> Dict[str, Any]:
     qp = state["query_plan"]
     session_id = state["session_id"]
+    jd_id = state.get("jd_id")  # state에서 jd_id 가져오기
     
-    resume_ctx = search_similar_chunks(qp.resume_query, doc_type="resume", top_k=5) if qp.resume_query else ""
-    jd_ctx = search_similar_chunks(qp.competency_query, doc_type="jd", top_k=3) if qp.competency_query else ""
+    print("\n" + "="*80)
+    print("🔍 [RETRIEVE NODE] RAG 검색 시작")
+    print("="*80)
+    print(f"🎯 검색 파라미터:")
+    print(f"   - session_id (resume/portfolio용): {session_id}")
+    print(f"   - jd_id (JD용): {jd_id}")
+    print(f"   - resume_query: {qp.resume_query[:100] if qp.resume_query else 'None'}...")
+    print(f"   - competency_query (JD): {qp.competency_query[:100] if qp.competency_query else 'None'}...")
+    print(f"   - portfolio_query: {qp.portfolio_query[:100] if qp.portfolio_query else 'None'}...")
+    print("="*80)
+    
+    resume_ctx = search_similar_chunks(qp.resume_query, session_id=session_id, doc_type="resume", top_k=5) if qp.resume_query else ""
+    print(f"✅ Resume 검색 완료: {len(str(resume_ctx))} 자")
+    
+    jd_ctx = search_similar_chunks(qp.competency_query, jd_id=jd_id, doc_type="jd", top_k=3) if qp.competency_query else ""
+    print(f"✅ JD 검색 완료: {len(str(jd_ctx))} 자")
+    
     interview_ctx = retrieve_interview_context(session_id) if session_id else ""
-    portfolio_ctx = search_similar_chunks(qp.portfolio_query, doc_type="portfolio", top_k=3) if qp.portfolio_query and qp.portfolio_query.strip() else None
+    print(f"✅ Interview 검색 완료: {len(str(interview_ctx))} 자")
+    
+    portfolio_ctx = search_similar_chunks(qp.portfolio_query, session_id=session_id, doc_type="portfolio", top_k=3) if qp.portfolio_query and qp.portfolio_query.strip() else None
+    print(f"✅ Portfolio 검색 완료: {len(str(portfolio_ctx)) if portfolio_ctx else 0} 자")
+    print("="*80 + "\n")
     
     return {
         "resume_ctx": resume_ctx,
@@ -542,6 +563,16 @@ def node_assemble_report(state: ReportState) -> Dict[str, Any]:
     quality = state["quality_out"]
     final = state["final_out"]
     
+    print("\n" + "="*80)
+    print("📋 [ASSEMBLE REPORT] 리포트 최종 조립")
+    print("="*80)
+    print("📊 메타데이터 확인:")
+    print(f"   - candidate_name: {state['candidate_name']}")
+    print(f"   - position_applied: {state['position_applied']}")
+    print(f"   - session_id: {state['session_id']}")
+    print(f"   - jd_id: {state.get('jd_id')}")
+    print("="*80 + "\n")
+    
     report = ReportOut(
         metadata=candiMeta(
             candidate_name=state["candidate_name"],
@@ -630,12 +661,15 @@ def create_report(
     interview_logs: Optional[str] = None,
     has_portfolio: bool = False,
 ) -> Dict[str, Any]:
+    from app.routes.state_routes import GLOBAL_STATE
+    
     graph = build_report_graph()
     
     initial_state: ReportState = {
         "session_id": session_id,
         "candidate_name": candidate_name,
         "position_applied": position_applied,
+        "jd_id": getattr(GLOBAL_STATE, "jd_id", None),  # 🆕 jd_id 추가
         "user_prompt": user_prompt or "표준 평가 기준으로 진행",
         "axes": axes_keys,
         "resume_text": resume_text,
@@ -665,6 +699,7 @@ def create_report(
 async def create_report_async(
     session_id: str,
     candidate_name: str,
+    position_applied: str,
     axes_keys: List[str],
     user_prompt: Optional[str] = None,
     resume_text: Optional[str] = None,
@@ -675,12 +710,29 @@ async def create_report_async(
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """스트리밍 버전 - 각 에이전트 실행 중 이벤트를 yield"""
     try:
+        print("\n" + "="*80)
+        print("📊 [REPORT AGENT] 리포트 생성 시작")
+        print("="*80)
+        print(f"👤 후보자 정보:")
+        print(f"   - session_id: {session_id}")
+        print(f"   - candidate_name: {candidate_name}")
+        print(f"   - position_applied: {position_applied}")
+        print(f"   - axes_keys: {axes_keys}")
+        print(f"   - has_portfolio: {has_portfolio}")
+        
+        # GLOBAL_STATE에서 jd_id 가져오기
+        from app.routes.state_routes import GLOBAL_STATE
+        jd_id = getattr(GLOBAL_STATE, "jd_id", None)
+        print(f"   - jd_id: {jd_id}")
+        print("="*80 + "\n")
+        
         graph = build_report_graph()
         
         initial_state: ReportState = {
             "session_id": session_id,
             "candidate_name": candidate_name,
-            "position_applied": axes_keys[0] if axes_keys else "지원자",
+            "position_applied": position_applied,
+            "jd_id": jd_id,  # 🆕 jd_id 추가
             "user_prompt": user_prompt or "표준 평가 기준으로 진행",
             "axes": axes_keys,
             "resume_text": resume_text,

@@ -8,6 +8,7 @@ class InterviewState(BaseModel):
     """
     session_id: Optional[str] = None  # 전체 서비스 세션 UUID (면접 단위)
     candidate_name: Optional[str] = None  # 면접자 이름 (필수)
+    position: Optional[str] = None    # 지원 포지션
     resume_id: Optional[str] = None   # Resume 문서 UUID (doc_id)
     jd_id: Optional[str] = None       # JD 문서 UUID (doc_id)
     portfolio_id: Optional[str] = None  # Portfolio 문서 UUID (doc_id, 선택)

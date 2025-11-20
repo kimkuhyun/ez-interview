@@ -299,8 +299,9 @@ function closePdfModal() {
 }
 
 // 면접 시작
-function startInterview(sessionId, name, jdId) {
-    window.location.href = `/panel/interview?session_id=${sessionId}&name=${encodeURIComponent(name)}&jd_id=${jdId}`;
+function startInterview(sessionId, name, jdId, position) {
+    console.log('[Candidates] 면접 시작:', sessionId, name, jdId, position);
+    window.location.href = `/panel/interview?session_id=${sessionId}&name=${encodeURIComponent(name)}&jd_id=${jdId}&position=${encodeURIComponent(position)}`;
 }
 
 // 상태 배지 생성

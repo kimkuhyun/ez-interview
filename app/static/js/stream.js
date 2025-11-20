@@ -449,14 +449,17 @@ function endInterview() {
           `리포트 페이지로 이동합니다.`
       );
 
+      // 리포트 URL에 name과 position 파라미터 추가
+      const reportUrl = `/panel/report/view?session_id=${data.session_id}&name=${encodeURIComponent(data.candidate_name || '지원자')}&position=${encodeURIComponent(data.position || '-')}`;
+
       // 오른쪽 패널만 리포트로 변경 (전체 페이지 리다이렉트 방지)
       if (window.parent && window.parent.loadPanel) {
         // interview.html의 loadPanel 함수 호출
-        window.parent.loadPanel('report');
+        window.parent.location.href = reportUrl;
       } else {
         console.warn("⚠️ loadPanel 함수를 찾을 수 없어 fallback 사용");
         // fallback: 전체 페이지 리다이렉트
-        window.location.href = "/panel/report";
+        window.location.href = reportUrl;
       }
     })
     .catch((err) => {
