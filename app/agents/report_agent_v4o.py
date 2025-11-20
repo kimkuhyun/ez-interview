@@ -439,7 +439,7 @@ async def node_parallel_analysis(state: ReportState) -> Dict[str, Any]:
         ])
         
         summary_chain = summary_prompt | _llm_solar_chat() | summary_parser
-        quality_chain = quality_prompt | _llm_solar_reasoning() | quality_parser
+        quality_chain = quality_prompt | _llm_gpt() | quality_parser
         
         tasks.append(summary_chain.ainvoke({"interview": interview, "axes": axes, "jd": jd, "format_instructions": summary_parser.get_format_instructions()}))
         task_names.append("summary")
