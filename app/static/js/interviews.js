@@ -154,6 +154,7 @@ async function updateInterviewDate(sessionId, newDate) {
 }
 
 // 면접 시작
+
 async function startInterview(sessionId, name, jdId) {
     console.log('[Interviews] 면접 시작:', sessionId, name, jdId);
     
