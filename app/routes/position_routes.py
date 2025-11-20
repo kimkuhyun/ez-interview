@@ -124,8 +124,7 @@ def get_position(jd_id):
 
 @position_bp.route('/<jd_id>/recommend-keywords', methods=['POST'])
 def recommend_keywords(jd_id):
-    """AI 키워드 추천 (GPT-4o)"""
-    from app.utils.file_utils import extract_text
+    """AI 키워드 추천 (GPT-4o) - DB content 활용"""
     from openai import OpenAI
     from app.config.config import Config
     
@@ -134,9 +133,9 @@ def recommend_keywords(jd_id):
     conn = get_connection()
     cur = conn.cursor()
     
-    # 1️⃣ DB에서 JD 파일 경로 조회
+    # 1️⃣ DB에서 저장된 content 조회 (파일 읽기 불필요)
     cur.execute("""
-        SELECT file_path FROM interview.job_descriptions 
+        SELECT content FROM interview.job_descriptions 
         WHERE jd_id = %s::uuid
     """, (jd_id,))
     
@@ -145,37 +144,15 @@ def recommend_keywords(jd_id):
     conn.close()
     
     if not row or not row[0]:
-        return jsonify({"error": "JD 파일을 찾을 수 없습니다"}), 404
+        return jsonify({"error": "JD 내용을 찾을 수 없습니다"}), 404
     
-    # 2️⃣ 파일 읽기
-    file_path = Path(__file__).parent.parent.parent / 'uploads' / row[0]
+    jd_text = row[0]
+    print(f"   ✅ DB에서 content 조회 완료: {len(jd_text)} 자")
     
-    if not file_path.exists():
-        return jsonify({"error": "JD 파일이 존재하지 않습니다"}), 404
+    if not jd_text or len(jd_text) < 50:
+        return jsonify({"error": "JD 내용이 너무 짧습니다"}), 400
     
-    print(f"   📄 파일 경로: {file_path}")
-    
-    # 3️⃣ 파일에서 텍스트 추출 (PDF/DOCX/이미지 모두 지원)
-    try:
-        with open(file_path, 'rb') as f:
-            from werkzeug.datastructures import FileStorage
-            file_storage = FileStorage(
-                stream=f,
-                filename=file_path.name,
-                content_type='application/octet-stream'
-            )
-            jd_text = extract_text(file_storage)
-        
-        print(f"   ✅ 텍스트 추출 완료: {len(jd_text)} 자")
-        
-        if not jd_text or len(jd_text) < 50:
-            return jsonify({"error": "JD 파일에서 텍스트를 추출할 수 없습니다"}), 400
-        
-    except Exception as e:
-        print(f"   ❌ 파일 읽기 실패: {e}")
-        return jsonify({"error": f"파일 읽기 실패: {str(e)}"}), 500
-    
-    # 4️⃣ GPT-4o로 키워드 추출
+    # 2️⃣ GPT-4o로 키워드 추출
     try:
         client = OpenAI(api_key=Config.OPENAI_API_KEY)
         
@@ -204,7 +181,7 @@ def recommend_keywords(jd_id):
                 }
             ],
             temperature=0.3,
-            max_tokens=3000
+            max_tokens=7000
         )
         
         result = response.choices[0].message.content.strip()

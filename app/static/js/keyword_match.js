@@ -128,7 +128,7 @@ function renderKeywords() {
 async function recommendKeywords() {
   const btn = event.target;
   btn.disabled = true;
-  btn.textContent = '🤖 추천 중...';
+  btn.textContent = '추천 중...';
   
   try {
     const res = await fetch(`/api/positions/${currentPositionId}/recommend-keywords`, {
@@ -149,7 +149,7 @@ async function recommendKeywords() {
     alert('AI 추천 실패: ' + error.message);
   } finally {
     btn.disabled = false;
-    btn.textContent = '🤖 AI 추천';
+    btn.textContent = 'AI 추천';
   }
 }
 
@@ -170,7 +170,7 @@ async function startMatching() {
   
   const btn = document.getElementById('matchBtn');
   btn.disabled = true;
-  btn.textContent = '⏳ 매칭 중...';
+  btn.textContent = '매칭 중...';
   
   try {
     // 선택된 키워드만 매칭에 사용

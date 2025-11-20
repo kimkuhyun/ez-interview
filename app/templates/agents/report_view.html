@@ -4,275 +4,1100 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>면접 리포트</title>
-  <style>{% include 'css/report.css' %}</style>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
-    .loading-overlay{position:fixed;inset:0;background:rgba(255,255,255,0.95);display:flex;align-items:center;justify-content:center;z-index:9999;}
-    .loading-spinner{width:50px;height:50px;border:4px solid #e5e7eb;border-top-color:#6366f1;border-radius:50%;animation:spin 1s linear infinite;}
-    @keyframes spin{to{transform:rotate(360deg);}}
-    .loading-text{margin-top:1rem;font-size:14px;color:#374151;max-width:720px;text-align:center;font-weight:500;}
-    .slot-wrapper{margin-top:1rem;max-height:20rem;overflow-y:auto;padding:0;max-width:720px;width:100%;text-align:center;}
-    .agent-log-item{padding:0.75rem 0;font-size:0.875rem;color:#1f2937;line-height:1.6;opacity:0.85;text-align:left;}
-    .debate-container{display:none;}
+    /* =========================================
+       Base & Variables (admin.css 기반)
+       ========================================= */
+    :root {
+      --color-primary: #394867;
+      --color-primary-dark: #14274E;
+      --color-primary-light: rgba(57, 72, 103, 0.1);
+      --color-success: #4a9d8e;
+      --color-success-dark: #3a7d71;
+      --color-success-light: #e8f5f2;
+      --color-danger: #d96459;
+      --color-danger-light: #fbeae9;
+      --color-warning: #e8a95d;
+      --color-warning-light: #fef5eb;
+      --color-info: #6b8cb5;
+      --color-info-light: rgba(107, 140, 181, 0.12);
+      --color-gray-100: #F1F6F9;
+      --color-gray-200: #e5eaef;
+      --color-gray-300: #d0d7e0;
+      --color-gray-400: #9BA4B4;
+      --color-gray-600: #5f6a7d;
+      --color-gray-900: #14274E;
+      --color-bg-primary: #ffffff;
+      --color-bg-secondary: #F1F6F9;
+      --color-text-primary: #14274E;
+      --color-text-secondary: #394867;
+      --color-text-tertiary: #7d8799;
+      --color-border-light: #F1F6F9;
+      --color-border-medium: #e5eaef;
+      --color-border-dark: #d0d7e0;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--color-bg-secondary);
+      color: var(--color-text-primary);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      min-height: 100vh;
+    }
+
+    /* =========================================
+       Loading Overlay
+       ========================================= */
+    .loading-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(241, 246, 249, 0.98);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      backdrop-filter: blur(4px);
+    }
+
+    .loading-spinner {
+      width: 48px;
+      height: 48px;
+      border: 4px solid var(--color-gray-200);
+      border-top-color: var(--color-primary);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      margin-top: 1.25rem;
+      font-size: 0.875rem;
+      color: var(--color-text-secondary);
+      font-weight: 600;
+      text-align: center;
+      max-width: 640px;
+    }
+
+    .slot-wrapper {
+      margin-top: 1rem;
+      max-height: 18rem;
+      overflow-y: auto;
+      padding: 0 0.5rem;
+      max-width: 640px;
+      width: 100%;
+    }
+
+    .slot-wrapper::-webkit-scrollbar { width: 6px; }
+    .slot-wrapper::-webkit-scrollbar-track { background: var(--color-gray-100); border-radius: 10px; }
+    .slot-wrapper::-webkit-scrollbar-thumb { background: var(--color-gray-400); border-radius: 10px; }
+
+    .agent-log-item {
+      padding: 0.625rem 0;
+      font-size: 0.813rem;
+      color: var(--color-text-secondary);
+      line-height: 1.5;
+      text-align: left;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    .agent-log-item:last-child { border-bottom: none; }
+
+    .debate-container { display: none; }
+
+    /* =========================================
+       Container & Layout
+       ========================================= */
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+      background: var(--color-bg-primary);
+      min-height: 100vh;
+    }
+
+    /* =========================================
+       Header
+       ========================================= */
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: 1.5rem;
+      margin-bottom: 2rem;
+      border-bottom: 2px solid var(--color-border-medium);
+    }
+
+    .header h1 {
+      font-size: 1.875rem;
+      font-weight: 700;
+      color: var(--color-gray-900);
+      margin-bottom: 0.375rem;
+    }
+
+    .header p {
+      font-size: 0.875rem;
+      color: var(--color-text-tertiary);
+      font-weight: 500;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 0.625rem;
+    }
+
+    /* =========================================
+       Buttons
+       ========================================= */
+    .btn {
+      padding: 0.625rem 1.25rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border: none;
+      border-radius: 0.375rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    }
+
+    .btn-success {
+      background: var(--color-success);
+      color: white;
+    }
+
+    .btn-success:hover {
+      background: var(--color-success-dark);
+      box-shadow: 0 2px 4px rgba(74, 157, 142, 0.3);
+    }
+
+    .btn-secondary {
+      background: var(--color-gray-600);
+      color: white;
+    }
+
+    .btn-secondary:hover {
+      background: var(--color-primary);
+      box-shadow: 0 2px 4px rgba(57, 72, 103, 0.3);
+    }
+
+    .no-print { display: inline-block; }
+
+    /* =========================================
+       Alert
+       ========================================= */
+    .alert {
+      background: var(--color-danger-light);
+      border: 1px solid var(--color-danger);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .alert-title {
+      font-weight: 700;
+      color: var(--color-danger);
+      margin-bottom: 0.5rem;
+    }
+
+    .alert-body {
+      font-size: 0.875rem;
+      color: var(--color-text-secondary);
+    }
+
+    .code {
+      background: rgba(217, 100, 89, 0.1);
+      border: 1px solid var(--color-danger);
+      color: var(--color-danger);
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+
+    /* =========================================
+       Cards
+       ========================================= */
+    .card {
+      background: var(--color-bg-primary);
+      border: 1px solid var(--color-border-medium);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+      transition: box-shadow 0.2s ease;
+    }
+
+    .card:hover {
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.07);
+    }
+
+    .card-header {
+      font-size: 1.125rem;
+      font-weight: 700;
+      color: var(--color-gray-900);
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 2px solid var(--color-border-medium);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-highlight {
+      border-width: 2px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    .card-indigo {
+      border-color: var(--color-info);
+      background: linear-gradient(135deg, var(--color-bg-primary) 0%, var(--color-info-light) 100%);
+    }
+
+    .card-indigo .card-header { color: var(--color-info); }
+
+    .card-emerald {
+      border-color: var(--color-success);
+      background: linear-gradient(135deg, var(--color-bg-primary) 0%, var(--color-success-light) 100%);
+    }
+
+    .card-emerald .card-header { color: var(--color-success); }
+
+    /* =========================================
+       Grid Layout
+       ========================================= */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 968px) {
+      .grid-2 { grid-template-columns: 1fr; }
+    }
+
+    /* =========================================
+       Headline Section
+       ========================================= */
+    .headline {
+      background: linear-gradient(135deg, var(--color-bg-primary) 0%, var(--color-info-light) 100%);
+      border: 2px solid var(--color-info);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      box-shadow: 0 2px 8px rgba(107, 140, 181, 0.1);
+    }
+
+    .headline-summary {
+      font-size: 1.125rem;
+      font-weight: 600;
+      color: var(--color-gray-900);
+      line-height: 1.6;
+      margin-bottom: 1rem;
+    }
+
+    .headline-keywords {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .headline-keyword {
+      background: var(--color-info-light);
+      color: var(--color-info);
+      border: 1px solid var(--color-info);
+      padding: 0.375rem 0.875rem;
+      border-radius: 9999px;
+      font-size: 0.813rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* =========================================
+       Reliability Scores
+       ========================================= */
+    .reliability-scores {
+      display: flex;
+      gap: 1.5rem;
+      background: var(--color-bg-secondary);
+      border: 1px solid var(--color-border-medium);
+      border-radius: 0.5rem;
+      padding: 1rem 1.5rem;
+      min-width: 280px;
+    }
+
+    .reliability-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .reliability-label {
+      font-size: 0.75rem;
+      color: var(--color-text-tertiary);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .reliability-value {
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--color-primary);
+    }
+
+    /* =========================================
+       Chart Container
+       ========================================= */
+    .chart-container {
+      height: 380px;
+      background: var(--color-bg-primary);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* =========================================
+       Summary Scroll (Interview Flow)
+       ========================================= */
+    .summary-scroll {
+      max-height: 380px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    .summary-scroll::-webkit-scrollbar { width: 6px; }
+    .summary-scroll::-webkit-scrollbar-track { background: var(--color-gray-100); border-radius: 10px; }
+    .summary-scroll::-webkit-scrollbar-thumb { background: var(--color-gray-400); border-radius: 10px; }
+
+    .qa-simple {
+      background: var(--color-success-light);
+      border-left: 3px solid var(--color-success);
+      border-radius: 0.375rem;
+      padding: 1rem;
+      margin-bottom: 0.875rem;
+      transition: all 0.2s ease;
+    }
+
+    .qa-simple:hover {
+      box-shadow: 0 2px 6px rgba(74, 157, 142, 0.15);
+      transform: translateX(2px);
+    }
+
+    .qa-topic {
+      font-weight: 700;
+      font-size: 0.875rem;
+      color: var(--color-success-dark);
+      margin-bottom: 0.5rem;
+      line-height: 1.4;
+    }
+
+    .qa-summary {
+      font-size: 0.813rem;
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+    }
+
+    /* =========================================
+       Prose (Commentary)
+       ========================================= */
+    .prose p {
+      margin: 0;
+      font-size: 0.875rem;
+      line-height: 1.7;
+      color: var(--color-text-secondary);
+    }
+
+    /* =========================================
+       Tables
+       ========================================= */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      border: 1px solid var(--color-border-medium);
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+
+    thead {
+      background: var(--color-bg-secondary);
+      border-bottom: 2px solid var(--color-border-medium);
+    }
+
+    th {
+      padding: 0.875rem 1rem;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: var(--color-gray-600);
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 0.875rem 1rem;
+      font-size: 0.875rem;
+      color: var(--color-text-primary);
+      border-top: 1px solid var(--color-border-light);
+    }
+
+    tbody tr {
+      transition: background 0.15s ease;
+    }
+
+    tbody tr:hover {
+      background: var(--color-bg-secondary);
+    }
+
+    /* =========================================
+       Badges
+       ========================================= */
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      border-radius: 9999px;
+      white-space: nowrap;
+    }
+
+    .badge-indigo {
+      background: var(--color-info-light);
+      color: var(--color-info);
+      border: 1px solid var(--color-info);
+    }
+
+    .badge-purple {
+      background: rgba(139, 92, 246, 0.12);
+      color: #7c3aed;
+      border: 1px solid #a78bfa;
+    }
+
+    .eid-link {
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .eid-link:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 6px rgba(107, 140, 181, 0.3);
+    }
+
+    /* =========================================
+       Evidence Row Highlight
+       ========================================= */
+    .evidence-row {
+      transition: all 0.3s ease;
+    }
+
+    .evidence-highlight {
+      background: var(--color-info-light) !important;
+      box-shadow: 0 0 0 2px var(--color-info);
+    }
+
+    /* =========================================
+       Stats
+       ========================================= */
+    .stats {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      padding: 1.25rem;
+      background: var(--color-bg-secondary);
+      border-radius: 0.5rem;
+      border: 1px solid var(--color-border-medium);
+    }
+
+    .stats-item {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .stats-label {
+      font-weight: 600;
+      color: var(--color-text-tertiary);
+      font-size: 0.875rem;
+    }
+
+    .stats-value {
+      font-weight: 700;
+      color: var(--color-primary);
+      font-size: 0.875rem;
+    }
+
+    /* =========================================
+       Empty State
+       ========================================= */
+    .empty {
+      height: 300px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px dashed var(--color-border-dark);
+      border-radius: 0.5rem;
+      background: var(--color-bg-secondary);
+    }
+
+    .empty p {
+      color: var(--color-text-tertiary);
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    /* =========================================
+       Print Styles
+       ========================================= */
+    @media print {
+      body * { visibility: hidden; }
+      .container, .container * { visibility: visible; }
+      .container { position: absolute; left: 0; top: 0; width: 100%; }
+      .no-print { display: none !important; }
+      .summary-scroll { max-height: none; overflow: visible; }
+      .card { page-break-inside: avoid; }
+    }
+
+    /* =========================================
+       Responsive
+       ========================================= */
+    @media (max-width: 768px) {
+      .container { padding: 1rem; }
+      .header { flex-direction: column; gap: 1rem; }
+      .header-actions { width: 100%; }
+      .btn { width: 100%; }
+      .reliability-scores { flex-direction: column; gap: 1rem; }
+      .stats { gap: 1rem; }
+    }
   </style>
 </head>
 <body>
 <div id="loadingOverlay" class="loading-overlay">
-  <div style="max-width:900px;width:90%;background:white;border-radius:1rem;box-shadow:0 10px 40px rgba(0,0,0,0.15);padding:2rem;text-align:center;display:flex;flex-direction:column;align-items:center;">
-    <div class="loading-spinner" style="margin:0 auto 1rem;"></div>
-    <div class="loading-text">리포트 생성 중...</div>
-    <div class="slot-wrapper"><span id="slotText">시작 준비 중...</span></div>
-    <div id="debateLog" class="debate-container" style="display:none;"><div id="debateContent"></div></div>
+  <div style="max-width:800px;width:90%;background:white;border-radius:0.75rem;box-shadow:0 10px 40px rgba(20, 39, 78, 0.15);padding:2.5rem;display:flex;flex-direction:column;align-items:center;border:1px solid var(--color-border-medium);">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">리포트 생성 중입니다...</div>
+    <div class="slot-wrapper">
+      <div id="slotText" style="font-size:0.813rem;color:var(--color-text-tertiary);"></div>
+    </div>
   </div>
 </div>
 
 <div class="container">
   <div class="header">
-    <div><h1 id="reportTitle">면접 리포트</h1><p>AI 기반 면접 평가 및 분석 결과</p></div>
+    <div>
+      <h1 id="reportTitle">면접 리포트</h1>
+      <p>AI 기반 면접 평가 및 종합 분석 결과</p>
+    </div>
     <div class="header-actions">
       <button id="dlBtn" class="btn btn-success no-print">HTML 다운로드</button>
-      <button id="pdfBtn" class="btn btn-secondary no-print" style="margin-left:0.5rem;">PDF 다운로드</button>
+      <button id="pdfBtn" class="btn btn-secondary no-print">PDF 다운로드</button>
     </div>
   </div>
-  <div class="header-line"></div>
+
   <div id="errBox" class="alert" style="display:none;"></div>
 
   <div id="reportRoot">
+    <!-- Headline Section -->
     <div class="headline">
-      <div style="display:flex;justify-content:space-between;gap:1rem;">
-        <div style="flex:1;"><div id="headlineSummary" class="headline-summary"></div><div id="headlineKeywords" class="headline-keywords"></div></div>
+      <div style="display:flex;justify-content:space-between;gap:1.5rem;align-items:flex-start;">
+        <div style="flex:1;">
+          <div id="headlineSummary" class="headline-summary"></div>
+          <div id="headlineKeywords" class="headline-keywords"></div>
+        </div>
         <div id="reliabilityScores" class="reliability-scores" style="display:none;">
-          <div class="reliability-item"><div class="reliability-label">모순 정도</div><div id="contradictionScore" class="reliability-value">-</div></div>
-          <div class="reliability-item"><div class="reliability-label">대화 깊이</div><div id="depthScore" class="reliability-value">-</div></div>
-          <div class="reliability-item"><div class="reliability-label">신뢰도</div><div id="reliabilityScore" class="reliability-value">-</div></div>
+          <div class="reliability-item">
+            <div class="reliability-label">모순도</div>
+            <div id="contradictionScore" class="reliability-value">-</div>
+          </div>
+          <div class="reliability-item">
+            <div class="reliability-label">대화깊이</div>
+            <div id="depthScore" class="reliability-value">-</div>
+          </div>
+          <div class="reliability-item">
+            <div class="reliability-label">신뢰도</div>
+            <div id="reliabilityScore" class="reliability-value">-</div>
+          </div>
         </div>
       </div>
     </div>
 
+    <!-- Main Grid: Radar Chart + Interview Summary -->
     <div class="grid-2">
-      <div class="card card-indigo card-highlight"><div class="card-header">핵심 평가</div><div class="chart-container"><canvas id="radarChart"></canvas></div></div>
-      <div class="card card-emerald card-highlight"><div class="card-header">인터뷰 요약</div><div id="flowList" class="summary-scroll"></div></div>
+      <div class="card card-indigo card-highlight">
+        <div class="card-header">핵심 역량 평가</div>
+        <div class="chart-container">
+          <canvas id="radarChart"></canvas>
+        </div>
+      </div>
+
+      <div class="card card-emerald card-highlight">
+        <div class="card-header">면접 요약</div>
+        <div id="flowList" class="summary-scroll"></div>
+      </div>
     </div>
 
+    <!-- Commentary: Positive & Negative -->
     <div class="grid-2">
-      <div class="card" style="border-color:#22d3ee"><div class="card-header">긍정 의견</div><div id="posBox" class="prose"></div></div>
-      <div class="card" style="border-color:#fb7185"><div class="card-header">부정 의견</div><div id="negBox" class="prose"></div></div>
+      <div class="card" style="border-color:var(--color-success);">
+        <div class="card-header" style="color:var(--color-success);">✓ 긍정 평가</div>
+        <div id="posBox" class="prose"></div>
+      </div>
+
+      <div class="card" style="border-color:var(--color-danger);">
+        <div class="card-header" style="color:var(--color-danger);">△ 개선 필요</div>
+        <div id="negBox" class="prose"></div>
+      </div>
     </div>
 
-    <div class="card"><div class="card-header" style="color:#7c3aed;">핵심역량</div><table id="jdTable"><thead><tr><th>역량</th><th>요구사항/기대치</th><th>점수</th><th>근거</th></tr></thead><tbody></tbody></table></div>
-    <div class="card"><div class="card-header" style="color:#d97706;">증거 맵</div><table id="evTable"><thead><tr><th>EID</th><th>출처</th><th>내용</th><th>연결</th></tr></thead><tbody></tbody></table></div>
-    <div class="card"><div class="card-header" style="color:#0891b2;">대화 통계</div><div id="stats" class="stats"></div></div>
+    <!-- JD Competency Coverage -->
+    <div class="card">
+      <div class="card-header" style="color:var(--color-primary);">핵심 역량 분석</div>
+      <table id="jdTable">
+        <thead>
+          <tr>
+            <th>역량</th>
+            <th>요구사항 / 기대치</th>
+            <th style="text-align:center;">충족도</th>
+            <th>증거 링크</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Evidence Map -->
+    <div class="card">
+      <div class="card-header" style="color:var(--color-info);">증거 맵</div>
+      <table id="evTable">
+        <thead>
+          <tr>
+            <th style="width:80px;">EID</th>
+            <th style="width:80px;">출처</th>
+            <th>증거 내용</th>
+            <th style="width:120px;">연결 역량</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <!-- Statistics -->
+    <div class="card">
+      <div class="card-header" style="color:var(--color-gray-600);">면접 통계</div>
+      <div id="stats" class="stats"></div>
+    </div>
   </div>
 </div>
 
 <script>
-const $=id=>document.getElementById(id);
-const esc=s=>String(s||"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
-let radar,currentReportData=null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s || "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+let radar, currentReportData = null;
 
-function showError(err){
-  const box=$("errBox");
-  box.innerHTML=`<div class="alert-title">리포트 로드 실패</div><div class="alert-body"><span class="code">${esc(err.code||'ERROR')}</span> ${esc(err.message||'오류')}</div>`;
-  box.style.display="block";
-  if($("loadingOverlay"))$("loadingOverlay").style.display="none";
+function showError(err) {
+  const box = $("errBox");
+  box.innerHTML = `
+    <div class="alert-title">리포트 생성 실패</div>
+    <div class="alert-body">
+      <span class="code">${esc(err.code || 'ERROR')}</span>
+      ${esc(err.message || '알 수 없는 오류가 발생했습니다')}
+    </div>
+  `;
+  box.style.display = "block";
+  if ($("loadingOverlay")) $("loadingOverlay").style.display = "none";
 }
 
-function addAgentMessage(agent,message){
-  const el=$('slotText');
-  if(!el)return;
-  const div=document.createElement('div');
-  div.className='agent-log-item';
-  if(message.startsWith('→')){
-    div.style.fontWeight='700';
-    div.style.marginTop='0.5rem';
-    div.style.color='#000000';
+function addAgentMessage(agent, message) {
+  const el = $('slotText');
+  if (!el) return;
+  
+  const div = document.createElement('div');
+  div.className = 'agent-log-item';
+  
+  if (message.startsWith('→')) {
+    div.style.fontWeight = '700';
+    div.style.marginTop = '0.75rem';
+    div.style.color = 'var(--color-primary)';
   }
-  div.textContent=message;
+  
+  div.textContent = message;
   el.appendChild(div);
-  const wrapper=document.querySelector('.slot-wrapper');
-  if(wrapper)wrapper.scrollTop=wrapper.scrollHeight;
+  
+  const wrapper = document.querySelector('.slot-wrapper');
+  if (wrapper) wrapper.scrollTop = wrapper.scrollHeight;
 }
 
-function showDebateLog(topic,logs){
-  const debateLog=$("debateLog"),debateContent=$("debateContent");
-  if(!debateLog||!debateContent||!logs||!logs.length)return;
-  debateLog.style.display="block";
-  const section=document.createElement("div");
-  section.className="debate-section";
-  const h=document.createElement("div");
-  h.className="debate-topic";
-  h.textContent=topic||"에이전트 토론";
-  section.appendChild(h);
-  logs.forEach(log=>{
-    const d=document.createElement("div");
-    d.className="debate-content";
-    d.textContent="• "+log;
-    section.appendChild(d);
-  });
-  debateContent.appendChild(section);
-  debateLog.scrollTop=debateLog.scrollHeight;
-}
-
-function renderReport(r){
-  if($("reportRoot"))$("reportRoot").style.display="block";
-  if($("dlBtn"))$("dlBtn").style.display="inline-block";
-  const title=$("reportTitle");
-  if(title)title.textContent=`${r?.metadata?.candidate_name||"지원자"}의 면접 리포트`;
-  const hs=$("headlineSummary");
-  if(hs)hs.textContent=r?.headline?.oneline_summary||"";
-  const hk=$("headlineKeywords");
-  if(hk){
-    const tags=Array.isArray(r?.headline?.tag)?r.headline.tag:[];
-    hk.innerHTML=tags.map(t=>`<span class="headline-keyword">#${esc(t)}</span>`).join('');
+function renderReport(r) {
+  if ($("reportRoot")) $("reportRoot").style.display = "block";
+  if ($("dlBtn")) $("dlBtn").style.display = "inline-block";
+  
+  // Title
+  const title = $("reportTitle");
+  if (title) title.textContent = `${r?.metadata?.candidate_name || "지원자"}의 면접 리포트`;
+  
+  // Headline
+  const hs = $("headlineSummary");
+  if (hs) hs.textContent = r?.headline?.oneline_summary || "종합 요약이 없습니다.";
+  
+  const hk = $("headlineKeywords");
+  if (hk) {
+    const tags = Array.isArray(r?.headline?.tag) ? r.headline.tag : [];
+    hk.innerHTML = tags.map(t => `<span class="headline-keyword">#${esc(t)}</span>`).join('');
   }
-  if(r?.quality){
-    const rs=$("reliabilityScores");
-    if(rs)rs.style.display="flex";
-    const q=r.quality;
-    const cs=$("contradictionScore"),ds=$("depthScore"),rls=$("reliabilityScore");
-    if(cs&&q.contradiction_score!==undefined){
-      cs.textContent=`${q.contradiction_score}%`;
-      cs.style.color=q.contradiction_score>50?"#dc2626":q.contradiction_score>30?"#f59e0b":"#10b981";
+  
+  // Quality Scores
+  if (r?.quality) {
+    const rs = $("reliabilityScores");
+    if (rs) rs.style.display = "flex";
+    
+    const q = r.quality;
+    const cs = $("contradictionScore"), ds = $("depthScore"), rls = $("reliabilityScore");
+    
+    if (cs && q.contradiction_score !== undefined) {
+      cs.textContent = `${q.contradiction_score}%`;
+      cs.style.color = q.contradiction_score > 50 ? "var(--color-danger)" : 
+                       q.contradiction_score > 30 ? "var(--color-warning)" : "var(--color-success)";
     }
-    if(ds&&q.depth_score!==undefined){
-      ds.textContent=`${q.depth_score}%`;
-      ds.style.color=q.depth_score>70?"#10b981":q.depth_score>50?"#f59e0b":"#dc2626";
+    
+    if (ds && q.depth_score !== undefined) {
+      ds.textContent = `${q.depth_score}%`;
+      ds.style.color = q.depth_score > 70 ? "var(--color-success)" : 
+                       q.depth_score > 50 ? "var(--color-warning)" : "var(--color-danger)";
     }
-    if(rls&&q.reliabality_score!==undefined){
-      rls.textContent=`${q.reliabality_score}%`;
-      rls.style.color=q.reliabality_score>70?"#10b981":q.reliabality_score>50?"#f59e0b":"#dc2626";
+    
+    if (rls && q.reliabality_score !== undefined) {
+      rls.textContent = `${q.reliabality_score}%`;
+      rls.style.color = q.reliabality_score > 70 ? "var(--color-success)" : 
+                        q.reliabality_score > 50 ? "var(--color-warning)" : "var(--color-danger)";
     }
   }
-  const axes=r.axes||[],labels=axes.map(a=>a.competency||a.label||""),values=axes.map(a=>a.score||0);
-  const rc=$("radarChart");
-  if(rc){
-    if(radar)radar.destroy();
-    radar=new Chart(rc,{type:'radar',data:{labels,datasets:[{label:'점수',data:values,fill:true,backgroundColor:'rgba(99,102,241,0.2)',borderColor:'rgb(79,70,229)',borderWidth:2,pointBackgroundColor:'rgb(79,70,229)',pointBorderColor:'#fff',pointBorderWidth:2,pointRadius:4}]},options:{responsive:true,maintainAspectRatio:true,scales:{r:{beginAtZero:true,min:0,max:100,ticks:{stepSize:20}}},plugins:{legend:{display:false}}}});
+  
+  // Radar Chart
+  const axes = r.axes || [];
+  const labels = axes.map(a => a.competency || a.label || "");
+  const values = axes.map(a => a.score || 0);
+  
+  const rc = $("radarChart");
+  if (rc) {
+    if (radar) radar.destroy();
+    radar = new Chart(rc, {
+      type: 'radar',
+      data: {
+        labels,
+        datasets: [{
+          label: '평가 점수',
+          data: values,
+          fill: true,
+          backgroundColor: 'rgba(107, 140, 181, 0.15)',
+          borderColor: 'rgb(107, 140, 181)',
+          borderWidth: 2,
+          pointBackgroundColor: 'rgb(107, 140, 181)',
+          pointBorderColor: '#fff',
+          pointBorderWidth: 2,
+          pointRadius: 5,
+          pointHoverRadius: 7
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+          r: {
+            beginAtZero: true,
+            min: 0,
+            max: 100,
+            ticks: {
+              stepSize: 20,
+              font: { size: 11, weight: '600' },
+              color: 'var(--color-text-tertiary)'
+            },
+            grid: {
+              color: 'var(--color-border-medium)'
+            },
+            pointLabels: {
+              font: { size: 12, weight: '700' },
+              color: 'var(--color-text-primary)'
+            }
+          }
+        },
+        plugins: {
+          legend: { display: false }
+        }
+      }
+    });
   }
-  const items=(r.interview_summary?.items)||[];
-  const flowList=$("flowList");
-  if(flowList){
-    flowList.innerHTML=items.map(it=>`<div class="qa-simple"><div class="qa-topic">${esc(it.questions||"")}</div><div class="qa-summary">${esc(it.answers||"")}</div></div>`).join("")||'<div class="empty"><p>요약 없음</p></div>';
+  
+  // Interview Summary
+  const items = (r.interview_summary?.items) || [];
+  const flowList = $("flowList");
+  if (flowList) {
+    flowList.innerHTML = items.map(it => `
+      <div class="qa-simple">
+        <div class="qa-topic">${esc(it.questions || "")}</div>
+        <div class="qa-summary">${esc(it.answers || "")}</div>
+      </div>
+    `).join("") || '<div class="empty"><p>인터뷰 요약 정보가 없습니다</p></div>';
   }
-  const posBox=$("posBox"),negBox=$("negBox");
-  if(posBox)posBox.innerHTML=`<p>${esc(r?.interview_commentary?.positive_comment||"")}</p>`||'<div class="empty"><p>없음</p></div>';
-  if(negBox)negBox.innerHTML=`<p>${esc(r?.interview_commentary?.improvement_comment||"")}</p>`||'<div class="empty"><p>없음</p></div>';
-  const jdBody=document.querySelector("#jdTable tbody");
-  if(jdBody){
-    jdBody.innerHTML=(r.compCoverage||[]).map(row=>{
+  
+  // Commentary
+  const posBox = $("posBox"), negBox = $("negBox");
+  if (posBox) {
+    posBox.innerHTML = `<p>${esc(r?.interview_commentary?.positive_comment || "긍정 평가 내용이 없습니다.")}</p>`;
+  }
+  if (negBox) {
+    negBox.innerHTML = `<p>${esc(r?.interview_commentary?.improvement_comment || "개선 필요 사항이 없습니다.")}</p>`;
+  }
+  
+  // JD Coverage Table
+  const jdBody = document.querySelector("#jdTable tbody");
+  if (jdBody) {
+    jdBody.innerHTML = (r.compCoverage || []).map(row => {
       const eids = Array.isArray(row.evidence_ids) ? row.evidence_ids : [];
-      const chips=eids.map(e=>`<span class="badge badge-indigo eid-link" data-eid="${esc(e)}" onclick="scrollToEvidence('${esc(e)}')">${esc(e)}</span>`).join(" ");
-      return`<tr><td><strong style="color:#7c3aed;">${esc(row.competency||"")}</strong></td><td>${esc(row.expectation||"")}</td><td>${row.fulfillment||0}</td><td>${chips||'-'}</td></tr>`;
+      const chips = eids.map(e => 
+        `<span class="badge badge-indigo eid-link" data-eid="${esc(e)}" onclick="scrollToEvidence('${esc(e)}')">${esc(e)}</span>`
+      ).join(" ");
+      
+      return `
+        <tr>
+          <td><strong>${esc(row.competency || "")}</strong></td>
+          <td>${esc(row.expectation || "")}</td>
+          <td style="text-align:center;"><strong style="font-size:1.125rem;color:var(--color-primary);">${row.fulfillment || 0}</strong></td>
+          <td>${chips || '-'}</td>
+        </tr>
+      `;
     }).join('');
   }
-  const evBody=document.querySelector("#evTable tbody");
-  if(evBody){
-    evBody.innerHTML=(r.evidences||[]).map(ev=>`<tr id="ev-${esc(ev.eid)}" class="evidence-row"><td><strong style="color:#4f46e5;">${esc(ev.eid)}</strong></td><td style="color:#6b7280;font-size:0.75rem;">면접</td><td>${esc(ev.evidence)}</td><td><span class="badge badge-purple">${esc(ev.competency)}</span></td></tr>`).join('');
+  
+  // Evidence Table
+  const evBody = document.querySelector("#evTable tbody");
+  if (evBody) {
+    evBody.innerHTML = (r.evidences || []).map(ev => `
+      <tr id="ev-${esc(ev.eid)}" class="evidence-row">
+        <td><strong style="color:var(--color-info);">${esc(ev.eid)}</strong></td>
+        <td style="color:var(--color-text-tertiary);font-size:0.813rem;">면접</td>
+        <td>${esc(ev.evidence)}</td>
+        <td><span class="badge badge-purple">${esc(ev.competency)}</span></td>
+      </tr>
+    `).join('');
   }
-  const statsElem=$("stats");
-  if(statsElem&&r.interview_stat){
-    const st=r.interview_stat;
-    statsElem.innerHTML=`<div class="stats-item"><span class="stats-label">소요시간</span><span>:</span><span class="stats-value">${esc(st.duration||"-")}</span></div><div class="stats-item"><span class="stats-label">후속질문 평균</span><span>:</span><span class="stats-value">${esc(st.follow_up_avg||"-")}</span></div>`;
+  
+  // Statistics
+  const statsElem = $("stats");
+  if (statsElem && r.interview_stat) {
+    const st = r.interview_stat;
+    statsElem.innerHTML = `
+      <div class="stats-item">
+        <span class="stats-label">소요 시간</span>
+        <span>:</span>
+        <span class="stats-value">${esc(st.duration || "-")}</span>
+      </div>
+      <div class="stats-item">
+        <span class="stats-label">후속 질문 평균</span>
+        <span>:</span>
+        <span class="stats-value">${esc(st.follow_up_avg || "-")}</span>
+      </div>
+    `;
   }
-  if($("loadingOverlay"))$("loadingOverlay").style.display="none";
+  
+  // Hide loading
+  if ($("loadingOverlay")) $("loadingOverlay").style.display = "none";
 }
 
-function scrollToEvidence(eid){
-  const tr=document.getElementById(`ev-${eid}`);
-  if(!tr)return;
-  document.querySelectorAll('.evidence-row').forEach(r=>r.classList.remove('evidence-highlight'));
-  tr.scrollIntoView({behavior:'smooth',block:'center'});
-  setTimeout(()=>{tr.classList.add('evidence-highlight');setTimeout(()=>tr.classList.remove('evidence-highlight'),3000);},500);
+function scrollToEvidence(eid) {
+  const tr = document.getElementById(`ev-${eid}`);
+  if (!tr) return;
+  
+  document.querySelectorAll('.evidence-row').forEach(r => r.classList.remove('evidence-highlight'));
+  tr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  
+  setTimeout(() => {
+    tr.classList.add('evidence-highlight');
+    setTimeout(() => tr.classList.remove('evidence-highlight'), 2000);
+  }, 300);
 }
 
-function downloadHTML(){
-  const rc=$("radarChart");
-  let dataURL=null;
-  if(rc&&rc.toDataURL){try{dataURL=rc.toDataURL('image/png');}catch(e){}}
-  const html=document.documentElement.cloneNode(true);
-  if(dataURL){
-    const cc=html.querySelector('#radarChart');
-    if(cc&&cc.parentNode){
-      const img=document.createElement('img');
-      img.id='radarChartImage';
-      img.src=dataURL;
-      img.alt='면접 핵심 평가 차트';
-      img.style.cssText='display:block;width:100%;height:100%;object-fit:contain;';
-      cc.parentNode.replaceChild(img,cc);
-    }
-    const head=html.querySelector('head');
-    if(head){
-      const style=document.createElement('style');
-      style.textContent='.chart-container img#radarChartImage{width:100%!important;height:100%!important;object-fit:contain;display:block;}';
-      head.appendChild(style);
+function downloadHTML() {
+  const rc = $("radarChart");
+  let dataURL = null;
+  
+  if (rc && rc.toDataURL) {
+    try { dataURL = rc.toDataURL('image/png'); } catch (e) {}
+  }
+  
+  const html = document.documentElement.cloneNode(true);
+  
+  if (dataURL) {
+    const cc = html.querySelector('#radarChart');
+    if (cc && cc.parentNode) {
+      const img = document.createElement('img');
+      img.src = dataURL;
+      img.alt = '면접 핵심 평가 차트';
+      img.style.cssText = 'display:block;width:100%;height:100%;object-fit:contain;';
+      cc.parentNode.replaceChild(img, cc);
     }
   }
-  const lo=html.querySelector('#loadingOverlay');if(lo)lo.remove();
-  const ha=html.querySelector('.header-actions');if(ha)ha.remove();
-  const eb=html.querySelector('#errBox');if(eb)eb.remove();
-  const str='<!DOCTYPE html>\n'+html.outerHTML;
-  const blob=new Blob([str],{type:'text/html;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const link=document.createElement('a');
-  link.href=url;
-  link.download=`interview_report_${new Date().toISOString().slice(0,10)}.html`;
+  
+  const lo = html.querySelector('#loadingOverlay'); if (lo) lo.remove();
+  const ha = html.querySelector('.header-actions'); if (ha) ha.remove();
+  const eb = html.querySelector('#errBox'); if (eb) eb.remove();
+  
+  const str = '<!DOCTYPE html>\n' + html.outerHTML;
+  const blob = new Blob([str], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `interview_report_${new Date().toISOString().slice(0, 10)}.html`;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
 
-function downloadPDF(){
-  if(!currentReportData){alert('리포트 데이터가 없습니다.');return;}
-  fetch('/reports/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({report:currentReportData})}).then(res=>{if(!res.ok)throw new Error('PDF 생성 실패');return res.blob();}).then(blob=>{const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=`interview_report_${currentReportData?.metadata?.session_id||'report'}.pdf`;document.body.appendChild(link);link.click();document.body.removeChild(link);URL.revokeObjectURL(url);}).catch(e=>{console.error(e);alert('PDF 다운로드 중 오류 발생');});
+function downloadPDF() {
+  if (!currentReportData) {
+    alert('리포트 데이터가 없습니다.');
+    return;
+  }
+  
+  fetch('/reports/pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report: currentReportData })
+  })
+  .then(res => {
+    if (!res.ok) throw new Error('PDF 생성 실패');
+    return res.blob();
+  })
+  .then(blob => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `interview_report_${currentReportData?.metadata?.session_id || 'report'}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  })
+  .catch(e => {
+    console.error(e);
+    alert('PDF 다운로드 중 오류가 발생했습니다.');
+  });
 }
 
-async function startStreaming(){
-  const params=new URLSearchParams(window.location.search);
-  const sid=params.get('session_id');
-  if(!sid){showError({code:'NO_SESSION',message:'session_id가 없습니다'});return;}
-  const payload=new URLSearchParams();
-  if(sid)payload.set('session_id',sid);
-  if(params.get('name'))payload.set('name',params.get('name'));
-  if(params.get('position'))payload.set('position',params.get('position'));
-  if(params.get('axes_keys'))payload.set('axes_keys',params.get('axes_keys'));
-  if(params.get('user_prompt'))payload.set('user_prompt',params.get('user_prompt'));
-  try{
-    const es=new EventSource('/reports/generate/stream?'+payload.toString());
-    es.addEventListener('debate',e=>{
-      const d=JSON.parse(e.data);
-      if(d.debate_topic){
-        addAgentMessage(d.agent,`→ ${d.debate_topic}`);
+async function startStreaming() {
+  const params = new URLSearchParams(window.location.search);
+  const sid = params.get('session_id');
+  
+  if (!sid) {
+    showError({ code: 'NO_SESSION', message: 'session_id가 없습니다' });
+    return;
+  }
+  
+  const payload = new URLSearchParams();
+  if (sid) payload.set('session_id', sid);
+  if (params.get('name')) payload.set('name', params.get('name'));
+  if (params.get('position')) payload.set('position', params.get('position'));
+  if (params.get('axes_keys')) payload.set('axes_keys', params.get('axes_keys'));
+  if (params.get('user_prompt')) payload.set('user_prompt', params.get('user_prompt'));
+  
+  try {
+    const es = new EventSource('/reports/generate/stream?' + payload.toString());
+    
+    es.addEventListener('debate', e => {
+      const d = JSON.parse(e.data);
+      if (d.debate_topic) {
+        addAgentMessage(d.agent, `→ ${d.debate_topic}`);
       }
-      if(d.message){
-        addAgentMessage(d.agent,d.message);
+      if (d.message) {
+        addAgentMessage(d.agent, d.message);
       }
     });
-    es.addEventListener('error',e=>{try{const d=JSON.parse(e.data);showError({code:'AGENT_ERROR',message:d.message});}catch(err){showError({code:'AGENT_ERROR',message:'에이전트 오류 발생'});}es.close();});
-    es.addEventListener('report',e=>{const ed=JSON.parse(e.data);const rd=ed.data||ed;currentReportData=rd;renderReport(rd);});
-    es.addEventListener('done',e=>{
-      if($("loadingOverlay"))$("loadingOverlay").style.display="none";
-      // 리포트 생성 완료 시 서버에 PDF 저장
-      if(currentReportData){
+    
+    es.addEventListener('error', e => {
+      try {
+        const d = JSON.parse(e.data);
+        showError({ code: 'AGENT_ERROR', message: d.message });
+      } catch (err) {
+        showError({ code: 'AGENT_ERROR', message: '에이전트 오류 발생' });
+      }
+      es.close();
+    });
+    
+    es.addEventListener('report', e => {
+      const ed = JSON.parse(e.data);
+      const rd = ed.data || ed;
+      currentReportData = rd;
+      renderReport(rd);
+    });
+    
+    es.addEventListener('done', e => {
+      if ($("loadingOverlay")) $("loadingOverlay").style.display = "none";
+      
+      // PDF 자동 저장
+      if (currentReportData) {
         savePDFToServer(sid);
       }
       es.close();
     });
-    es.onerror=e=>{if(es.readyState===EventSource.CLOSED)console.log('EventSource 연결 종료');else showError({code:'STREAM_ERROR',message:'스트리밍 연결 오류'});es.close();};
-  }catch(e){showError({code:'NETWORK',message:'네트워크 오류'});}
+    
+    es.onerror = e => {
+      if (es.readyState === EventSource.CLOSED) {
+        console.log('EventSource 연결 종료');
+      } else {
+        showError({ code: 'STREAM_ERROR', message: '스트리밍 연결 오류' });
+      }
+      es.close();
+    };
+  } catch (e) {
+    showError({ code: 'NETWORK', message: '네트워크 오류가 발생했습니다' });
+  }
 }
 
-function savePDFToServer(sessionId){
-  if(!currentReportData||!sessionId){console.error('리포트 데이터 또는 세션 ID 없음');return;}
+function savePDFToServer(sessionId) {
+  if (!currentReportData || !sessionId) {
+    console.error('리포트 데이터 또는 세션 ID 없음');
+    return;
+  }
+  
   console.log('📄 서버에 PDF 저장 중...');
-  fetch('/reports/pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({report:currentReportData,session_id:sessionId,save_to_server:true})}).then(res=>res.json()).then(data=>{if(data.success){console.log('✅ PDF 서버 저장 완료:',data.file_path);}else{console.error('❌ PDF 서버 저장 실패:',data.error);}}).catch(e=>{console.error('❌ PDF 저장 오류:',e);});
+  
+  fetch('/reports/pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      report: currentReportData,
+      session_id: sessionId,
+      save_to_server: true
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      console.log('✅ PDF 서버 저장 완료:', data.file_path);
+    } else {
+      console.error('❌ PDF 서버 저장 실패:', data.error);
+    }
+  })
+  .catch(e => {
+    console.error('❌ PDF 저장 오류:', e);
+  });
 }
 
-(function(){
-  if($("dlBtn"))$("dlBtn").onclick=downloadHTML;
-  if($("pdfBtn"))$("pdfBtn").onclick=downloadPDF;
-  const params=new URLSearchParams(window.location.search);
-  if(params.get('session_id'))startStreaming();
+// Initialize
+(function() {
+  if ($("dlBtn")) $("dlBtn").onclick = downloadHTML;
+  if ($("pdfBtn")) $("pdfBtn").onclick = downloadPDF;
+  
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('session_id')) {
+    startStreaming();
+  }
 })();
 </script>
 </body>
