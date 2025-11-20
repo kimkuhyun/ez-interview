@@ -11,9 +11,21 @@ if (!window.candidatesState) {
     };
 }
 
+// 업로드 진행 상태 관리
+if (!window.uploadProgress) {
+    window.uploadProgress = {
+        isUploading: false,
+        total: 0,
+        completed: 0
+    };
+}
+
 // 페이지 로드 시 데이터 가져오기 (즉시 실행)
 (function initCandidates() {
     console.log('[Candidates] 초기화 시작');
+    
+    // 업로드 진행 상태 복원
+    updateUploadButtonProgress();
     
     // 포지션 목록 로드
     loadPositionFilter();
@@ -372,7 +384,18 @@ async function openUploadModal() {
     const modal = document.getElementById('uploadModal');
     if (modal) {
         modal.classList.add('active');
-        resetUploadModal();
+        
+        // 업로드 진행 중이 아닐 때만 리셋
+        if (!window.uploadProgress || !window.uploadProgress.isUploading) {
+            resetUploadModal();
+        } else {
+            // 업로드 진행 중이면 입력 필드 비활성화
+            const folderInput = document.getElementById('folderInput');
+            const positionSelect = document.getElementById('positionSelect');
+            if (folderInput) folderInput.disabled = true;
+            if (positionSelect) positionSelect.disabled = true;
+        }
+        
         await loadActivePositions();
     }
 }
@@ -409,7 +432,12 @@ function closeUploadModal() {
     const modal = document.getElementById('uploadModal');
     if (modal) {
         modal.classList.remove('active');
-        resetUploadModal();
+        // 업로드 진행 중이 아닐 때만 리셋
+        if (!window.uploadProgress || !window.uploadProgress.isUploading) {
+            resetUploadModal();
+        } else {
+            console.log('[Upload] 모달 닫힘 - 백그라운드 업로드 계속 진행 중');
+        }
     }
 }
 
@@ -507,8 +535,16 @@ function updateFileItemStatus(index, status) {
     const btn = document.getElementById(`file-btn-${index}`);
     if (!btn) return;
     
-    if (status === 'loading') {
-        // 로딩 중 - 회전하는 스피너 (배경 제거)
+    if (status === 'pending') {
+        // 대기 중 - 시계 아이콘
+        btn.innerHTML = '⏱';
+        btn.style.backgroundColor = 'transparent';
+        btn.style.color = '#94a3b8';
+        btn.style.border = 'none';
+        btn.disabled = true;
+        btn.onclick = null;
+    } else if (status === 'loading') {
+        // 로딩 중 - 회전하는 스피너
         btn.innerHTML = '<span style="display: inline-block; animation: spin 1s linear infinite; font-size: 1rem;">◐</span>';
         btn.style.backgroundColor = 'transparent';
         btn.style.color = '#3b82f6';
@@ -546,6 +582,15 @@ async function submitUpload() {
         return;
     }
     
+    // 업로드 상태 초기화 및 시작
+    if (!window.uploadProgress) {
+        window.uploadProgress = { isUploading: false, total: 0, completed: 0 };
+    }
+    window.uploadProgress.isUploading = true;
+    window.uploadProgress.total = window.uploadState.selectedFiles.length;
+    window.uploadProgress.completed = 0;
+    updateUploadButtonProgress();
+    
     const uploadSubmitBtn = document.getElementById('uploadSubmitBtn');
     const cancelBtn = document.getElementById('cancelBtn');
     
@@ -558,6 +603,11 @@ async function submitUpload() {
     
     // 취소 버튼 비활성화
     if (cancelBtn) cancelBtn.disabled = true;
+    
+    // 모든 파일의 취소 버튼을 대기 상태로 변경
+    window.uploadState.selectedFiles.forEach((file, index) => {
+        updateFileItemStatus(index, 'pending');
+    });
     
     // 파일들을 이름별로 그룹화
     const fileGroups = {};
@@ -630,17 +680,100 @@ async function submitUpload() {
                 updateFileItemStatus(fileIndex, 'error');
                 console.error(`[Upload] 오류: ${file.name}`, error);
             }
+            
+            // 진행 상태 업데이트
+            window.uploadProgress.completed++;
+            updateUploadButtonProgress();
         }
     }
+    
+    // 업로드 완료 - 진행 상태 완전히 초기화
+    window.uploadProgress.isUploading = false;
+    window.uploadProgress.total = 0;
+    window.uploadProgress.completed = 0;
+    updateUploadButtonProgress();
+    
+    // 모달 완전히 리셋
+    resetUploadModal();
     
     // 업로드 완료 후 버튼 활성화
     if (uploadSubmitBtn) {
         uploadSubmitBtn.disabled = false;
         uploadSubmitBtn.style.cursor = 'pointer';
     }
+    
+    // 결과 알림
+    console.log(`[Upload] 완료 - 성공: ${successCount}, 실패: ${failCount}`);
+    
+    // 데이터 새로고침
+    loadCandidates();
 }
 
 function closeUploadModalAndRefresh() {
     closeUploadModal();
     loadCandidates();
 }
+
+// 업로드 버튼에 진행 상태 시각화
+function updateUploadButtonProgress() {
+    const uploadBtn = document.getElementById('upload-btn');
+    if (!uploadBtn) return;
+    
+    if (window.uploadProgress && window.uploadProgress.isUploading) {
+        const percentage = (window.uploadProgress.completed / window.uploadProgress.total) * 100;
+        uploadBtn.style.background = `linear-gradient(to right, var(--color-success) ${percentage}%, var(--color-gray-300) ${percentage}%)`;
+        uploadBtn.style.color = 'white';
+        uploadBtn.textContent = `업로드 중 (${window.uploadProgress.completed}/${window.uploadProgress.total})`;
+        uploadBtn.disabled = false;
+        uploadBtn.style.cursor = 'pointer';
+        // 클릭 시 모달 열어서 진행 상황 표시
+        uploadBtn.onclick = () => {
+            const modal = document.getElementById('uploadModal');
+            if (modal) modal.classList.add('active');
+        };
+    } else {
+        uploadBtn.style.background = '';
+        uploadBtn.style.color = '';
+        uploadBtn.textContent = '이력서 업로드';
+        uploadBtn.disabled = false;
+        uploadBtn.style.cursor = 'pointer';
+        uploadBtn.onclick = null;
+    }
+}
+
+// 페이지 떠나기 전 경고
+window.addEventListener('beforeunload', (e) => {
+    if (window.uploadProgress && window.uploadProgress.isUploading) {
+        e.preventDefault();
+        e.returnValue = '업로드가 진행 중입니다. 페이지를 떠나면 업로드가 취소됩니다.';
+        return e.returnValue;
+    }
+});
+
+// 업로드 버튼에 진행 상태 시각화
+function updateUploadButtonProgress() {
+    const uploadBtn = document.getElementById('upload-btn');
+    if (!uploadBtn) return;
+    
+    if (window.uploadProgress.isUploading) {
+        const percentage = (window.uploadProgress.completed / window.uploadProgress.total) * 100;
+        uploadBtn.style.background = `linear-gradient(to right, var(--color-success) ${percentage}%, var(--color-gray-300) ${percentage}%)`;
+        uploadBtn.style.color = 'white';
+        uploadBtn.textContent = `업로드 중 (${window.uploadProgress.completed}/${window.uploadProgress.total})`;
+        uploadBtn.disabled = true;
+    } else {
+        uploadBtn.style.background = '';
+        uploadBtn.style.color = '';
+        uploadBtn.textContent = '이력서 업로드';
+        uploadBtn.disabled = false;
+    }
+}
+
+// 페이지 떠나기 전 경고
+window.addEventListener('beforeunload', (e) => {
+    if (window.uploadProgress.isUploading) {
+        e.preventDefault();
+        e.returnValue = '업로드가 진행 중입니다. 페이지를 떠나면 업로드가 취소됩니다.';
+        return e.returnValue;
+    }
+});

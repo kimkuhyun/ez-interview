@@ -75,15 +75,6 @@
         </p>
       </div>
 
-      <div id="fileListContainer" style="display: none;">
-        <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: #334155;">
-          발견된 파일 (<span id="fileCount">0</span>개)
-        </label>
-        <div id="fileList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.75rem;">
-          <!-- 파일 목록이 여기에 표시됩니다 -->
-        </div>
-      </div>
-
       <div style="margin-top: 1.5rem;">
         <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: #334155;">
           지원 포지션
@@ -96,6 +87,15 @@
           <option value="">포지션을 선택하세요</option>
           <!-- 활성 포지션 목록이 JavaScript로 로드됩니다 -->
         </select>
+      </div>
+
+      <div id="fileListContainer" style="display: none; margin-top: 1.5rem;">
+        <label style="display: block; font-weight: 500; margin-bottom: 0.5rem; color: #334155;">
+          발견된 파일 (<span id="fileCount">0</span>개)
+        </label>
+        <div id="fileList" style="max-height: 300px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 0.5rem; padding: 0.75rem;">
+          <!-- 파일 목록이 여기에 표시됩니다 -->
+        </div>
       </div>
 
       <div style="margin-top: 1.5rem; display: flex; gap: 0.75rem; justify-content: flex-end;">
