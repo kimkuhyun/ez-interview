@@ -354,16 +354,48 @@ def match_candidates(jd_id):
     for session_id, name in candidates:
         print(f"👤 지원자 매칭 중: {name} ({session_id})")
         
-        # ✅ 통합 쿼리로 1번만 검색 (기존: 키워드 개수만큼 반복)
-        chunks = search_similar_chunks(combined_query, str(session_id), "resume", top_k=5)
+        try:
+            # ✅ 이력서 + 포트폴리오 통합 검색
+            resume_chunks = search_similar_chunks(combined_query, str(session_id), "resume", top_k=3)
+            portfolio_chunks = search_similar_chunks(combined_query, str(session_id), "portfolio", top_k=2)
+            chunks = resume_chunks + portfolio_chunks
+            
+            # 매칭된 이력서 내용 추출
+            matched_snippets = []
+            valid_chunks = [c for c in chunks if c['score'] >= 0.3]
+            
+            if valid_chunks:
+                match_score = sum(c['score'] for c in valid_chunks) / len(valid_chunks)
+                print(f"   ✅ 매칭 점수: {match_score:.4f} ({len(valid_chunks)}개 유효 청크)")
+                
+                for chunk in valid_chunks:
+                    content = chunk['content'].strip()
+                    section = chunk.get('metadata', {}).get('section', '').lower()
+                    
+                    # 불필요한 섹션 스킵
+                    if any(x in section for x in ['name', 'contact', '이름', '연락처', '기간', '날짜']):
+                        continue
+                    
+                    # 첫 의미있는 문장 추출
+                    for line in content.split('\n'):
+                        line = line.strip()
+                        if len(line) >= 20 and not line.startswith(('•', '-', '*', '●')) and '~' not in line:
+                            matched_snippets.append(line[:50] + ('...' if len(line) > 50 else ''))
+                            break
+                    
+                    if len(matched_snippets) >= 3:
+                        break
+                
+                for i, s in enumerate(matched_snippets[:3]):
+                    print(f"      [{i+1}] {s}")
+            else:
+                match_score = 0
+                print(f"   ⚠️  유효한 매칭 없음 (점수 0.3 미만)")
         
-        if chunks:
-            # 상위 청크의 평균 점수 계산
-            match_score = sum(c['score'] for c in chunks) / len(chunks)
-            print(f"   ✅ 매칭 점수: {match_score:.4f}")
-        else:
+        except Exception as e:
+            print(f"   ❌ 매칭 중 에러: {e}")
             match_score = 0
-            print(f"   ⚠️  매칭 결과 없음")
+            matched_snippets = []
         
         # jd_id 업데이트
         cur.execute("""
@@ -376,7 +408,7 @@ def match_candidates(jd_id):
             "session_id": str(session_id),
             "name": name,
             "score": round(match_score * 100, 1),
-            "matched_keywords": keywords[:3],  # 상위 3개 키워드 표시
+            "matched_snippets": matched_snippets,  # 매칭된 이력서 내용
             "has_portfolio": False  # 나중에 구현
         })
     

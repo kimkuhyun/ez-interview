@@ -359,6 +359,26 @@ body {
   margin-bottom: 8px;
 }
 
+.candidate-snippets {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.snippet-line {
+  padding: 4px 0;
+  border-left: 2px solid #e2e8f0;
+  padding-left: 8px;
+}
+
+.snippet-line.no-match {
+  color: #94a3b8;
+  font-style: italic;
+}
+
 .candidate-meta {
   display: flex;
   flex-wrap: wrap;

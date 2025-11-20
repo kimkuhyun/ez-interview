@@ -216,8 +216,11 @@ function renderCandidates() {
     <div class="candidate-card" id="card-${c.session_id}" data-session-id="${c.session_id}">
       <div class="candidate-info" onclick="openCandidateModal('${c.session_id}')">
         <div class="candidate-name">${c.name}</div>
-        <div class="candidate-meta">
-          ${c.matched_keywords ? c.matched_keywords.map(kw => `<span class="meta-tag">${kw}</span>`).join('') : ''}
+        <div class="candidate-snippets">
+          ${c.matched_snippets && c.matched_snippets.length > 0 
+            ? c.matched_snippets.map(snippet => `<div class="snippet-line">${snippet}</div>`).join('')
+            : '<div class="snippet-line no-match">매칭된 내용 없음</div>'
+          }
         </div>
       </div>
       <div class="match-score" onclick="openCandidateModal('${c.session_id}')">${c.score}%</div>
