@@ -57,11 +57,27 @@ def stream_panel():
     """면접 페이지 로드"""
     from flask import request
     
-    # URL 파라미터에서 session_id 가져오기 (interview_session.html에서 전달)
+    # URL 파라미터에서 session_id, name, jd_id, position 가져오기 (interview_session.html에서 전달)
     session_id_param = request.args.get('session_id')
+    candidate_name_param = request.args.get('name')
+    jd_id_param = request.args.get('jd_id')
+    position_param = request.args.get('position')
+    
     if session_id_param:
         GLOBAL_STATE.session_id = session_id_param
         print(f"🔄 GLOBAL_STATE.session_id 설정: {session_id_param}")
+    
+    if candidate_name_param:
+        GLOBAL_STATE.candidate_name = candidate_name_param
+        print(f"🔄 GLOBAL_STATE.candidate_name 설정: {candidate_name_param}")
+    
+    if jd_id_param:
+        GLOBAL_STATE.jd_id = jd_id_param
+        print(f"🔄 GLOBAL_STATE.jd_id 설정: {jd_id_param}")
+    
+    if position_param:
+        GLOBAL_STATE.position = position_param
+        print(f"🔄 GLOBAL_STATE.position 설정: {position_param}")
     
     # GLOBAL_STATE의 questions 사용 (필수)
     if not GLOBAL_STATE.questions or len(GLOBAL_STATE.questions) == 0:

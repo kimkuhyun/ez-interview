@@ -303,7 +303,7 @@ class ReportState(TypedDict):
     position_applied: str
     user_prompt: str
     axes: List[str]
-    jd_id: Optional[str]  # 🆕 JD ID 추가
+    jd_id: Optional[str]  
 
     resume_text: Optional[str]
     jd_text: Optional[str]
@@ -360,7 +360,7 @@ def node_query_plan(state: ReportState) -> Dict[str, Any]:
 def node_retrieve(state: ReportState) -> Dict[str, Any]:
     qp = state["query_plan"]
     session_id = state["session_id"]
-    jd_id = state.get("jd_id")  # state에서 jd_id 가져오기
+    jd_id = state.get("jd_id")  #
     
     print("\n" + "="*80)
     print("🔍 [RETRIEVE NODE] RAG 검색 시작")

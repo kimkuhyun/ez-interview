@@ -468,12 +468,21 @@
     try {
       rightPanel.innerHTML = '<div class="loading"><div class="spinner"></div><span>패널 로딩 중...</span></div>';
       
-      // stream 패널일 경우 session_id 파라미터 추가
+      // stream 패널일 경우 session_id, name, jd_id, position 파라미터 추가
       const urlParams = new URLSearchParams(window.location.search);
       const sessionId = urlParams.get('session_id');
+      const name = urlParams.get('name');
+      const jdId = urlParams.get('jd_id');
+      const position = urlParams.get('position');
+      
       let url = '/panel/' + panelType;
       if (panelType === 'stream' && sessionId) {
-        url += `?session_id=${sessionId}`;
+        const params = new URLSearchParams();
+        params.append('session_id', sessionId);
+        if (name) params.append('name', name);
+        if (jdId) params.append('jd_id', jdId);
+        if (position) params.append('position', position);
+        url += `?${params.toString()}`;
       }
       
       const response = await fetch(url);
