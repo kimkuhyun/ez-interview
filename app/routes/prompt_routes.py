@@ -66,28 +66,36 @@ def get_prompt(name):
 
 @prompt_bp.route('/api/prompts/<name>', methods=['POST'])
 def update_prompt(name):
-    """프롬프트 내용 수정 (작업 디렉토리에서, 타임스탬프 백업)"""
+    """프롬프트 내용 수정 (작업 디렉토리에서, 사용자 지정 백업 파일명)"""
     if name not in PROMPT_FILES:
         return jsonify({'error': 'Prompt not found'}), 404
     
     content = request.json.get('content', '')
+    custom_backup_name = request.json.get('backup_name', '').strip()
     file_path = os.path.join(WORK_PROMPT_DIR, PROMPT_FILES[name])
     
-    # 타임스탬프 백업 파일명
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_filename = f"{PROMPT_FILES[name].replace('.md', '')}_{timestamp}.md.backup"
+    # 백업 파일명 결정
+    if custom_backup_name:
+        # 사용자 지정 이름 사용
+        backup_filename = custom_backup_name if custom_backup_name.endswith('.backup') else f"{custom_backup_name}.backup"
+    else:
+        # 기본: 타임스탬프 백업 파일명
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_filename = f"{PROMPT_FILES[name].replace('.md', '')}_{timestamp}.md.backup"
+    
     backup_path = os.path.join(BACKUP_DIR, backup_filename)
     
+    # 중복 파일명 체크
+    if os.path.exists(backup_path):
+        return jsonify({'error': f'백업 파일 "{backup_filename}"이(가) 이미 존재합니다'}), 400
+    
     try:
-        # 현재 파일 백업
-        if os.path.exists(file_path):
-            with open(file_path, 'r', encoding='utf-8') as f:
-                original = f.read()
-            with open(backup_path, 'w', encoding='utf-8') as f:
-                f.write(original)
-        
         # 새 내용 저장
         with open(file_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        # 저장된 내용을 백업
+        with open(backup_path, 'w', encoding='utf-8') as f:
             f.write(content)
         
         return jsonify({'success': True, 'backup': backup_filename})
@@ -114,13 +122,13 @@ def restore_original(name):
 
 @prompt_bp.route('/api/prompts/<name>/backups')
 def list_backups(name):
-    """백업 목록 조회"""
+    """백업 목록 조회 - 모든 백업 파일 표시"""
     if name not in PROMPT_FILES:
         return jsonify({'error': 'Prompt not found'}), 404
     
     try:
-        prefix = PROMPT_FILES[name].replace('.md', '')
-        backups = [f for f in os.listdir(BACKUP_DIR) if f.startswith(prefix) and f.endswith('.backup')]
+        # 모든 .backup 파일 표시 (사용자가 이름 변경한 경우도 포함)
+        backups = [f for f in os.listdir(BACKUP_DIR) if f.endswith('.backup')]
         backups.sort(reverse=True)  # 최신 순
         return jsonify({'backups': backups})
     except Exception as e:

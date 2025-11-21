@@ -111,15 +111,27 @@
 
         async function savePrompt() {
             const content = document.getElementById('content').value;
+            
+            // 백업 파일명 입력받기
+            const timestamp = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15).replace('T', '_');
+            const defaultName = `${currentPrompt}_${timestamp}.md`;
+            const backupName = prompt('백업 파일명을 입력하세요:', defaultName);
+            
+            // 취소하면 저장하지 않음
+            if (backupName === null) return;
+            
             const res = await fetch(`/api/prompts/${currentPrompt}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ content })
+                body: JSON.stringify({ 
+                    content: content,
+                    backup_name: backupName.trim()
+                })
             });
             
             const result = await res.json();
             if (result.success) {
-                showMessage('저장 완료! (백업: ' + result.backup + ')');
+                showMessage('✅ 저장 완료! (백업: ' + result.backup + ')');
                 originalContent = content;
             } else {
                 showMessage('❌ 저장 실패: ' + result.error, true);
@@ -127,7 +139,7 @@
         }
 
         async function restoreOriginal() {
-            if (!confirm('원본 프롬프트로 복원하시겠습니까? (현재 내용은 백업됩니다)')) return;
+            if (!confirm('원본 프롬프트로 복원하시겠습니까? (현재 내용은 삭제됩니다.)')) return;
             
             const res = await fetch(`/api/prompts/${currentPrompt}/restore`, {
                 method: 'POST'
