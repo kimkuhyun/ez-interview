@@ -25,7 +25,10 @@
 
 [행동 규칙]
 
-- 질의는 중복 없이 목적에 따라 분리한다.
+- **[핵심] resume_query는 axes 전체 키워드 + JD 필수 기술 키워드를 모두 포함해야 한다.**
+  - user_prompt(렌즈)는 키워드 강조 순서만 조정할 뿐, 특정 축/기술을 질의에서 완전히 삭제하면 안 된다.
+  - 예: axes=["문제해결", "협업", "Docker"], JD 필수기술=["Kubernetes", "Python"] → resume_query는 "문제해결, 협업, Docker, Kubernetes, Python" 등 모든 키워드를 쉼표로 연결
+- **질의 형식: 각 질의는 쉼표로 구분된 키워드 나열 한 줄로만 작성. 문장/설명 금지.**
 - resume/competency/interview/portfolio는 서로 다른 키워드 구조를 가진다.
 - user_prompt에서 요청한 분석 관점은 반드시 질의에 반영한다.
 - 중복·수식어·서술형 문장을 절대 생성하지 않는다.

@@ -325,6 +325,7 @@ class ReportState(TypedDict):
 
     retry_count: int
     retry_mode: Optional[str]
+    has_portfolio: bool
 #========================== 프롬프트 에이전트 노드 ===========================
 def node_optimize_prompt(state: ReportState) -> Dict[str, Any]:
     parser = PydanticOutputParser(pydantic_object=OptimizedPrompt)
@@ -344,6 +345,9 @@ def node_optimize_prompt(state: ReportState) -> Dict[str, Any]:
 def node_query_plan(state: ReportState) -> Dict[str, Any]:
     parser = PydanticOutputParser(pydantic_object=QueryPlan)
     opt = state["optimized_prompt"]
+    axes = state["axes"]
+    jd_text = state.get("jd_text") or ""
+    
     prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("queryPlan_agent")),
         ("user", "OptimizedPrompt: {opt}\naxes: {axes}\njd_text: {jd_text}\n\n{format_instructions}")
@@ -351,10 +355,16 @@ def node_query_plan(state: ReportState) -> Dict[str, Any]:
     chain = prompt | _llm_solar_chat() | parser
     result = chain.invoke({
         "opt": opt.model_dump_json(),
-        "axes": state["axes"],
-        "jd_text": state.get("jd_text") or "",
+        "axes": axes,
+        "jd_text": jd_text,
         "format_instructions": parser.get_format_instructions()
     })
+    
+    # 품질 검증: quality_score < 0.7이면 경고 출력
+    if result.quality_score < 0.7 or result.needs_retry:
+        print(f"\n⚠️  [쿼리 품질] 검색 쿼리 품질이 낮을 수 있습니다 (score: {result.quality_score:.2f})")
+        print(f"    힌트: {', '.join(result.hints) if result.hints else '없음'}")
+    
     return {"query_plan": result}
 #========================== 리트리버 에이전트 노드 ===========================
 def node_retrieve(state: ReportState) -> Dict[str, Any]:
@@ -362,29 +372,51 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
     session_id = state["session_id"]
     jd_id = state.get("jd_id")  #
     
-    print("\n" + "="*80)
-    print("🔍 [RETRIEVE NODE] RAG 검색 시작")
-    print("="*80)
-    print(f"🎯 검색 파라미터:")
-    print(f"   - session_id (resume/portfolio용): {session_id}")
-    print(f"   - jd_id (JD용): {jd_id}")
-    print(f"   - resume_query: {qp.resume_query[:100] if qp.resume_query else 'None'}...")
-    print(f"   - competency_query (JD): {qp.competency_query[:100] if qp.competency_query else 'None'}...")
-    print(f"   - portfolio_query: {qp.portfolio_query[:100] if qp.portfolio_query else 'None'}...")
-    print("="*80)
+    print("\n[RAG 검색]")
     
-    resume_ctx = search_similar_chunks(qp.resume_query, session_id=session_id, doc_type="resume", top_k=20) if qp.resume_query else ""
-    print(f"✅ Resume 검색 완료: {len(str(resume_ctx))} 자")
+    # Resume 검색
+    resume_ctx = search_similar_chunks(qp.resume_query, session_id=session_id, doc_type="resume", top_k=30) if qp.resume_query else ""
+    resume_len = len(str(resume_ctx))
+    print(f"  이력서 - 질의: {qp.resume_query[:80]}... → 결과: {resume_len}자")
     
-    jd_ctx = search_similar_chunks(qp.competency_query, jd_id=jd_id, doc_type="jd", top_k=10) if qp.competency_query else ""
-    print(f"✅ JD 검색 완료: {len(str(jd_ctx))} 자")
+    # RAG 결과가 부족하면 동일 쿼리로 추가 검색
+    if resume_len < 2000 and state.get("resume_text"):
+        # 동일 쿼리로 추가 청크 검색
+        additional_resume = search_similar_chunks(qp.resume_query, session_id=session_id, doc_type="resume", top_k=50, offset=30)
+        if additional_resume and len(str(additional_resume)) > 100:
+            resume_ctx = str(resume_ctx) + "\n\n=== 추가 관련 내용 ===\n" + str(additional_resume)
+            print(f"    → 추가 RAG 검색 (+{len(str(additional_resume))}자)")
     
+    # JD 검색
+    jd_ctx = search_similar_chunks(qp.competency_query, jd_id=jd_id, doc_type="jd", top_k=15) if qp.competency_query else ""
+    jd_len = len(str(jd_ctx))
+    print(f"  JD - 질의: {qp.competency_query[:80]}... → 결과: {jd_len}자")
+    
+    if jd_len < 1000 and state.get("jd_text"):
+        additional_jd = search_similar_chunks(qp.competency_query, jd_id=jd_id, doc_type="jd", top_k=25, offset=15)
+        if additional_jd and len(str(additional_jd)) > 100:
+            jd_ctx = str(jd_ctx) + "\n\n=== 추가 관련 내용 ===\n" + str(additional_jd)
+            print(f"    → 추가 RAG 검색 (+{len(str(additional_jd))}자)")
+    
+    # Interview 검색
     interview_ctx = retrieve_interview_context(session_id) if session_id else ""
-    print(f"✅ Interview 검색 완료: {len(str(interview_ctx))} 자")
+    interview_len = len(str(interview_ctx))
+    print(f"  인터뷰로그 - 전체 조회 → 결과: {interview_len}자")
     
-    portfolio_ctx = search_similar_chunks(qp.portfolio_query, session_id=session_id, doc_type="portfolio", top_k=20) if qp.portfolio_query and qp.portfolio_query.strip() else None
-    print(f"✅ Portfolio 검색 완료: {len(str(portfolio_ctx)) if portfolio_ctx else 0} 자")
-    print("="*80 + "\n")
+    # Portfolio 검색
+    portfolio_ctx = search_similar_chunks(qp.portfolio_query, session_id=session_id, doc_type="portfolio", top_k=30) if qp.portfolio_query and qp.portfolio_query.strip() else None
+    portfolio_len = len(str(portfolio_ctx)) if portfolio_ctx else 0
+    if qp.portfolio_query and qp.portfolio_query.strip():
+        print(f"  포트폴리오 - 질의: {qp.portfolio_query[:80]}... → 결과: {portfolio_len}자")
+        
+        if portfolio_len < 1500 and state.get("portfolio_text"):
+            additional_portfolio = search_similar_chunks(qp.portfolio_query, session_id=session_id, doc_type="portfolio", top_k=50, offset=30)
+            if additional_portfolio and len(str(additional_portfolio)) > 100:
+                portfolio_ctx = str(portfolio_ctx) + "\n\n=== 추가 관련 내용 ===\n" + str(additional_portfolio)
+                print(f"    → 추가 RAG 검색 (+{len(str(additional_portfolio))}자)")
+    else:
+        print(f"  포트폴리오 - 검색 안 함")
+    print()
     
     return {
         "resume_ctx": resume_ctx,
@@ -394,44 +426,31 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
     }
 #========================== 병렬 분석 에이전트 노드 ===========================
 async def node_parallel_analysis(state: ReportState) -> Dict[str, Any]:
-    """인터뷰 로그가 있을 때만 실행되는 병렬 분석 노드"""
+    """3개 에이전트 완전 병렬 실행"""
     resume = state.get("resume_ctx") or state.get("resume_text") or ""
     portfolio = state.get("portfolio_ctx") or state.get("portfolio_text") or ""
-    interview = state.get("interview_ctx") or state.get("interview_logs") or ""
     jd = state.get("jd_ctx") or state.get("jd_text") or ""
     axes = state["axes"]
-    
-    # 인터뷰 로그 확인
+    interview = state.get("interview_ctx") or ""
     has_interview = bool(interview and interview.strip())
     
-    print(f"\n🔍 [병렬 분석] 인터뷰 로그 존재 여부: {has_interview}")
-    print(f"   - 인터뷰 로그 길이: {len(interview) if interview else 0}자")
-    print(f"   - 이력서 데이터 길이: {len(resume) if resume else 0}자\n")
+    print(f"\n[병렬 분석] 인터뷰: {'있음' if has_interview else '없음'} / 이력서: {len(resume)}자 / 포트폴리오: {len(portfolio)}자")
     
     comp_parser = PydanticOutputParser(pydantic_object=CompAgentOut)
-    summary_parser = PydanticOutputParser(pydantic_object=SummaryAgentOut)
-    quality_parser = PydanticOutputParser(pydantic_object=QualityAgentOut)
-    
     comp_prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("comp_agent")),
         ("user", "has_interview: {has_interview}\nresume: {resume}\nportfolio: {portfolio}\ninterview: {interview}\naxes: {axes}\njd_text: {jd}\n\n{format_instructions}")
     ])
-    
     comp_chain = comp_prompt | _llm_solar_reasoning() | comp_parser
-    tasks = []
-    task_names = []
     
-    # CompAgent는 항상 실행 (이력서 기반 역량 평가 가능)
-    tasks.append(comp_chain.ainvoke({"has_interview": has_interview, "resume": resume, "portfolio": portfolio, "interview": interview, "axes": axes, "jd": jd, "format_instructions": comp_parser.get_format_instructions()}))
-    task_names.append("comp")
-    
-    result = {"comp_out": None, "summary_out": None, "quality_out": None}
-    
-    # 인터뷰 로그가 있을 때만 SummaryAgent와 QualityAgent 실행
     if has_interview:
+        # 인터뷰 있음: 3개 에이전트 완전 병렬 실행
+        summary_parser = PydanticOutputParser(pydantic_object=SummaryAgentOut)
+        quality_parser = PydanticOutputParser(pydantic_object=QualityAgentOut)
+        
         summary_prompt = ChatPromptTemplate.from_messages([
             ("system", build_system_prompt("summary_agent")),
-            ("user", "interview: {interview}\naxes: {axes}\njd_text: {jd}\n\n{format_instructions}")
+            ("user", "interview: {interview}\n\n{format_instructions}")
         ])
         quality_prompt = ChatPromptTemplate.from_messages([
             ("system", build_system_prompt("quality_agent")),
@@ -441,58 +460,32 @@ async def node_parallel_analysis(state: ReportState) -> Dict[str, Any]:
         summary_chain = summary_prompt | _llm_solar_chat() | summary_parser
         quality_chain = quality_prompt | _llm_gpt() | quality_parser
         
-        tasks.append(summary_chain.ainvoke({"interview": interview, "axes": axes, "jd": jd, "format_instructions": summary_parser.get_format_instructions()}))
-        task_names.append("summary")
+        comp_out, summary_out, quality_out = await asyncio.gather(
+            comp_chain.ainvoke({"has_interview": has_interview, "resume": resume, "portfolio": portfolio, "interview": interview, "axes": axes, "jd": jd, "format_instructions": comp_parser.get_format_instructions()}),
+            summary_chain.ainvoke({"interview": interview, "format_instructions": summary_parser.get_format_instructions()}),
+            quality_chain.ainvoke({"resume": resume, "portfolio": portfolio, "interview": interview, "jd": jd, "format_instructions": quality_parser.get_format_instructions()})
+        )
         
-        tasks.append(quality_chain.ainvoke({"resume": resume, "portfolio": portfolio, "interview": interview, "jd": jd, "format_instructions": quality_parser.get_format_instructions()}))
-        task_names.append("quality")
-        
-        # 병렬 실행
-        results = await asyncio.gather(*tasks)
-        result["comp_out"] = results[0]
-        result["summary_out"] = results[1]
-        result["quality_out"] = results[2]
-        
-        print("✅ [병렬 분석] CompAgent, SummaryAgent, QualityAgent 완료")
+        return {"comp_out": comp_out, "summary_out": summary_out, "quality_out": quality_out}
     else:
-        # 인터뷰 로그가 없으면 CompAgent만 실행
-        results = await asyncio.gather(*tasks)
-        result["comp_out"] = results[0]
+        # 인터뷰 없음: CompAgent만 실행 + 기본값 반환
+        comp_out = await comp_chain.ainvoke({"has_interview": has_interview, "resume": resume, "portfolio": portfolio, "interview": interview, "axes": axes, "jd": jd, "format_instructions": comp_parser.get_format_instructions()})
         
-        # 기본값 생성
-        result["summary_out"] = SummaryAgentOut(
-            headline=Headline(
-                oneline_summary="인터뷰 미진행",
-                tag=["데이터 부족"]
+        return {
+            "comp_out": comp_out,
+            "summary_out": SummaryAgentOut(
+                headline=Headline(oneline_summary="인터뷰 미진행", tag=["데이터 부족"]),
+                interview_summary=InterviewSummary(interview_summary="인터뷰가 진행되지 않았습니다.", items=[]),
+                interview_stat=InterviewStat(),
+                quality_score=0.0, needs_retry=True, hints=["인터뷰 로그가 필요합니다"], self_comment="인터뷰 데이터 없음"
             ),
-            interview_summary=InterviewSummary(
-                interview_summary="인터뷰가 진행되지 않았습니다.",
-                items=[]
-            ),
-            interview_stat=InterviewStat(),
-            quality_score=0.0,
-            needs_retry=True,
-            hints=["인터뷰 로그가 필요합니다"],
-            self_comment="인터뷰 데이터 없음"
-        )
-        
-        result["quality_out"] = QualityAgentOut(
-            contradiction_score=0,
-            depth_score=0,
-            reliability_score=0,
-            contradiction_reason="인터뷰 미진행으로 평가 불가",
-            depth_reason="인터뷰 미진행으로 평가 불가",
-            reliability_reason="인터뷰 미진행으로 평가 불가",
-            positive_comment="이력서 기반 평가만 가능합니다.",
-            improvement_comment="인터뷰를 통한 검증이 필요합니다.",
-            quality_score=0.0,
-            needs_retry=True,
-            hints=["인터뷰 로그가 필요합니다"]
-        )
-        
-        print("⚠️  [병렬 분석] 인터뷰 로그 없음 - CompAgent만 실행, 기본값 반환")
-    
-    return result
+            "quality_out": QualityAgentOut(
+                contradiction_score=0, depth_score=0, reliability_score=0,
+                contradiction_reason="인터뷰 미진행으로 평가 불가", depth_reason="인터뷰 미진행으로 평가 불가", reliability_reason="인터뷰 미진행으로 평가 불가",
+                positive_comment="이력서 기반 평가만 가능합니다.", improvement_comment="인터뷰를 통한 검증이 필요합니다.",
+                quality_score=0.0, needs_retry=True, hints=["인터뷰 로그가 필요합니다"]
+            )
+        }
 
 #========================== 라우팅 및 재시도 노드 ===========================
 def node_route(state: ReportState) -> Dict[str, Any]:
@@ -504,55 +497,104 @@ def node_route(state: ReportState) -> Dict[str, Any]:
     interview = state.get("interview_ctx") or state.get("interview_logs") or ""
     has_interview = bool(interview and interview.strip())
     
-    print(f"\n🔀 [라우팅] 재시도 체크 (시도 횟수: {retry}/3)")
-    print(f"   - 인터뷰 로그 존재: {has_interview}")
-    print(f"   - Comp quality: {comp.quality_score:.2f}, needs_retry: {comp.needs_retry}")
-    print(f"   - Summary quality: {summary.quality_score:.2f}, needs_retry: {summary.needs_retry}")
-    print(f"   - Quality quality: {quality.quality_score:.2f}, needs_retry: {quality.needs_retry}\n")
-    
     if retry >= 3:
-        print("❌ [라우팅] 최대 재시도 횟수 초과 - 최종 단계로 진행\n")
         return {"retry_mode": "none"}
     
-    # 인터뷰 로그가 없는 경우 데이터 부족으로 처리하지 않음 (정상 플로우)
     if not has_interview:
-        print("ℹ️  [라우팅] 인터뷰 미진행 - 최종 단계로 진행\n")
         return {"retry_mode": "none"}
     
-    # 1. 데이터 부족 우선 처리
     if comp.needs_retry or summary.needs_retry or quality.needs_retry:
-        print("⚠️  [라우팅] 데이터 부족 감지 - 추가 데이터 검색\n")
+        print(f"\n[재시도] 데이터 부족 ({retry+1}/3)")
         return {"retry_mode": "data"}
     
-    # 2. 품질 점수 종합 평가
     avg_quality = (comp.quality_score + summary.quality_score + quality.quality_score) / 3
     
-    # 3. 개별 품질 불량 체크
     if (comp.quality_score < 0.7 or 
         summary.quality_score < 0.7 or 
         quality.quality_score < 0.7 or 
         avg_quality < 0.75):
-        print(f"⚠️  [라우팅] 품질 불량 감지 (평균: {avg_quality:.2f}) - 품질 개선 재시도\n")
+        print(f"\n[재시도] 품질 개선 (평균: {avg_quality:.2f}, {retry+1}/3)")
         return {"retry_mode": "quality"}
-    
-    print(f"✅ [라우팅] 품질 기준 충족 (평균: {avg_quality:.2f}) - 최종 단계로 진행\n")
     return {"retry_mode": "none"}
 #========================== 재시도 에이전트 노드 ===========================
 def node_retry_retrieve(state: ReportState) -> Dict[str, Any]:
+    """재시도 시 에이전트 힌트 기반으로 데이터 재검색"""
     session_id = state["session_id"]
-    additional_ctx = retrieve_interview_context(session_id)
-    current_ctx = state.get("interview_ctx") or ""
+    retry_count = state["retry_count"]
+    axes = state["axes"]
+    qp = state["query_plan"]
     
-    return {
-        "interview_ctx": current_ctx + "\n\n=== 추가 컨텍스트 ===\n" + additional_ctx,
-        "retry_count": state["retry_count"] + 1
+    # 각 에이전트에서 제공한 힌트 수집
+    comp = state.get("comp_out")
+    summary = state.get("summary_out")
+    quality = state.get("quality_out")
+    
+    all_hints = []
+    if comp and comp.hints:
+        all_hints.extend(comp.hints)
+    if summary and summary.hints:
+        all_hints.extend(summary.hints)
+    if quality and quality.hints:
+        all_hints.extend(quality.hints)
+    
+    print(f"\n[재검색] 에이전트 힌트 기반 재검색 ({retry_count+1}회차)")
+    
+    # 힌트 기반 쿼리 생성
+    if all_hints:
+        # 힌트에서 핵심 키워드 추출하여 쿼리 구성
+        hint_keywords = ", ".join(all_hints[:3])  # 상위 3개 힌트 사용
+        additional_query = f"{hint_keywords}, {', '.join(axes)}"
+        print(f"  힌트 기반 쿼리: {hint_keywords[:100]}...")
+    else:
+        # 힌트가 없으면 재시도 횟수에 따라 전략 변경
+        if retry_count == 0:
+            additional_query = f"구체적 사례, 프로젝트 경험, 성과, {', '.join(axes[:3])}"
+            print(f"  전략: 구체적 사례 중심 (힌트 없음)")
+        elif retry_count == 1:
+            additional_query = f"기술 스택, 문제 해결 방법, 도구 활용, {', '.join(axes[2:])}"
+            print(f"  전략: 기술 세부사항 중심 (힌트 없음)")
+        else:
+            additional_query = f"경력, 학력, 프로젝트, 기술, {', '.join(axes)}"
+            print(f"  전략: 포괄적 검색 (힌트 없음)")
+    
+    # 추가 검색 (힌트 기반 쿼리 사용)
+    additional_resume = search_similar_chunks(additional_query, session_id=session_id, doc_type="resume", top_k=15)
+    # 인터뷰는 이미 전체 조회했으므로 재검색하지 않음
+    
+    # 포트폴리오도 힌트에 따라 추가 검색
+    additional_portfolio = None
+    if state.get("has_portfolio") and all_hints:
+        portfolio_query = f"{', '.join(all_hints[:2])}, 프로젝트, 경험"
+        additional_portfolio = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=10)
+        print(f"  포트폴리오 추가 검색: {len(str(additional_portfolio))}자")
+    
+    # 기존 컨텍스트에 추가
+    current_resume = state.get("resume_ctx") or ""
+    current_portfolio = state.get("portfolio_ctx") or ""
+    
+    new_resume = current_resume + f"\n\n=== 힌트 기반 재검색 ({retry_count+1}회차) ===\n" + str(additional_resume)
+    
+    updates = {
+        "resume_ctx": new_resume,
+        "retry_count": retry_count + 1
     }
+    
+    if additional_portfolio:
+        new_portfolio = current_portfolio + f"\n\n=== 힌트 기반 재검색 ({retry_count+1}회차) ===\n" + str(additional_portfolio)
+        updates["portfolio_ctx"] = new_portfolio
+    
+    print(f"  추가된 이력서: +{len(str(additional_resume))}자")
+    print(f"  인터뷰: 재검색 안 함 (전체 데이터 이미 로드됨)")
+    
+    return updates
 
 async def node_retry_quality_full(state: ReportState) -> Dict[str, Any]:
+    """품질 개선을 위한 재실행"""
     comp = state["comp_out"]
     summary = state["summary_out"]
     quality = state["quality_out"]
     
+    # 데이터 가져오기
     interview = state.get("interview_ctx") or state.get("interview_logs") or ""
     resume = state.get("resume_ctx") or state.get("resume_text") or ""
     portfolio = state.get("portfolio_ctx") or state.get("portfolio_text") or ""
@@ -580,10 +622,10 @@ async def node_retry_quality_full(state: ReportState) -> Dict[str, Any]:
         summary_parser = PydanticOutputParser(pydantic_object=SummaryAgentOut)
         summary_prompt = ChatPromptTemplate.from_messages([
             ("system", build_system_prompt("summary_agent") + hint_context),
-            ("user", "interview: {interview}\naxes: {axes}\njd_text: {jd}\n\n{format_instructions}")
+            ("user", "interview: {interview}\n\n{format_instructions}")
         ])
         summary_chain = summary_prompt | _llm_solar_reasoning() | summary_parser
-        tasks.append(("summary_out", summary_chain.ainvoke({"interview": interview, "axes": axes, "jd": jd, "format_instructions": summary_parser.get_format_instructions()})))
+        tasks.append(("summary_out", summary_chain.ainvoke({"interview": interview, "format_instructions": summary_parser.get_format_instructions()})))
     
     if quality.quality_score < 0.7:
         quality_parser = PydanticOutputParser(pydantic_object=QualityAgentOut)
@@ -605,6 +647,7 @@ async def node_retry_quality_full(state: ReportState) -> Dict[str, Any]:
 #========================== 최종 에이전트 노드 ===========================
 
 def node_final_agent(state: ReportState) -> Dict[str, Any]:
+    """최종 평가 및 추천 결정"""
     comp = state["comp_out"]
     summary = state["summary_out"]
     opt = state["optimized_prompt"]
@@ -612,6 +655,10 @@ def node_final_agent(state: ReportState) -> Dict[str, Any]:
     position = state.get("position_applied", "")
     interview = state.get("interview_ctx") or state.get("interview_logs") or ""
     has_interview = bool(interview and interview.strip())
+    
+    # 데이터 부족 경고
+    if not comp or not summary:
+        print(f"\n⚠️  [최종분석] 필수 데이터 부족 - 기본 평가만 진행")
     
     # 이력서 전체 텍스트
     resume = state.get("resume_ctx") or state.get("resume_text") or ""
@@ -621,11 +668,8 @@ def node_final_agent(state: ReportState) -> Dict[str, Any]:
     portfolio_relevant = ""
     if state.get("has_portfolio"):
         # CompAgent의 evidence 기반으로 포트폴리오 관련 부분 검색
-        evidence_keywords = " ".join([ev.evidence[:100] for ev in comp.evidences[:20]])  # 상위 5개 증거의 키워드
+        evidence_keywords = " ".join([ev.evidence[:100] for ev in comp.evidences[:20]])
         search_query = f"JD 요구사항: {jd[:200]} 관련 경험: {evidence_keywords}"
-        
-        print(f"\n📂 [FinalAgent] 포트폴리오 관련 부분 검색")
-        print(f"   - 검색 쿼리: {search_query[:150]}...")
         
         portfolio_chunks = search_similar_chunks(
             query=search_query,
@@ -634,7 +678,7 @@ def node_final_agent(state: ReportState) -> Dict[str, Any]:
             top_k=5
         )
         portfolio_relevant = "\n\n".join([chunk.get("content", "") for chunk in portfolio_chunks])
-        print(f"   ✅ 포트폴리오 관련 부분 검색 완료: {len(portfolio_relevant)}자\n")
+        print(f"\n[최종분석] 포트폴리오 추가 검색: {len(portfolio_relevant)}자")
 
     final_prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("final_agent")),
@@ -667,20 +711,19 @@ def node_final_agent(state: ReportState) -> Dict[str, Any]:
     return {"final_out": final_out}
 #========================== 보고서 조립 노드 ===========================
 def node_assemble_report(state: ReportState) -> Dict[str, Any]:
-    comp = state["comp_out"]
-    summary = state["summary_out"]
-    quality = state["quality_out"]
-    final = state["final_out"]
+    """최종 리포트 조립"""
+    comp = state.get("comp_out")
+    summary = state.get("summary_out")
+    quality = state.get("quality_out")
+    final = state.get("final_out")
     
-    print("\n" + "="*80)
-    print("📋 [ASSEMBLE REPORT] 리포트 최종 조립")
-    print("="*80)
-    print("📊 메타데이터 확인:")
-    print(f"   - candidate_name: {state['candidate_name']}")
-    print(f"   - position_applied: {state['position_applied']}")
-    print(f"   - session_id: {state['session_id']}")
-    print(f"   - jd_id: {state.get('jd_id')}")
-    print("="*80 + "\n")
+    # 필수 데이터 검증
+    if not comp or not summary or not quality or not final:
+        print(f"\n❌ [리포트 조립] 필수 데이터 누락")
+        print(f"  comp: {bool(comp)}, summary: {bool(summary)}, quality: {bool(quality)}, final: {bool(final)}")
+        raise ValueError("리포트 조립에 필요한 데이터가 부족합니다")
+    
+    print("\n[리포트 조립 완료]\n")
     
     report = ReportOut(
         metadata=candiMeta(
@@ -769,71 +812,22 @@ def create_report(
     portfolio_text: Optional[str] = None,
     interview_logs: Optional[str] = None,
     has_portfolio: bool = False,
+    jd_id: Optional[str] = None,
 ) -> Dict[str, Any]:
-    from app.routes.state_routes import GLOBAL_STATE
-    
-    graph = build_report_graph()
-    
-    initial_state: ReportState = {
-        "session_id": session_id,
-        "candidate_name": candidate_name,
-        "position_applied": position_applied,
-        "jd_id": getattr(GLOBAL_STATE, "jd_id", None),  # 🆕 jd_id 추가
-        "user_prompt": user_prompt or "표준 평가 기준으로 진행",
-        "axes": axes_keys,
-        "resume_text": resume_text,
-        "jd_text": jd_text,
-        "portfolio_text": portfolio_text,
-        "interview_logs": interview_logs,
-        "resume_ctx": None,
-        "jd_ctx": None,
-        "portfolio_ctx": None,
-        "interview_ctx": None,
-        "optimized_prompt": None,
-        "query_plan": None,
-        "comp_out": None,
-        "summary_out": None,
-        "quality_out": None,
-        "final_out": None,
-        "report": None,
-        "retry_count": 0,
-        "retry_mode": None
-    }
-    
-    final_state = graph.invoke(initial_state)
-    report = final_state["report"]
-    
-    return report.model_dump() if report else None
-
-async def create_report_async(
-    session_id: str,
-    candidate_name: str,
-    position_applied: str,
-    axes_keys: List[str],
-    user_prompt: Optional[str] = None,
-    resume_text: Optional[str] = None,
-    jd_text: Optional[str] = None,
-    portfolio_text: Optional[str] = None,
-    interview_logs: Optional[str] = None,
-    has_portfolio: bool = False,
-) -> AsyncGenerator[Dict[str, Any], None]:
-    """스트리밍 버전 - 각 에이전트 실행 중 이벤트를 yield"""
+    """리포트 생성 (Sync 버전)"""
     try:
-        print("\n" + "="*80)
-        print("📊 [REPORT AGENT] 리포트 생성 시작")
-        print("="*80)
-        print(f"👤 후보자 정보:")
-        print(f"   - session_id: {session_id}")
-        print(f"   - candidate_name: {candidate_name}")
-        print(f"   - position_applied: {position_applied}")
-        print(f"   - axes_keys: {axes_keys}")
-        print(f"   - has_portfolio: {has_portfolio}")
+        # 필수 데이터 검증
+        if not session_id or not candidate_name or not axes_keys:
+            return {
+                "status": "failed",
+                "error": "필수 파라미터 누락 (session_id, candidate_name, axes_keys)"
+            }
         
-        # GLOBAL_STATE에서 jd_id 가져오기
-        from app.routes.state_routes import GLOBAL_STATE
-        jd_id = getattr(GLOBAL_STATE, "jd_id", None)
-        print(f"   - jd_id: {jd_id}")
-        print("="*80 + "\n")
+        if len(axes_keys) != 5:
+            return {
+                "status": "failed",
+                "error": f"axes_keys는 5개여야 합니다 (현재: {len(axes_keys)}개)"
+            }
         
         graph = build_report_graph()
         
@@ -841,7 +835,7 @@ async def create_report_async(
             "session_id": session_id,
             "candidate_name": candidate_name,
             "position_applied": position_applied,
-            "jd_id": jd_id,  # 🆕 jd_id 추가
+            "jd_id": jd_id,
             "user_prompt": user_prompt or "표준 평가 기준으로 진행",
             "axes": axes_keys,
             "resume_text": resume_text,
@@ -860,7 +854,101 @@ async def create_report_async(
             "final_out": None,
             "report": None,
             "retry_count": 0,
-            "retry_mode": None
+            "retry_mode": None,
+            "has_portfolio": has_portfolio,
+        }
+        
+        final_state = graph.invoke(initial_state)
+        report = final_state["report"]
+        
+        if not report:
+            return {
+                "status": "failed",
+                "error": "리포트 생성 실패 - 결과 없음"
+            }
+        
+        return report.model_dump()
+        
+    except Exception as e:
+        return {
+            "status": "failed",
+            "error": f"리포트 생성 중 오류: {str(e)}"
+        }
+
+async def create_report_async(
+    session_id: str,
+    candidate_name: str,
+    position_applied: str,
+    axes_keys: List[str],
+    user_prompt: Optional[str] = None,
+    resume_text: Optional[str] = None,
+    jd_text: Optional[str] = None,
+    portfolio_text: Optional[str] = None,
+    interview_logs: Optional[str] = None,
+    has_portfolio: bool = False,
+    jd_id: Optional[str] = None,
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """스트리밍 버전 - 각 에이전트 실행 중 이벤트를 yield"""
+    try:
+        # 필수 데이터 검증
+        if not session_id or not candidate_name or not axes_keys:
+            yield {
+                "type": "error",
+                "message": "필수 파라미터 누락"
+            }
+            return
+        
+        if len(axes_keys) != 5:
+            yield {
+                "type": "error",
+                "message": f"axes_keys는 5개여야 합니다 (현재: {len(axes_keys)}개)"
+            }
+            return
+        
+        print("\n" + "="*80)
+        print("📊 [REPORT AGENT] 리포트 생성 시작")
+        print("="*80)
+        print(f"[입력 파라미터]")
+        print(f"  session_id: {session_id}")
+        print(f"  jd_id: {jd_id}")
+        print(f"  후보자: {candidate_name}")
+        print(f"  포지션: {position_applied}")
+        print(f"  핵심역량: {axes_keys}")
+        print(f"  포트폴리오 여부: {has_portfolio}")
+        print(f"\n[입력 문서 확인]")
+        print(f"  이력서: {'있음' if resume_text else '없음'} ({len(resume_text) if resume_text else 0}자)")
+        print(f"  JD: {'있음' if jd_text else '없음'} ({len(jd_text) if jd_text else 0}자)")
+        print(f"  인터뷰로그: {'있음' if interview_logs else '없음'} ({len(interview_logs) if interview_logs else 0}자)")
+        print(f"  포트폴리오: {'있음' if portfolio_text else '없음'} ({len(portfolio_text) if portfolio_text else 0}자)")
+        print("="*80 + "\n")
+        
+        graph = build_report_graph()
+        
+        initial_state: ReportState = {
+            "session_id": session_id,
+            "candidate_name": candidate_name,
+            "position_applied": position_applied,
+            "jd_id": jd_id, 
+            "user_prompt": user_prompt or "표준 평가 기준으로 진행",
+            "axes": axes_keys,
+            "resume_text": resume_text,
+            "jd_text": jd_text,
+            "portfolio_text": portfolio_text,
+            "interview_logs": interview_logs,
+            "resume_ctx": None,
+            "jd_ctx": None,
+            "portfolio_ctx": None,
+            "interview_ctx": None,
+            "optimized_prompt": None,
+            "query_plan": None,
+            "comp_out": None,
+            "summary_out": None,
+            "quality_out": None,
+            "final_out": None,
+            "report": None,
+            "retry_count": 0,
+            "retry_mode": None,
+            "has_portfolio": has_portfolio,
         }
         
         # 그래프 스트리밍 실행

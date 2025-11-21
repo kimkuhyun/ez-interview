@@ -26,7 +26,6 @@ from app.agents.report_agent_v4o import create_report, create_report_async
 report_bp = Blueprint("report", __name__)
 reports_bp = Blueprint("reports", __name__)
 
-_AXES_KEY_PATTERN = re.compile(r"^[a-z][a-z0-9_]{1,32}$")
 _DEFAULT_AXES_KEYS = [
     "문제해결",
     "커뮤니케이션",
@@ -36,39 +35,6 @@ _DEFAULT_AXES_KEYS = [
 ]
 
 
-def _wants_html(payload: dict) -> bool:
-    return (payload.get("format") == "html")
-
-
-def _parse_axes_keys(payload: dict) -> list[str]:
-    raw = payload.get("axes_keys")
-    if isinstance(raw, list):
-        candidates = raw
-    else:
-        axes_keys_str = str(raw or "")
-        candidates = axes_keys_str.split(",")
-
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for cand in candidates:
-        key = str(cand or "").strip()
-        if not key:
-            continue
-        key = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", key)
-        key = re.sub(r"[^a-z0-9]+", "_", key, flags=re.IGNORECASE)
-        key = re.sub(r"_+", "_", key).strip("_").lower()
-        if not key:
-            continue
-        if not _AXES_KEY_PATTERN.fullmatch(key):
-            continue
-        if key in seen:
-            continue
-        normalized.append(key)
-        seen.add(key)
-        if len(normalized) == 5:
-            break
-
-    return normalized
 
 
 @report_bp.route("/panel/report")
@@ -167,6 +133,7 @@ def report_pdf():
                 axes_keys=axes_keys,
                 user_prompt=user_prompt,
                 has_portfolio=bool(getattr(GLOBAL_STATE, "portfolio_len", 0)),
+                jd_id=getattr(GLOBAL_STATE, "jd_id", None), 
             )
         except Exception as e:
             err = {
@@ -277,10 +244,6 @@ def generate_stream():
     """
     from app.routes.state_routes import GLOBAL_STATE
 
-    # GET 요청이므로 query parameter에서 가져옴
-    print(f"\n[reports/generate/stream] 스트리밍 요청 시작")
-    print(f"   - Query 파라미터: {dict(request.args)}")
-
     # session_id, axes_keys 파싱
     session_id = request.args.get('session_id') or GLOBAL_STATE.session_id
     metrics = GLOBAL_STATE.metrics
@@ -293,10 +256,8 @@ def generate_stream():
     # 폴백 session_id 처리
     FALLBACK_SESSION_ID = "7ac7d019-0c29-4af8-abd3-8bf18f4544bf"
     if not session_id:
-        print(f"⚠️  session_id가 없음 → 폴백 사용: {FALLBACK_SESSION_ID}")
         session_id = FALLBACK_SESSION_ID
     else:
-        # DB에서 데이터 확인
         try:
             from app.db.db_connection import get_connection
             conn = get_connection()
@@ -309,10 +270,8 @@ def generate_stream():
             conn.close()
 
             if doc_count == 0 and log_count == 0:
-                print(f"⚠️  DB에 데이터가 없음 → 폴백 사용: {FALLBACK_SESSION_ID}")
                 session_id = FALLBACK_SESSION_ID
-        except Exception as e:
-            print(f"⚠️  DB 확인 실패: {e} → 폴백 사용: {FALLBACK_SESSION_ID}")
+        except Exception:
             session_id = FALLBACK_SESSION_ID
 
     if metrics:
@@ -326,26 +285,12 @@ def generate_stream():
 
     if not axes_keys or len(axes_keys) != 5:
         axes_keys = _DEFAULT_AXES_KEYS.copy()
-
-    print(f"\n[스트리밍 파라미터]")
-    print(f"   - session_id: {session_id}")
-    print(f"   - candidate_name: {candidate_name}")
-    print(f"   - position: {position}")
-    print(f"   - axes_keys: {axes_keys}")
-    print(f"   - user_prompt: {user_prompt[:100] if user_prompt else '(없음)'}")
-    print(f"\n[🔑 GLOBAL_STATE 확인]")
-    print(f"   - GLOBAL_STATE.session_id: {GLOBAL_STATE.session_id}")
-    print(f"   - GLOBAL_STATE.jd_id: {getattr(GLOBAL_STATE, 'jd_id', None)}")
-    print(f"   - GLOBAL_STATE.candidate_name: {getattr(GLOBAL_STATE, 'candidate_name', None)}")
-    print(f"   - GLOBAL_STATE.position: {getattr(GLOBAL_STATE, 'position', None)}")
-    print()
+    
+    jd_id = getattr(GLOBAL_STATE, 'jd_id', None)
 
     async def async_generate():
         """비동기 SSE 이벤트 생성기"""
         try:
-            print(f"\n[SSE 스트림 시작]")
-            event_count = 0
-
             async for event in create_report_async(
                 session_id=session_id,
                 candidate_name=candidate_name,
@@ -353,32 +298,19 @@ def generate_stream():
                 axes_keys=axes_keys,
                 user_prompt=user_prompt,
                 has_portfolio=bool(getattr(GLOBAL_STATE, "portfolio_len", 0)),
+                jd_id=jd_id,
             ):
-                event_count += 1
-                print(
-                    f"[SSE] 이벤트 #{event_count} 전송 - "
-                    f"type: {event.get('type')}, agent: {event.get('agent', 'N/A')}"
-                )
-                event_count += 1
-                print(f"[SSE] 이벤트 #{event_count} 전송 - type: {event.get('type')}, agent: {event.get('agent', 'N/A')}")
-
                 if event["type"] == "debate":
                     yield f"event: debate\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
                 elif event["type"] == "error":
-                    print(f"[SSE] 에러 이벤트 전송 - {event.get('message', '')[:100]}")
                     yield f"event: error\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
                 elif event["type"] == "report":
-                    print(f"[SSE] 최종 리포트 전송 중...")
                     yield f"event: report\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
                 elif event["type"] == "done":
-                    print(f"[SSE] 완료 이벤트 전송")
                     yield f"event: done\ndata: {json.dumps({'status': 'completed'}, ensure_ascii=False)}\n\n"
                     return
 
         except Exception as e:
-            print(f"\n❌ [스트리밍 오류] {e}")
-            import traceback
-            traceback.print_exc()
             error_event = {
                 "type": "error",
                 "message": f"스트리밍 오류: {str(e)}"
@@ -401,20 +333,15 @@ def generate_stream():
                     event_data = loop.run_until_complete(async_gen.__anext__())
                     yield event_data
                 except StopAsyncIteration:
-                    # 제너레이터 정상 종료
                     break
 
         except Exception as e:
-            print(f"\n❌ [동기 래퍼 오류] {e}")
-            import traceback
-            traceback.print_exc()
             error_event = {
                 "type": "error",
                 "message": f"래퍼 오류: {str(e)}"
             }
             yield f"event: error\ndata: {json.dumps(error_event, ensure_ascii=False)}\n\n"
         finally:
-            # async generator 정리 → 내부 pending task 제거
             if async_gen is not None:
                 try:
                     loop.run_until_complete(async_gen.aclose())
@@ -422,7 +349,6 @@ def generate_stream():
                     pass
             if loop and not loop.is_closed():
                 loop.close()
-                print(f"[SSE] 이벤트 루프 종료")
 
     return Response(
         stream_with_context(generate()),
