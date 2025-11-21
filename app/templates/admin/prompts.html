@@ -119,7 +119,7 @@
             
             const result = await res.json();
             if (result.success) {
-                showMessage('✅ 저장 완료! (백업: ' + result.backup + ')');
+                showMessage('저장 완료! (백업: ' + result.backup + ')');
                 originalContent = content;
             } else {
                 showMessage('❌ 저장 실패: ' + result.error, true);
@@ -150,7 +150,7 @@
                 const list = document.getElementById('backupList');
                 list.innerHTML = result.backups.map(backup => `
                     <div class="backup-item">
-                        <div class="backup-name" onclick="loadBackup('${backup}')">📦 ${backup}</div>
+                        <div class="backup-name" onclick="loadBackup('${backup}')"> ${backup}</div>
                         <div class="backup-actions">
                             <button class="btn-rename" onclick="event.stopPropagation(); renameBackup('${backup}')">이름변경</button>
                             <button class="btn-delete" onclick="event.stopPropagation(); deleteBackup('${backup}')">삭제</button>
@@ -171,7 +171,7 @@
                 if (confirm(`백업 "${backupFile}"을(를) 불러오시겠습니까?`)) {
                     document.getElementById('content').value = result.content;
                     document.getElementById('backupModal').style.display = 'none';
-                    showMessage('✅ 백업을 불러왔습니다 (저장 버튼을 눌러 적용하세요)');
+                    showMessage('백업을 불러왔습니다 (저장 버튼을 눌러 적용하세요)');
                 }
             }
         }
@@ -185,7 +185,7 @@
             
             const result = await res.json();
             if (result.success) {
-                showMessage('✅ 백업이 삭제되었습니다');
+                showMessage('백업이 삭제되었습니다');
                 showBackups();  // 목록 새로고침
             } else {
                 showMessage('❌ 삭제 실패: ' + result.error, true);
@@ -204,7 +204,7 @@
             
             const result = await res.json();
             if (result.success) {
-                showMessage(`✅ 파일명이 "${result.new_name}"로 변경되었습니다`);
+                showMessage(`파일명이 "${result.new_name}"로 변경되었습니다`);
                 showBackups();  // 목록 새로고침
             } else {
                 showMessage('❌ 변경 실패: ' + result.error, true);
@@ -218,7 +218,7 @@
         function resetPrompt() {
             if (confirm('마지막 저장 상태로 되돌리시겠습니까?')) {
                 document.getElementById('content').value = originalContent;
-                showMessage('✅ 마지막 저장 상태로 복원됨');
+                showMessage('마지막 저장 상태로 복원됨');
             }
         }
 
