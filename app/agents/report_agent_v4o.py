@@ -19,12 +19,26 @@ from app.utils.rag_retriever import search_similar_chunks
 from app.utils.interview_store import retrieve_interview_context
 
 from pathlib import Path
-POLICY_DIR = Path("report_prompt")
+import os
+
+# 프롬프트 로드: uploads/report_prompt 우선, 없으면 원본 사용
+WORK_PROMPT_DIR = Path("uploads") / "report_prompt"
+ORIGINAL_PROMPT_DIR = Path("report_prompt")
+
 def load_policy_prompt(file_name: str) -> str:
-    path = POLICY_DIR / f"{file_name}.md"
-    if not path.exists():
-        return ""
-    return path.read_text(encoding="utf-8").strip()
+    """작업 디렉토리 우선, 없으면 원본에서 로드"""
+    # 1. uploads/report_prompt에서 찾기
+    work_path = WORK_PROMPT_DIR / f"{file_name}.md"
+    if work_path.exists():
+        return work_path.read_text(encoding="utf-8").strip()
+    
+    # 2. 원본(report_prompt)에서 찾기
+    original_path = ORIGINAL_PROMPT_DIR / f"{file_name}.md"
+    if original_path.exists():
+        return original_path.read_text(encoding="utf-8").strip()
+    
+    return ""
+
 def build_system_prompt(agent_policy_name: str) -> str:
     global_rules = load_policy_prompt("global_rules")
     agent_rules = load_policy_prompt(agent_policy_name)
