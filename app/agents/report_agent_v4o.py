@@ -347,7 +347,7 @@ def node_optimize_prompt(state: ReportState) -> Dict[str, Any]:
         ("system", build_system_prompt("optimized_agent")),
         ("user", "user_prompt: {user_prompt}\naxes: {axes}\njd_text: {jd_text}\n\n{format_instructions}")
     ])
-    chain = prompt | _llm_solar_chat() | parser
+    chain = prompt | _llm_solar_reasoning() | parser
     result = chain.invoke({
         "user_prompt": state["user_prompt"],
         "axes": state["axes"],
@@ -366,7 +366,7 @@ def node_query_plan(state: ReportState) -> Dict[str, Any]:
         ("system", build_system_prompt("queryPlan_agent")),
         ("user", "OptimizedPrompt: {opt}\naxes: {axes}\njd_text: {jd_text}\n\n{format_instructions}")
     ])
-    chain = prompt | _llm_solar_chat() | parser
+    chain = prompt | _llm_solar_reasoning() | parser
     result = chain.invoke({
         "opt": opt.model_dump_json(),
         "axes": axes,
@@ -471,7 +471,7 @@ async def node_parallel_analysis(state: ReportState) -> Dict[str, Any]:
             ("user", "resume: {resume}\nportfolio: {portfolio}\ninterview: {interview}\njd_text: {jd}\n\n{format_instructions}")
         ])
         
-        summary_chain = summary_prompt | _llm_solar_chat() | summary_parser
+        summary_chain = summary_prompt | _llm_solar_reasoning() | summary_parser
         quality_chain = quality_prompt | _llm_gpt() | quality_parser
         
         comp_out, summary_out, quality_out = await asyncio.gather(
@@ -646,7 +646,7 @@ async def node_retry_quality_full(state: ReportState) -> Dict[str, Any]:
             ("system", build_system_prompt("quality_agent") + hint_context),
             ("user", "resume: {resume}\nportfolio: {portfolio}\ninterview: {interview}\njd_text: {jd}\n\n{format_instructions}")
         ])
-        quality_chain = quality_prompt | _llm_solar_reasoning() | quality_parser
+        quality_chain = quality_prompt | _llm_gpt() | quality_parser
         tasks.append(("quality_out", quality_chain.ainvoke({"resume": resume, "portfolio": portfolio, "interview": interview, "jd": jd, "format_instructions": quality_parser.get_format_instructions()})))
     
     if tasks:
