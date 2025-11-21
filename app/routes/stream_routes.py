@@ -3,6 +3,9 @@ from app.agents.stream_agent import StreamAgent
 from app.agents.grammar_agent import get_postprocessor
 from app.routes.state_routes import GLOBAL_STATE
 import time
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import os
 
 stream_bp = Blueprint("stream", __name__)
 stream_agent = StreamAgent()
@@ -47,6 +50,45 @@ def error_response(message, status_code=400):
 def success_response(data=None):
     """성공 응답 생성"""
     return jsonify(data or {"status": "ok"})
+
+
+def get_jd_content_from_db(jd_id):
+    """JD content를 DB에서 조회"""
+    if not jd_id:
+        print("⚠️  [Stream] jd_id가 없습니다.")
+        return ""
+    
+    try:
+        conn = psycopg2.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=os.getenv("DB_PORT", "5432"),
+            database=os.getenv("DB_NAME", "postgres"),
+            user=os.getenv("DB_USER", "postgres"),
+            password=os.getenv("DB_PASSWORD", "")
+        )
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("""
+            SELECT content 
+            FROM interview.job_descriptions 
+            WHERE jd_id = %s
+        """, (jd_id,))
+        
+        result = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if result and result.get('content'):
+            content = result['content']
+            print(f"✅ [Stream] JD content 조회 완료: {len(content)}자")
+            return content
+        else:
+            print(f"⚠️  [Stream] JD content가 없습니다. (jd_id: {jd_id})")
+            return ""
+            
+    except Exception as e:
+        print(f"❌ [Stream] JD content 조회 실패: {e}")
+        return ""
 
 
 # ========================================
@@ -206,18 +248,19 @@ def ai_followup():
     if not conversation:
         return error_response(f"{data.get('question_id')} 대화가 없습니다", 404)
 
-    # history에 resume_text, jd_text, portfolio_text 추가
+    # 대화 히스토리
     history_with_docs = conversation.get("followups", []).copy()
     
-    # AI 에이전트 호출 (session_id + 문서 텍스트 전달)
+    # JD content DB 조회
+    jd_content = get_jd_content_from_db(GLOBAL_STATE.jd_id)
+    
+    # AI 에이전트 호출 (session_id로 RAG 검색, JD는 DB 조회)
     questions = stream_agent.generate_followups(
         text=data.get("text", ""),
         question_id=data.get("question_id"),
         history=history_with_docs,
-        session_id=GLOBAL_STATE.session_id,  # RAG 검색용
-        resume_text=GLOBAL_STATE.resume_text or "",  # 이력서 원문
-        jd_text=GLOBAL_STATE.jd_text or "",  # JD 원문
-        portfolio_text=GLOBAL_STATE.portfolio_text or "",  # 포트폴리오 원문
+        session_id=GLOBAL_STATE.session_id,  # RAG 검색용 (이력서/포트폴리오)
+        jd_text=jd_content,  # DB에서 조회한 JD 원문
         regen=data.get("regen", False),
     )
     

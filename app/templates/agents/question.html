@@ -15,6 +15,7 @@
       overflow: hidden;
       display: flex;
       flex-direction: column;
+      background: #F1F6F9;
     }
     
     h2, p {
@@ -46,11 +47,11 @@
 
     .section-header {
       padding: 12px 15px;
-      background: #f8f9fa;
+      background: #394867;
       border-bottom: 1px solid #ddd;
       flex-shrink: 0;
       font-weight: bold;
-      color: #333;
+      color: #fff;
     }
 
     .section-content {
@@ -89,7 +90,7 @@
       width: 20px;
       height: 20px;
       border: 3px solid #f3f3f3;
-      border-top: 3px solid #3498db;
+      border-top: 3px solid #394867;
       border-radius: 50%;
       animation: spin 1s linear infinite;
       margin-right: 10px;
@@ -101,9 +102,9 @@
     }
     
     .error-message {
-      background: #f8d7da;
-      border: 1px solid #f5c6cb;
-      color: #721c24;
+      background: #ffe5e3;
+      border: 1px solid #d96459;
+      color: #8b2f2a;
       padding: 12px;
       border-radius: 4px;
       margin-bottom: 15px;
@@ -111,9 +112,9 @@
     }
     
     .success-message {
-      background: #d4edda;
-      border: 1px solid #c3e6cb;
-      color: #155724;
+      background: #d9f2ee;
+      border: 1px solid #4a9d8e;
+      color: #2d5f56;
       padding: 12px;
       border-radius: 4px;
       margin-bottom: 15px;
@@ -121,26 +122,32 @@
     }
 
     .question-item {
-      border: 1px solid #ddd;
-      border-radius: 6px;
-      padding: 12px;
-      margin-bottom: 10px;
-      background: #fafafa;
+      border: 1px solid #e0e6ea;
+      border-radius: 8px;
+      padding: 14px;
+      margin-bottom: 12px;
+      background: #ffffff;
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
       flex-shrink: 0;
       cursor: move;
       transition: all 0.2s;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    }
+
+    .question-item:hover {
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+      border-color: #394867;
     }
 
     .question-item.dragging {
       opacity: 0.5;
-      background: #e8f4f8;
+      background: #e3ebf2;
     }
 
     .question-item.drag-over {
-      border-top: 3px solid #3498db;
+      border-top: 3px solid #394867;
     }
 
     .drag-handle {
@@ -155,14 +162,13 @@
     }
 
     .question-item.fixed {
-      background: #fff3cd;
-      border-color: #ffc107;
+      background: #fef8f0;
+      border-color: #e8a95d;
+      border-width: 2px;
     }
 
     .question-item.fixed::before {
-<!--      content: '📌 ';-->
       font-weight: bold;
-<!--      color: #ffc107;-->
       margin-right: 5px;
     }
     
@@ -175,7 +181,7 @@
     .question-text input[type="text"] {
       width: 100%;
       padding: 8px;
-      border: 1px solid #3498db;
+      border: 1px solid #394867;
       border-radius: 4px;
       font-size: 14px;
       font-family: Arial, sans-serif;
@@ -183,43 +189,46 @@
     
     .question-number {
       font-weight: bold;
-      color: #3498db;
+      color: #394867;
       margin-right: 10px;
       flex-shrink: 0;
     }
 
     .question-actions {
       display: flex;
-      gap: 5px;
+      gap: 6px;
       margin-left: 10px;
       flex-shrink: 0;
     }
 
     .question-actions button {
-      padding: 6px 10px;
+      padding: 7px 12px;
       border: none;
-      border-radius: 4px;
+      border-radius: 5px;
       cursor: pointer;
       font-size: 12px;
       transition: all 0.2s;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     }
 
     .edit-btn {
-      background: #3498db;
+      background: #6b8cb5;
       color: white;
+      font-weight: 500;
     }
 
     .edit-btn:hover {
-      background: #2980b9;
+      background: #5a7a9f;
+      transform: translateY(-1px);
     }
 
     .save-question-btn {
-      background: #27ae60;
+      background: #4a9d8e;
       color: white;
     }
 
     .save-question-btn:hover {
-      background: #229954;
+      background: #3d8375;
     }
 
     .cancel-btn {
@@ -232,16 +241,18 @@
     }
 
     .delete-btn {
-      background: #e74c3c;
+      background: #d96459;
       color: white;
+      font-weight: 500;
     }
 
     .delete-btn:hover {
-      background: #c0392b;
+      background: #c54f45;
+      transform: translateY(-1px);
     }
 
     .add-question-btn {
-      background: #27ae60;
+      background: #4a9d8e;
       color: white;
       border: none;
       border-radius: 6px;
@@ -255,11 +266,11 @@
     }
 
     .add-question-btn:hover {
-      background: #229954;
+      background: #3d8375;
     }
 
     .refresh-all-btn {
-      background: #f39c12;
+      background: #e8a95d;
       color: white;
       border: none;
       border-radius: 6px;
@@ -273,16 +284,18 @@
     }
 
     .refresh-all-btn:hover {
-      background: #e67e22;
+      background: #d4954a;
     }
 
     .refresh-btn {
-      background: #9b59b6;
+      background: #e8a95d;
       color: white;
+      font-weight: 500;
     }
 
     .refresh-btn:hover {
-      background: #8e44ad;
+      background: #d4954a;
+      transform: translateY(-1px);
     }
 
     .metric-list {
@@ -331,7 +344,7 @@
 
     .metric-input-wrapper button {
       padding: 6px 12px;
-      background: #27ae60;
+      background: #4a9d8e;
       color: white;
       border: none;
       border-radius: 4px;
@@ -341,11 +354,11 @@
     }
 
     .metric-input-wrapper button:hover {
-      background: #229954;
+      background: #3d8375;
     }
 
     .delete-metric-btn {
-      background: #e74c3c;
+      background: #d96459;
       color: white;
       border: none;
       border-radius: 3px;
@@ -356,11 +369,11 @@
     }
 
     .delete-metric-btn:hover {
-      background: #c0392b;
+      background: #c54f45;
     }
 
     .save-btn {
-      background: #007bff;
+      background: #394867;
       color: white;
       border: none;
       border-radius: 6px;
@@ -374,7 +387,7 @@
     }
     
     .save-btn:hover {
-      background: #0056b3;
+      background: #2d3850;
     }
     
     .save-btn:disabled {
@@ -383,12 +396,12 @@
     }
 
     .debug-info {
-      background: #e7f3ff;
-      border: 1px solid #b3d9ff;
+      background: #e8f0f7;
+      border: 1px solid #6b8cb5;
       padding: 10px;
       border-radius: 4px;
       font-size: 12px;
-      color: #004085;
+      color: #394867;
       margin-top: 15px;
     }
 
@@ -412,7 +425,7 @@
       position: fixed;
       bottom: 20px;
       right: 20px;
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      background: linear-gradient(135deg, #394867 0%, #4a9d8e 100%);
       color: white;
       border: none;
       border-radius: 50px;
@@ -420,14 +433,14 @@
       font-size: 16px;
       font-weight: bold;
       cursor: pointer;
-      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+      box-shadow: 0 4px 15px rgba(57, 72, 103, 0.4);
       transition: all 0.3s ease;
       z-index: 1000;
     }
 
     .interview-start-btn:hover {
       transform: translateY(-2px);
-      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+      box-shadow: 0 6px 20px rgba(57, 72, 103, 0.6);
     }
 
     .interview-start-btn:active {
@@ -438,7 +451,7 @@
 </head>
 <body>
   <div class="header">
-    <h2> AI 기반 질문 생성</h2>
+    <h2>AI 기반 질문 생성</h2>
     <p>AI가 생성한 질문과 평가지표를 검토하세요.</p>
     <div id="messageContainer"></div>
   </div>
@@ -446,7 +459,7 @@
   <div class="container">
     <!-- 질문 섹션 -->
     <div class="section-wrapper">
-      <div class="section-header">📋 면접 질문 (자동 생성 + 수정 가능)</div>
+      <div class="section-header">면접 질문 (자동 생성 + 수정 가능)</div>
       <div class="section-content" id="questionSection">
         <div class="loading-spinner"></div> 질문 생성 중...
       </div>
@@ -454,7 +467,7 @@
 
     <!-- 평가지표 섹션 -->
     <div class="section-wrapper">
-      <div class="section-header">📊 생성된 평가지표 (최대 5개 선택)</div>
+      <div class="section-header">생성된 평가지표 (최대 5개 선택)</div>
       <div class="section-content" id="metricSection">
         <div class="loading-spinner"></div> 평가지표 로드 중...
       </div>
@@ -462,7 +475,7 @@
   </div>
 
   <!-- 면접 진행 버튼 -->
-  <button class="interview-start-btn" onclick="startInterview()">🎤 면접 진행</button>
+  <button class="interview-start-btn" onclick="startInterview()">면접 진행</button>
 
   <script>
     let questions = [];
@@ -478,8 +491,8 @@
       last: "마지막으로 저희 회사에 하고 싶은 말씀이 있으신가요?"
     };
 
-    // ✅ 페이지 로드 시 자동으로 질문 생성
-    console.log("💡 question.html 로드됨 - 자동으로 질문 생성 시작...");
+    // 페이지 로드 시 자동으로 질문 생성
+    console.log("[Question] 페이지 로드됨 - 자동으로 질문 생성 시작...");
     
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', generateQuestions);
@@ -495,25 +508,25 @@
       const questionBtn = window.parent.document.getElementById("questionBtn");
       if (questionBtn) {
         questionBtn.disabled = true;
-        questionBtn.innerText = "⏳ 질문 생성 중...";
+        questionBtn.innerText = "질문 생성 중...";
       }
       
       if (questions.length > 0) {
-        console.log("💡 이미 질문이 생성되었습니다");
+        console.log("[Question] 이미 질문이 생성되었습니다");
         if (questionBtn) {
           questionBtn.disabled = true;
-          questionBtn.innerText = "✅ 질문 생성 완료";
+          questionBtn.innerText = "질문 생성 완료";
         }
         return;
       }
       
       try {
-        console.log("📡 API 호출 시작: /api/interview-question");
+        console.log("[Question] API 호출 시작: /api/interview-question");
         messageContainer.innerHTML = "";
         questionSection.innerHTML = '<div class="loading-spinner"></div> 질문 생성 중...';
 
         // 먼저 GLOBAL_STATE에서 session_id 가져오기
-        console.log("🔍 현재 State 조회 중...");
+        console.log("[Question] 현재 State 조회 중...");
         const stateRes = await fetch("/api/state", {
           method: "GET",
           headers: { "Content-Type": "application/json" }
@@ -525,15 +538,15 @@
         
         const stateData = await stateRes.json();
         const sessionId = stateData.session_id;
-        console.log("✅ Session ID 획득:", sessionId);
+        console.log("[Question] Session ID 획득:", sessionId);
 
         const requestBody = {
           query_text: "지원자 이력서 및 JD를 기반으로 면접 질문과 평가지표를 생성해라.",
           num_questions: 8,  // 고정 2개를 제외한 8개만 생성
-          session_id: sessionId  // ✅ session_id 포함
+          session_id: sessionId
         };
         
-        console.log("   - 요청 내용:", requestBody);
+        console.log("[Question] 요청 내용:", requestBody);
 
         const res = await fetch("/api/interview-question", {
           method: "POST",
@@ -541,16 +554,16 @@
           body: JSON.stringify(requestBody)
         });
 
-        console.log("📥 응답 상태:", res.status, res.statusText);
+        console.log("[Question] 응답 상태:", res.status, res.statusText);
 
         if (!res.ok) {
           const errorData = await res.json();
-          console.error("   - 에러 응답:", errorData);
+          console.error("[Question] 에러 응답:", errorData);
           throw new Error(`HTTP Error: ${res.status} ${res.statusText} - ${errorData.error || 'Unknown error'}`);
         }
 
         const data = await res.json();
-        console.log("✅ API 응답 데이터:", data);
+        console.log("[Question] API 응답 데이터:", data);
 
         if (!data.questions) {
           throw new Error("응답에 questions 필드가 없습니다");
@@ -567,7 +580,7 @@
         }));
         metrics = data.metrics;
 
-        console.log(`📊 생성된 질문: ${questions.length}개 (고정 2개 포함), 지표: ${metrics.length}개`);
+        console.log(`[Question] 생성된 질문: ${questions.length}개 (고정 2개 포함), 지표: ${metrics.length}개`);
 
         renderQuestions();
         renderMetrics();
@@ -575,15 +588,15 @@
         // 성공 시 버튼 비활성화 유지
         if (questionBtn) {
           questionBtn.disabled = true;
-          questionBtn.innerText = "✅ 질문 생성 완료";
+          questionBtn.innerText = "질문 생성 완료";
         }
 
       } catch (error) {
-        console.error("❌ 에러 발생:", error);
-        console.error("   - 전체 스택:", error.stack);
+        console.error("[Question] 에러 발생:", error);
+        console.error("[Question] 전체 스택:", error.stack);
         messageContainer.innerHTML = `
           <div class="error-message">
-            <strong>❌ 오류 발생:</strong> ${error.message}<br>
+            <strong>오류 발생:</strong> ${error.message}<br>
             <small>개발자 콘솔 (F12)을 확인하세요.</small>
           </div>
         `;
@@ -592,7 +605,7 @@
         // 실패 시 버튼 활성화
         if (questionBtn) {
           questionBtn.disabled = false;
-          questionBtn.innerText = "🤖 질문 생성";
+          questionBtn.innerText = "질문 생성";
         }
       }
     }
@@ -677,7 +690,7 @@
       // 질문 추가 버튼
       const addBtn = document.createElement("button");
       addBtn.className = "add-question-btn";
-      addBtn.textContent = "➞ 질문 추가";
+      addBtn.textContent = "질문 추가";
       addBtn.onclick = addNewQuestion;
       addBtn.style.flex = "1";
       addBtn.style.margin = "0";
@@ -686,7 +699,7 @@
       // 전체 새로고침 버튼
       const refreshAllBtn = document.createElement("button");
       refreshAllBtn.className = "refresh-all-btn";
-      refreshAllBtn.textContent = "🔄 질문 전체 새로고침";
+      refreshAllBtn.textContent = "질문 전체 새로고침";
       refreshAllBtn.onclick = refreshAllQuestions;
       refreshAllBtn.style.flex = "1";
       refreshAllBtn.style.margin = "0";
@@ -901,7 +914,7 @@
         const messageContainer = document.getElementById("messageContainer");
         messageContainer.innerHTML = `
           <div class="success-message">
-            ✅ Q${index + 1} 질문이 새로 생성되었습니다!
+            Q${index + 1} 질문이 새로 생성되었습니다!
           </div>
         `;
         
@@ -910,7 +923,7 @@
         }, 3000);
 
       } catch (error) {
-        console.error("❌ 질문 재생성 실패:", error);
+        console.error("[Question] 질문 재생성 실패:", error);
         
         regeneratingQuestionId = null; // 재생성 실패 플래그 해제
         
@@ -925,7 +938,7 @@
         const messageContainer = document.getElementById("messageContainer");
         messageContainer.innerHTML = `
           <div class="error-message">
-            ❌ 질문 재생성 실패: ${error.message}
+            질문 재생성 실패: ${error.message}
           </div>
         `;
       }
@@ -988,7 +1001,7 @@
         
         messageContainer.innerHTML = `
           <div class="success-message">
-            ✅ 질문 ${questions.length}개가 새로 생성되었습니다!
+            질문 ${questions.length}개가 새로 생성되었습니다!
           </div>
         `;
         
@@ -997,10 +1010,10 @@
         }, 3000);
 
       } catch (error) {
-        console.error("❌ 질문 새로고침 실패:", error);
+        console.error("[Question] 질문 새로고침 실패:", error);
         messageContainer.innerHTML = `
           <div class="error-message">
-            ❌ 질문 새로고침 실패: ${error.message}
+            질문 새로고침 실패: ${error.message}
           </div>
         `;
         renderQuestions();
@@ -1073,7 +1086,7 @@
       metrics.push(newMetric);
       input.value = "";
       renderMetrics();
-      console.log(`➕ 평가지표 추가: ${newMetric}`);
+      console.log(`[Question] 평가지표 추가: ${newMetric}`);
     }
 
     function deleteMetric(index) {
@@ -1083,7 +1096,7 @@
         // 선택된 지표에서도 제거
         selectedMetrics = selectedMetrics.filter(m => m !== metric);
         renderMetrics();
-        console.log(`🗑️ 평가지표 삭제: ${metric}`);
+        console.log(`[Question] 평가지표 삭제: ${metric}`);
       }
     }
 
@@ -1107,26 +1120,26 @@
         countDiv.textContent = `${selectedMetrics.length} / 5 선택`;
       }
       
-      console.log("✏️ 선택된 지표:", selectedMetrics);
+      console.log("[Question] 선택된 지표:", selectedMetrics);
     }
 
     // 면접 진행 버튼
     async function startInterview() {
-      console.log("🎤 면접 진행 버튼 클릭");
+      console.log("[Question] 면접 진행 버튼 클릭");
       
       // 검증: 평가지표 5개 선택 확인
       if (selectedMetrics.length !== 5) {
-        alert(`❌ 평가지표를 정확히 5개 선택해주세요 (현재: ${selectedMetrics.length}개)`);
+        alert(`평가지표를 정확히 5개 선택해주세요 (현재: ${selectedMetrics.length}개)`);
         return;
       }
       
-      console.log("✅ 선택된 평가지표 검증 완료: 5개");
+      console.log("[Question] 선택된 평가지표 검증 완료: 5개");
       
       // 현재 UI의 질문과 선택된 지표를 State에 저장
       try {
-        console.log("💾 면접 진행 전 최종 State 저장");
-        console.log("   - 질문: " + questions.length + "개");
-        console.log("   - 선택된 지표: " + selectedMetrics.length + "개");
+        console.log("[Question] 면접 진행 전 최종 State 저장");
+        console.log("[Question] 질문: " + questions.length + "개");
+        console.log("[Question] 선택된 지표: " + selectedMetrics.length + "개");
         
         const res = await fetch("/api/state", {
           method: "POST",
@@ -1143,18 +1156,18 @@
         }
         
         const data = await res.json();
-        console.log("✅ 최종 State 저장 완료", data);
+        console.log("[Question] 최종 State 저장 완료", data);
         
         // 왼쪽 패널의 임베딩/질문 생성 버튼 숨기기
         const embedBtn = document.getElementById("embedBtn");
         const questionBtn = document.getElementById("questionBtn");
         if (embedBtn) embedBtn.style.display = "none";
         if (questionBtn) questionBtn.style.display = "none";
-        console.log("🙈 임베딩/질문 생성 버튼 숨김");
+        console.log("[Question] 임베딩/질문 생성 버튼 숨김");
         
         document.getElementById("messageContainer").innerHTML = `
           <div class="success-message">
-            ✅ 준비 완료! 면접을 시작합니다.<br>
+            준비 완료! 면접을 시작합니다.<br>
             <small>질문: ${questions.length}개 | 평가지표: ${selectedMetrics.length}개</small>
           </div>
         `;
@@ -1163,8 +1176,8 @@
         setTimeout(() => loadPanel('stream'), 500);
         
       } catch (error) {
-        console.error("❌ State 저장 실패:", error);
-        alert("❌ 면접 진행 실패: " + error.message);
+        console.error("[Question] State 저장 실패:", error);
+        alert("면접 진행 실패: " + error.message);
       }
     }
   </script>

@@ -22,23 +22,21 @@ class InterviewState(TypedDict):
     """면접 진행 상태"""
     
     # 세션 정보
-    session_id: str
+    session_id: str  # RAG 검색용 (이력서/포트폴리오)
     question_id: str  # 현재 대질문 (q1, q2, ...)
     
     # 대화 기록
     messages: Annotated[List[dict], operator.add]  # 자동 append
     history_text: str  # LLM에 전달할 히스토리 문자열
     
-    # RAG 문서 원본 (state.py에서 전달)
-    resume_text: str
+    # JD 원문 (DB에서 조회)
     jd_text: str
-    portfolio_text: str
     
     # RAG 컨텍스트 (동적 검색)
     rag_context: str  # 동적으로 생성되는 관련 컨텍스트
-    resume_available: bool  # 이력서 존재 여부
+    resume_available: bool  # 이력서 RAG 검색 가능 여부
     jd_available: bool  # JD 존재 여부
-    portfolio_available: bool  # 포트폴리오 존재 여부 (선택)
+    portfolio_available: bool  # 포트폴리오 RAG 검색 가능 여부
     
     # 생성된 질문
     current_questions: List[str]  # 현재 표시 중인 후속 질문 3개
@@ -90,28 +88,28 @@ def load_rag_node(state: InterviewState) -> InterviewState:
     """
     1️⃣ RAG 문서 존재 여부 확인
     
-    state에서 resume_text, jd_text, portfolio_text 필드를 확인하여 플래그 설정
+    - session_id가 있으면 이력서/포트폴리오 RAG 검색 가능 (resume_available, portfolio_available)
+    - jd_text가 있으면 JD 사용 가능 (jd_available)
     """
     print(f"🔍 RAG 문서 확인 중...")
     
-    # state에서 문서 텍스트 가져오기
-    resume_text = state.get("resume_text", "")
-    jd_text = state.get("jd_text", "")
-    portfolio_text = state.get("portfolio_text", "")
+    # session_id로 RAG 검색 가능 여부 (이력서/포트폴리오)
+    session_id = state.get("session_id", "")
+    state["resume_available"] = bool(session_id and session_id.strip())
+    state["portfolio_available"] = bool(session_id and session_id.strip())
     
-    # 존재 여부 플래그 설정
-    state["resume_available"] = bool(resume_text and resume_text.strip())
+    # JD 원문 존재 여부
+    jd_text = state.get("jd_text", "")
     state["jd_available"] = bool(jd_text and jd_text.strip())
-    state["portfolio_available"] = bool(portfolio_text and portfolio_text.strip())
     
     # 로그 출력
     docs = []
     if state["resume_available"]: 
-        docs.append(f"이력서({len(resume_text)}자)")
+        docs.append(f"이력서(RAG 검색)")
+    if state["portfolio_available"]: 
+        docs.append(f"포트폴리오(RAG 검색)")
     if state["jd_available"]: 
         docs.append(f"JD({len(jd_text)}자)")
-    if state["portfolio_available"]: 
-        docs.append(f"포트폴리오({len(portfolio_text)}자)")
     
     if docs:
         print(f"✅ RAG 문서 확인 완료: {', '.join(docs)}")
@@ -228,6 +226,12 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
         else:
             print(f"   ⚠️  포트폴리오 검색 결과 없음")
 
+    # 3. JD 원문 추가
+    jd_text = state.get("jd_text", "")
+    if state.get("jd_available") and jd_text:
+        rag_context += f"[JD (채용공고)]\n{jd_text}\n\n"
+        print(f"   ✅ JD: {len(jd_text)}자 포함")
+    
     # 결과가 아무것도 없을 경우
     if not rag_context:
         rag_context = "[참고: 관련 문서 없음]\n"
@@ -539,7 +543,7 @@ class StreamAgent:
         print("🎯 StreamAgent (LangGraph) 초기화 완료")
     
     def generate_followups(self, text, question_id, history=None, session_id=None, 
-                          resume_text="", jd_text="", portfolio_text="", regen=False):
+                          jd_text="", regen=False):
         """
         후속 질문 3개 생성 (기존 Flask API와 호환)
         
@@ -547,14 +551,16 @@ class StreamAgent:
             text (str): 면접자의 최신 답변
             question_id (str): 현재 질문 ID (q1, q2, ...)
             history (list or str, optional): 이전 대화 기록
-            session_id (str, optional): 세션 ID (RAG 검색용)
-            resume_text (str, optional): 이력서 원문
-            jd_text (str, optional): JD 원문
-            portfolio_text (str, optional): 포트폴리오 원문
+            session_id (str, optional): 세션 ID (RAG 검색용 - 이력서/포트폴리오)
+            jd_text (str, optional): JD 원문 (DB에서 조회)
             regen (bool, optional): 재생성 여부
         
         Returns:
             list[str]: 후속 질문 리스트 (최대 3개)
+        
+        Note:
+            - 이력서/포트폴리오는 RAG 임베딩 검색으로 처리 (session_id 사용)
+            - JD는 DB에서 조회한 전체 원문 사용
         """
         try:
             # 재생성 히스토리 관리
@@ -580,9 +586,7 @@ class StreamAgent:
                 "question_id": question_id or "",
                 "messages": history if isinstance(history, list) else [],
                 "history_text": "",
-                "resume_text": resume_text or "",
                 "jd_text": jd_text or "",
-                "portfolio_text": portfolio_text or "",
                 "rag_context": "",
                 "current_questions": [],
                 "asked_questions": getattr(self, '_asked_questions_cache', []),
