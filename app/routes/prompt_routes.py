@@ -143,3 +143,49 @@ def get_backup_content(name, backup_file):
             return jsonify({'error': '백업 파일을 찾을 수 없습니다'}), 404
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+@prompt_bp.route('/api/prompts/<name>/backups/<backup_file>', methods=['DELETE'])
+def delete_backup(name, backup_file):
+    """백업 파일 삭제"""
+    if name not in PROMPT_FILES:
+        return jsonify({'error': 'Prompt not found'}), 404
+    
+    backup_path = os.path.join(BACKUP_DIR, backup_file)
+    
+    try:
+        if os.path.exists(backup_path):
+            os.remove(backup_path)
+            return jsonify({'success': True, 'message': '백업 파일이 삭제되었습니다'})
+        else:
+            return jsonify({'error': '백업 파일을 찾을 수 없습니다'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@prompt_bp.route('/api/prompts/<name>/backups/<backup_file>/rename', methods=['POST'])
+def rename_backup(name, backup_file):
+    """백업 파일 이름 변경"""
+    if name not in PROMPT_FILES:
+        return jsonify({'error': 'Prompt not found'}), 404
+    
+    new_name = request.json.get('new_name', '').strip()
+    if not new_name:
+        return jsonify({'error': '새 파일명을 입력하세요'}), 400
+    
+    # .backup 확장자 강제
+    if not new_name.endswith('.backup'):
+        new_name += '.backup'
+    
+    old_path = os.path.join(BACKUP_DIR, backup_file)
+    new_path = os.path.join(BACKUP_DIR, new_name)
+    
+    try:
+        if not os.path.exists(old_path):
+            return jsonify({'error': '백업 파일을 찾을 수 없습니다'}), 404
+        
+        if os.path.exists(new_path):
+            return jsonify({'error': '같은 이름의 파일이 이미 존재합니다'}), 400
+        
+        os.rename(old_path, new_path)
+        return jsonify({'success': True, 'new_name': new_name, 'message': '파일명이 변경되었습니다'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500

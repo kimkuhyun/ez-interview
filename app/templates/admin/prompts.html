@@ -28,8 +28,15 @@
         .message { margin-left: 15px; font-size: 14px; color: #27ae60; }
         #backupModal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; }
         #backupContent { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 20px; border-radius: 10px; width: 80%; max-width: 800px; max-height: 80%; overflow-y: auto; }
-        .backup-item { padding: 10px; margin: 5px 0; background: #f3f4f6; border-radius: 5px; cursor: pointer; transition: background 0.2s; }
+        .backup-item { padding: 10px; margin: 5px 0; background: #f3f4f6; border-radius: 5px; cursor: pointer; transition: background 0.2s; display: flex; justify-content: space-between; align-items: center; }
         .backup-item:hover { background: #e5e7eb; }
+        .backup-name { flex: 1; }
+        .backup-actions { display: flex; gap: 5px; }
+        .backup-actions button { padding: 5px 10px; font-size: 12px; border: none; border-radius: 3px; cursor: pointer; }
+        .btn-rename { background: #3498db; color: white; }
+        .btn-rename:hover { background: #2980b9; }
+        .btn-delete { background: #e74c3c; color: white; }
+        .btn-delete:hover { background: #c0392b; }
         #closeModal { float: right; cursor: pointer; font-size: 24px; color: #7f8c8d; }
         #closeModal:hover { color: #34495e; }
     </style>
@@ -142,8 +149,12 @@
             if (result.backups && result.backups.length > 0) {
                 const list = document.getElementById('backupList');
                 list.innerHTML = result.backups.map(backup => `
-                    <div class="backup-item" onclick="loadBackup('${backup}')">
-                        📦 ${backup}
+                    <div class="backup-item">
+                        <div class="backup-name" onclick="loadBackup('${backup}')">📦 ${backup}</div>
+                        <div class="backup-actions">
+                            <button class="btn-rename" onclick="event.stopPropagation(); renameBackup('${backup}')">이름변경</button>
+                            <button class="btn-delete" onclick="event.stopPropagation(); deleteBackup('${backup}')">삭제</button>
+                        </div>
                     </div>
                 `).join('');
                 document.getElementById('backupModal').style.display = 'block';
@@ -162,6 +173,41 @@
                     document.getElementById('backupModal').style.display = 'none';
                     showMessage('✅ 백업을 불러왔습니다 (저장 버튼을 눌러 적용하세요)');
                 }
+            }
+        }
+
+        async function deleteBackup(backupFile) {
+            if (!confirm(`백업 "${backupFile}"을(를) 삭제하시겠습니까?`)) return;
+            
+            const res = await fetch(`/api/prompts/${currentPrompt}/backups/${backupFile}`, {
+                method: 'DELETE'
+            });
+            
+            const result = await res.json();
+            if (result.success) {
+                showMessage('✅ 백업이 삭제되었습니다');
+                showBackups();  // 목록 새로고침
+            } else {
+                showMessage('❌ 삭제 실패: ' + result.error, true);
+            }
+        }
+
+        async function renameBackup(backupFile) {
+            const newName = prompt('새 파일명을 입력하세요:', backupFile.replace('.backup', ''));
+            if (!newName || newName.trim() === '') return;
+            
+            const res = await fetch(`/api/prompts/${currentPrompt}/backups/${backupFile}/rename`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ new_name: newName })
+            });
+            
+            const result = await res.json();
+            if (result.success) {
+                showMessage(`✅ 파일명이 "${result.new_name}"로 변경되었습니다`);
+                showBackups();  // 목록 새로고침
+            } else {
+                showMessage('❌ 변경 실패: ' + result.error, true);
             }
         }
 

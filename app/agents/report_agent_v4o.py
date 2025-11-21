@@ -23,7 +23,7 @@ import os
 
 # 프롬프트 로드: uploads/report_prompt 우선, 없으면 원본 사용
 WORK_PROMPT_DIR = Path("uploads") / "report_prompt"
-ORIGINAL_PROMPT_DIR = Path("report_prompt")
+ORIGINAL_PROMPT_DIR = Path(__file__).parent / "report_prompt"  # 절대 경로로 수정
 
 def load_policy_prompt(file_name: str) -> str:
     """작업 디렉토리 우선, 없으면 원본에서 로드"""
@@ -32,7 +32,7 @@ def load_policy_prompt(file_name: str) -> str:
     if work_path.exists():
         return work_path.read_text(encoding="utf-8").strip()
     
-    # 2. 원본(report_prompt)에서 찾기
+    # 2. 원본(app/agents/report_prompt)에서 찾기
     original_path = ORIGINAL_PROMPT_DIR / f"{file_name}.md"
     if original_path.exists():
         return original_path.read_text(encoding="utf-8").strip()
