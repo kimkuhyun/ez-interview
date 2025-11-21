@@ -574,7 +574,6 @@ def node_retry_retrieve(state: ReportState) -> Dict[str, Any]:
     # 추가 검색 (힌트 기반 쿼리 사용)
     additional_resume = search_similar_chunks(additional_query, session_id=session_id, doc_type="resume", top_k=15)
     # 인터뷰는 이미 전체 조회했으므로 재검색하지 않음
-    
     # 포트폴리오도 힌트에 따라 추가 검색
     additional_portfolio = None
     if state.get("has_portfolio") and all_hints:
@@ -586,7 +585,7 @@ def node_retry_retrieve(state: ReportState) -> Dict[str, Any]:
     current_resume = state.get("resume_ctx") or ""
     current_portfolio = state.get("portfolio_ctx") or ""
     
-    new_resume = current_resume + f"\n\n=== 힌트 기반 재검색 ({retry_count+1}회차) ===\n" + str(additional_resume)
+    new_resume = str(current_resume) + f"\n\n=== 힌트 기반 재검색 ({retry_count+1}회차) ===\n" + str(additional_resume)
     
     updates = {
         "resume_ctx": new_resume,
