@@ -329,7 +329,15 @@ table {
     width: 100%;
     border-collapse: collapse;
     background-color: var(--color-bg-primary);
+    table-layout: fixed;
 }
+
+#candidatesTable th:nth-child(1) { width: 12%; }  /* 지원자 이름 */
+#candidatesTable th:nth-child(2) { width: 15%; }  /* 지원 포지션 */
+#candidatesTable th:nth-child(3) { width: 12%; }  /* 지원 일자 */
+#candidatesTable th:nth-child(4) { width: 13%; }  /* 포트폴리오 */
+#candidatesTable th:nth-child(5) { width: 13%; }  /* 상태 */
+#candidatesTable th:nth-child(6) { width: 15%; }  /* 최종결과 */
 
 thead {
     background-color: var(--color-bg-secondary);

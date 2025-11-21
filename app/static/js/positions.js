@@ -101,22 +101,41 @@ async function submitPosition() {
   if (!name) return alert('포지션명을 입력하세요.');
   if (!uploadedFile) return alert('JD 파일을 업로드하세요.');
   
-  const formData = new FormData();
-  formData.append('name', name);
-  formData.append('file', uploadedFile);
+  // 로딩 상태 표시
+  const loading = document.getElementById('modalLoading');
+  const submitBtn = document.getElementById('submitBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
   
-  const res = await fetch('/api/positions', {
-    method: 'POST',
-    body: formData
-  });
+  loading.style.display = 'flex';
+  submitBtn.disabled = true;
+  cancelBtn.disabled = true;
   
-  if (res.ok) {
-    const data = await res.json();
-    alert(`'${name}' 포지션이 등록되었습니다.`);
-    closeModal();
-    loadPositions();
-  } else {
-    alert('등록 실패');
+  try {
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('file', uploadedFile);
+    
+    const res = await fetch('/api/positions', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      alert(`'${name}' 포지션이 등록되었습니다.`);
+      closeModal();
+      loadPositions();
+    } else {
+      alert('등록 실패');
+    }
+  } catch (error) {
+    console.error('등록 오류:', error);
+    alert('등록 중 오류가 발생했습니다.');
+  } finally {
+    // 로딩 상태 해제
+    loading.style.display = 'none';
+    submitBtn.disabled = false;
+    cancelBtn.disabled = false;
   }
 }
 
