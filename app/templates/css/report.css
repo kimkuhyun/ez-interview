@@ -9,13 +9,13 @@ body {
 .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
 
 .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-.header h1 { font-size: 1.5rem; color: #4f46e5; font-weight: 900; }
+.header h1 { font-size: 1.5rem; color: #394867; font-weight: 900; }
 .header p { font-size: 0.75rem; color: #6b7280; margin-top: 0.25rem; }
-.header-line { height: 4px; background: linear-gradient(90deg, #4f46e5 0%, #38bdf8 50%, transparent 100%); border-radius: 9999px; margin-top: 0.5rem; }
+.header-line { height: 4px; background: linear-gradient(90deg, #394867 0%, #4a9d8e 50%, transparent 100%); border-radius: 9999px; margin-top: 0.5rem; }
 
 .btn { padding: 0.5rem 1rem; border-radius: 0.5rem; font-weight: 600; font-size: 0.875rem; border: none; cursor: pointer; transition: all 0.2s; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-.btn-primary { background: #4f46e5; color: #fff; }
-.btn-primary:hover { background: #4338ca; }
+.btn-primary { background: #394867; color: #fff; }
+.btn-primary:hover { background: #14274E; }
 .btn-secondary { background: #6b7280; color: #fff; }
 .btn-secondary:hover { background: #4b5563; }
 .btn-success { background: #10b981; color: #fff; }
