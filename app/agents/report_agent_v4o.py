@@ -615,7 +615,7 @@ async def node_retry_quality_full(state: ReportState) -> Dict[str, Any]:
     jd = state.get("jd_ctx") or state.get("jd_text") or ""
     axes = state["axes"]
     
-    all_hints = comp.hints + summary.hints + quality.hints
+    all_hints = list(comp.hints or []) + list(summary.hints or []) + list(quality.hints or [])
     hint_context = "\n\n[중요: 이전 시도의 문제점]\n" + \
                "\n".join(f"- {hint}" for hint in all_hints) + \
                "\n위 문제를 반드시 해결하세요."
