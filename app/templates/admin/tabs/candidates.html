@@ -26,15 +26,16 @@
       <thead>
         <tr>
           <th>지원자 이름</th>
-          <th>상태</th>
           <th>지원 포지션</th>
           <th>지원 일자</th>
           <th>포트폴리오</th>
+          <th>상태</th>
+          <th>최종결과</th>
         </tr>
       </thead>
       <tbody id="candidateTableBody">
         <tr>
-          <td colspan="5" style="text-align: center; padding: 2rem; color: #9ca3af;">
+          <td colspan="6" style="text-align: left; padding: 2rem; color: #9ca3af;">
             데이터를 불러오는 중...
           </td>
         </tr>
@@ -111,7 +112,7 @@
 <!-- PDF 뷰어 모달 -->
 <div id="pdfModal" class="modal">
   <div class="modal-overlay" onclick="closePdfModal()"></div>
-  <div class="modal-content" style="max-width: 90vw; width: 1200px; height: 90vh;">
+  <div class="modal-content" style="max-width: 75vw; width: 900px; height: 95vh;">
     <div class="modal-header">
       <h3 class="modal-title" id="pdfModalTitle">지원자 서류</h3>
       <button class="modal-close" onclick="closePdfModal()">×</button>
@@ -119,7 +120,7 @@
     <div id="pdfTabs" style="display: none; padding: 0 1.5rem; border-bottom: 1px solid #e2e8f0;">
       <!-- 파일이 여러개일 때 탭으로 표시 -->
     </div>
-    <div class="modal-body" style="padding: 0; height: calc(90vh - 60px); overflow: hidden;">
+    <div class="modal-body" style="padding: 0; height: calc(95vh - 60px); overflow: hidden;">
       <iframe id="pdfViewer" style="width: 100%; height: 100%; border: none;"></iframe>
     </div>
   </div>

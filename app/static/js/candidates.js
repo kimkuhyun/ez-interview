@@ -132,7 +132,7 @@ async function loadCandidates() {
             if (tbody) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="5" style="text-align: center; padding: 2rem; color: #ef4444;">
+                        <td colspan="5" style="text-align: left; padding: 2rem; color: #ef4444;">
                             데이터 로드 실패: ${data.error || '알 수 없는 오류'}
                         </td>
                     </tr>
@@ -162,7 +162,7 @@ function renderCandidates(candidates) {
     if (candidates.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="5" style="text-align: center; padding: 2rem; color: #9ca3af;">
+                <td colspan="6" style="text-align: center; padding: 2rem; color: #9ca3af;">
                     검색 결과가 없습니다.
                 </td>
             </tr>
@@ -177,10 +177,11 @@ function renderCandidates(candidates) {
             ? '<span class="badge green">제출 완료</span>' 
             : '<span class="badge">미제출</span>';
         
-        // 면접 완료 또는 보류 상태인 경우 결과 선택 드롭다운 표시
-        let resultDropdown = '';
-        if (candidate.status === 'interview_completed' || candidate.status === 'on_hold') {
-            const currentStatus = candidate.status === 'on_hold' ? 'on_hold' : '';
+        // 면접 완료, 합격, 보류, 불합격 상태인 경우 결과 선택 드롭다운 표시
+        let resultDropdown = '-';
+        if (candidate.status === 'interview_completed' || candidate.status === 'on_hold' || 
+            candidate.status === 'passed' || candidate.status === 'rejected') {
+            const currentStatus = candidate.status;
             resultDropdown = `
                 <select 
                     class="result-select" 
@@ -188,9 +189,9 @@ function renderCandidates(candidates) {
                     onclick="event.stopPropagation()"
                 >
                     <option value="">결과 선택</option>
-                    <option value="passed" ${currentStatus === 'passed' ? 'selected' : ''}>✓ 합격</option>
-                    <option value="on_hold" ${currentStatus === 'on_hold' ? 'selected' : ''}>⏸ 보류</option>
-                    <option value="rejected" ${currentStatus === 'rejected' ? 'selected' : ''}>✗ 불합격</option>
+                    <option value="passed" ${currentStatus === 'passed' ? 'selected' : ''}>합격</option>
+                    <option value="on_hold" ${currentStatus === 'on_hold' ? 'selected' : ''}>보류</option>
+                    <option value="rejected" ${currentStatus === 'rejected' ? 'selected' : ''}>불합격</option>
                 </select>
             `;
         }
@@ -198,10 +199,11 @@ function renderCandidates(candidates) {
         return `
             <tr onclick="openCandidateDetail('${candidate.session_id}', '${escapeHtml(candidate.name)}')" style="cursor: pointer;">
                 <td>${escapeHtml(candidate.name || '-')}</td>
-                <td>${statusBadge} ${resultDropdown}</td>
                 <td>${escapeHtml(candidate.position || '-')}</td>
                 <td>${createdDate}</td>
-                <td style="text-align: center;">${portfolioBadge}</td>
+                <td style="text-align: left;">${portfolioBadge}</td>
+                <td>${statusBadge}</td>
+                <td style="text-align: left;">${resultDropdown}</td>
             </tr>
         `;
     }).join('');

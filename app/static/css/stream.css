@@ -14,7 +14,7 @@ body {
   align-items: center;
   gap: 12px;
   padding: 16px 24px;
-  background: linear-gradient(to right, #1e293b, #334155);
+  background: linear-gradient(to right, #394867, #2c3850);
   border-bottom: 2px solid rgba(255, 255, 255, 0.1);
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
   justify-content: flex-start;
@@ -30,43 +30,43 @@ body {
   transition: all 0.3s ease;
 }
 
-/* 🟡 준비 중 상태 */
+/* 준비 중 상태 */
 .stt-indicator.preparing {
-  background: #fbbf24;
+  background: #e8a95d;
   animation: preparingPulse 1s infinite;
 }
 
 @keyframes preparingPulse {
   0%, 100% {
-    box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7);
+    box-shadow: 0 0 0 0 rgba(232, 169, 93, 0.7);
   }
   50% {
-    box-shadow: 0 0 0 8px rgba(251, 191, 36, 0);
+    box-shadow: 0 0 0 8px rgba(232, 169, 93, 0);
   }
 }
 
-/* 🔴 STT 활성 시 (pulse 효과) */
+/* STT 활성 시 (pulse 효과) */
 .stt-indicator.active {
-  background: #ef4444;
+  background: #d96459;
   animation: pulse 1.5s infinite;
 }
 
 @keyframes pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    box-shadow: 0 0 0 0 rgba(217, 100, 89, 0.7);
   }
   70% {
-    box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    box-shadow: 0 0 0 10px rgba(217, 100, 89, 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    box-shadow: 0 0 0 0 rgba(217, 100, 89, 0);
   }
 }
 
 /* 🎛️ STT 버튼 */
 .stt-bar button {
   border: none;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #6b8cb5, #5a7a9f);
   color: white;
   padding: 10px 20px;
   font-weight: 600;
@@ -74,13 +74,13 @@ body {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(107, 140, 181, 0.3);
 }
 
 .stt-bar button:hover:not(:disabled) {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #5a7a9f, #4a6a8f);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 6px 20px rgba(107, 140, 181, 0.4);
 }
 
 .stt-bar button:disabled {
@@ -110,8 +110,8 @@ body {
 .tab-bar {
   display: flex;
   justify-content: space-around;
-  background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+  background: #F1F6F9;
+  border-bottom: 2px solid #d1dce5;
   flex-shrink: 0;
   overflow-x: auto;
   scrollbar-width: thin;
@@ -141,14 +141,14 @@ body {
 }
 
 .tab:hover {
-  background: #f1f5f9;
-  color: #3b82f6;
+  background: #e8f0f7;
+  color: #394867;
 }
 
 .tab.active {
-  background: linear-gradient(to bottom, #eff6ff, #ffffff);
-  color: #2563eb;
-  border-bottom: 3px solid #3b82f6;
+  background: linear-gradient(to bottom, #e8f0f7, #ffffff);
+  color: #394867;
+  border-bottom: 3px solid #394867;
 }
 
 .chat-box {
@@ -158,7 +158,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  background: linear-gradient(to bottom, #f8fafc, #ffffff);
+  background: linear-gradient(to bottom, #F1F6F9, #ffffff);
   scrollbar-width: thin;
 }
 
@@ -189,21 +189,19 @@ body {
   transition: all 0.25s ease;
 }
 
-/* 🧑 면접자 */
+/* 면접자 */
 .assistant {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #394867, #2c3850);
   color: white;
   align-self: flex-end;
   border-bottom-right-radius: 4px;
 }
 
-/* 🧠 면접관 */
+/* 면접관 */
 .user {
-  background: #f1f5f9;
+  background: #e7edf1;
   color: #1e293b;
   align-self: flex-start;
-  border-bottom-left-radius: 4px;
-  border-left: 4px solid #3b82f6;
 }
 
 /* 입력창 */
@@ -230,13 +228,13 @@ body {
 }
 
 .input-area input:focus {
-  border-color: #3b82f6;
+  border-color: #6b8cb5;
   background: #ffffff;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+  box-shadow: 0 0 0 3px rgba(107, 140, 181, 0.1);
 }
 
 .input-area button {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #394867, #2c3850);
   color: white;
   border: none;
   padding: 0 24px;
@@ -244,13 +242,13 @@ body {
   font-weight: 600;
   border-radius: 12px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(57, 72, 103, 0.3);
 }
 
 .input-area button:hover {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #2c3850, #1f2938);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 6px 20px rgba(57, 72, 103, 0.4);
 }
 
 /* 💬 STT 실시간 말풍선 */
@@ -275,10 +273,10 @@ body {
   transform: scale(1.02);
 }
 
-/* ✨ LLM 교정된 텍스트 */
+/* LLM 교정된 텍스트 */
 .message.stt.corrected {
-  background: #dbeafe;
-  color: #1e40af;
+  background: #e8f0f7;
+  color: #394867;
   font-weight: 500;
   animation: correctPulse 0.5s ease;
 }
@@ -307,9 +305,9 @@ body {
   }
 }
 
-/* 🛑 면접 종료 버튼 */
+/* 면접 종료 버튼 */
 .end-btn {
-  background: linear-gradient(135deg, #ef4444, #dc2626);
+  background: linear-gradient(135deg, #d96459, #c54f45);
   color: white;
   border: none;
   padding: 10px 20px;
@@ -317,14 +315,14 @@ body {
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+  box-shadow: 0 4px 12px rgba(217, 100, 89, 0.3);
   transition: all 0.3s ease;
 }
 
 .end-btn:hover {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
+  background: linear-gradient(135deg, #c54f45, #b13a30);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(239, 68, 68, 0.4);
+  box-shadow: 0 6px 20px rgba(217, 100, 89, 0.4);
 }
 
 .end-btn:active {
@@ -359,11 +357,11 @@ body {
 }
 
 .followup-btn:hover {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #394867, #2c3850);
   color: white;
-  border-color: #3b82f6;
+  border-color: #394867;
   transform: translateX(-4px);
-  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 16px rgba(57, 72, 103, 0.3);
 }
 
 .followup-regen {
@@ -386,7 +384,7 @@ body {
 }
 
 .ai-thinking {
-  color: #3b82f6;
+  color: #6b8cb5;
   font-weight: 400;
   margin: 12px 0;
   display: flex;
@@ -432,7 +430,7 @@ body {
 .ai-toggle {
   margin-left: auto;
   border: none;
-  background: linear-gradient(135deg, #10b981, #059669);
+  background: linear-gradient(135deg, #4a9d8e, #3d8375);
   color: white;
   padding: 10px 18px;
   font-weight: 600;
@@ -440,13 +438,13 @@ body {
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+  box-shadow: 0 4px 12px rgba(74, 157, 142, 0.3);
 }
 
 .ai-toggle:hover {
-  background: linear-gradient(135deg, #059669, #047857);
+  background: linear-gradient(135deg, #3d8375, #306960);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(16, 185, 129, 0.4);
+  box-shadow: 0 6px 20px rgba(74, 157, 142, 0.4);
 }
 
 .ai-toggle.off {
@@ -461,7 +459,7 @@ body {
 /* 🧠 면접관(assistant) 쪽 질문 생성 버튼 */
 .inline-ai-btn {
   align-self: flex-end;
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  background: linear-gradient(135deg, #394867, #2c3850);
   color: white;
   border: none;
   padding: 10px 18px;
@@ -471,12 +469,12 @@ body {
   cursor: pointer;
   margin-top: 8px;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 12px rgba(57, 72, 103, 0.3);
   animation: fadeIn 0.3s ease-in;
 }
 
 .inline-ai-btn:hover {
-  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  background: linear-gradient(135deg, #2c3850, #1f2938);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+  box-shadow: 0 6px 20px rgba(57, 72, 103, 0.4);
 }
