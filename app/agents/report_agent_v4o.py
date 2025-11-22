@@ -361,16 +361,18 @@ def node_query_plan(state: ReportState) -> Dict[str, Any]:
     opt = state["optimized_prompt"]
     axes = state["axes"]
     jd_text = state.get("jd_text") or ""
+    has_portfolio = state.get("has_portfolio", False)
     
     prompt = ChatPromptTemplate.from_messages([
         ("system", build_system_prompt("queryPlan_agent")),
-        ("user", "OptimizedPrompt: {opt}\naxes: {axes}\njd_text: {jd_text}\n\n{format_instructions}")
+        ("user", "OptimizedPrompt: {opt}\naxes: {axes}\njd_text: {jd_text}\nhas_portfolio: {has_portfolio}\n\n{format_instructions}")
     ])
     chain = prompt | _llm_solar_reasoning() | parser
     result = chain.invoke({
         "opt": opt.model_dump_json(),
         "axes": axes,
         "jd_text": jd_text,
+        "has_portfolio": has_portfolio,
         "format_instructions": parser.get_format_instructions()
     })
     
@@ -417,19 +419,25 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
     interview_len = len(str(interview_ctx))
     print(f"  인터뷰로그 - 전체 조회 → 결과: {interview_len}자")
     
-    # Portfolio 검색
-    portfolio_ctx = search_similar_chunks(qp.portfolio_query, session_id=session_id, doc_type="portfolio", top_k=30) if qp.portfolio_query and qp.portfolio_query.strip() else None
+    # Portfolio 검색 (질의 없으면 기본 키워드로 폴백)
+    portfolio_query = (qp.portfolio_query or "").strip()
+    if not portfolio_query and state.get("has_portfolio"):
+        axes_hint = ", ".join(state.get("axes", [])[:2])
+        base_keywords = "포트폴리오, 프로젝트, 성과"
+        portfolio_query = f"{base_keywords}, {axes_hint}" if axes_hint else base_keywords
+        print(f"  포트폴리오 - 기본 질의 사용: {portfolio_query}")
+    portfolio_ctx = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=30) if portfolio_query else None
     portfolio_len = len(str(portfolio_ctx)) if portfolio_ctx else 0
-    if qp.portfolio_query and qp.portfolio_query.strip():
-        print(f"  포트폴리오 - 질의: {qp.portfolio_query[:80]}... → 결과: {portfolio_len}자")
+    if portfolio_query:
+        print(f"  포트폴리오 - 질의: {portfolio_query[:80]}... → 결과: {portfolio_len}자")
         
         if portfolio_len < 1500 and state.get("portfolio_text"):
-            additional_portfolio = search_similar_chunks(qp.portfolio_query, session_id=session_id, doc_type="portfolio", top_k=50, offset=30)
+            additional_portfolio = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=50, offset=30)
             if additional_portfolio and len(str(additional_portfolio)) > 100:
                 portfolio_ctx = str(portfolio_ctx) + "\n\n=== 추가 관련 내용 ===\n" + str(additional_portfolio)
                 print(f"    → 추가 RAG 검색 (+{len(str(additional_portfolio))}자)")
     else:
-        print(f"  포트폴리오 - 검색 안 함")
+        print(f"  포트폴리오 - 검색 안 함 (데이터 없음)")
     print()
     
     return {
