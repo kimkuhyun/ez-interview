@@ -549,7 +549,7 @@ def node_route(state: ReportState) -> Dict[str, Any]:
     interview = state.get("interview_ctx") or state.get("interview_logs") or ""
     has_interview = bool(interview and interview.strip())
     
-    if retry >= 3:
+    if retry >= 2:
         return {"retry_mode": "none"}
     
     if not has_interview:
@@ -841,7 +841,7 @@ def build_report_graph() -> StateGraph:
     )
 
     graph.add_edge("retry_data", "retrieve")
-    graph.add_edge("retry_quality_full", "final_agent")
+    graph.add_edge("retry_quality_full", "route")
     graph.add_edge("final_agent", "assemble")
     graph.add_edge("assemble", END)
     
