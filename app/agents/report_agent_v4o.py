@@ -419,31 +419,26 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
     interview_len = len(str(interview_ctx))
     print(f"  인터뷰로그 - 전체 조회 → 결과: {interview_len}자")
     
-    # Portfolio 검색 (질의 없으면 기본 키워드로 폴백)
-    portfolio_query = (qp.portfolio_query or "").strip()
-    portfolio_ctx = ""  # 기본값을 빈 문자열로 통일
-    
-    if not portfolio_query and state.get("has_portfolio"):
-        # QueryPlan에서 쿼리를 생성하지 않은 경우에만 폴백
-        axes_hint = ", ".join(state.get("axes", [])[:2])
-        base_keywords = "포트폴리오, 프로젝트, 성과"
-        portfolio_query = f"{base_keywords}, {axes_hint}" if axes_hint else base_keywords
-        print(f"  포트폴리오 - 기본 질의 사용 (QueryPlan 미생성): {portfolio_query}")
-    
-    if portfolio_query:
-        # 1차 검색
+    # Portfolio 검색 (이력서와 동일한 패턴)
+    portfolio_ctx = ""
+    if state.get("has_portfolio"):
+        portfolio_query = (qp.portfolio_query or "").strip()
+        if not portfolio_query:
+            axes_hint = ", ".join(state.get("axes", [])[:3])
+            portfolio_query = f"포트폴리오, 프로젝트 경험, 성과, {axes_hint}"
+            print(f"  포트폴리오 - 기본 질의 사용: {portfolio_query}")
+        
         portfolio_ctx = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=30) or ""
         portfolio_len = len(str(portfolio_ctx))
         print(f"  포트폴리오 - 질의: {portfolio_query[:80]}... → 결과: {portfolio_len}자")
         
-        # 결과가 부족하고 has_portfolio가 True인 경우에만 추가 검색
-        if portfolio_len < 1500 and state.get("has_portfolio"):
+        if portfolio_len < 1500:
             additional_portfolio = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=50, offset=30)
             if additional_portfolio and len(str(additional_portfolio)) > 100:
                 portfolio_ctx = str(portfolio_ctx) + "\n\n=== 추가 관련 내용 ===\n" + str(additional_portfolio)
                 print(f"    → 추가 RAG 검색 (+{len(str(additional_portfolio))}자)")
     else:
-        print(f"  포트폴리오 - 검색 안 함 (has_portfolio={state.get('has_portfolio', False)})")
+        print(f"  포트폴리오 - 데이터 없음")
     print()
     
     return {
@@ -546,17 +541,15 @@ def node_route(state: ReportState) -> Dict[str, Any]:
     return {"retry_mode": "none"}
 #========================== 재시도 에이전트 노드 ===========================
 def node_retry_retrieve(state: ReportState) -> Dict[str, Any]:
-    """재시도 시 에이전트 힌트 기반으로 데이터 재검색"""
-    session_id = state["session_id"]
+    """재시도 시 힌트 기반으로 쿼리를 강화"""
     retry_count = state["retry_count"]
     axes = state["axes"]
     qp = state["query_plan"]
-    
-    # 각 에이전트에서 제공한 힌트 수집
+
     comp = state.get("comp_out")
     summary = state.get("summary_out")
     quality = state.get("quality_out")
-    
+
     all_hints = []
     if comp and comp.hints:
         all_hints.extend(comp.hints)
@@ -564,17 +557,14 @@ def node_retry_retrieve(state: ReportState) -> Dict[str, Any]:
         all_hints.extend(summary.hints)
     if quality and quality.hints:
         all_hints.extend(quality.hints)
-    
-    print(f"\n[재검색] 에이전트 힌트 기반 재검색 ({retry_count+1}회차)")
-    
-    # 힌트 기반 쿼리 생성
+
+    print(f"\n[재검색] 힌트 기반 쿼리 강화 ({retry_count+1}회차)")
+
     if all_hints:
-        # 힌트에서 핵심 키워드 추출하여 쿼리 구성
-        hint_keywords = ", ".join(all_hints[:3])  # 상위 3개 힌트 사용
+        hint_keywords = ", ".join(all_hints[:3])
         additional_query = f"{hint_keywords}, {', '.join(axes)}"
-        print(f"  힌트 기반 쿼리: {hint_keywords[:100]}...")
+        print(f"  힌트 기반 키워드: {hint_keywords[:100]}...")
     else:
-        # 힌트가 없으면 재시도 횟수에 따라 전략 변경
         if retry_count == 0:
             additional_query = f"구체적 사례, 프로젝트 경험, 성과, {', '.join(axes[:3])}"
             print(f"  전략: 구체적 사례 중심 (힌트 없음)")
@@ -584,36 +574,36 @@ def node_retry_retrieve(state: ReportState) -> Dict[str, Any]:
         else:
             additional_query = f"경력, 학력, 프로젝트, 기술, {', '.join(axes)}"
             print(f"  전략: 포괄적 검색 (힌트 없음)")
-    
-    # 추가 검색 (힌트 기반 쿼리 사용)
-    additional_resume = search_similar_chunks(additional_query, session_id=session_id, doc_type="resume", top_k=15)
-    # 인터뷰는 이미 전체 조회했으므로 재검색하지 않음
-    # 포트폴리오도 힌트에 따라 추가 검색
-    additional_portfolio = None
-    if state.get("has_portfolio") and all_hints:
-        portfolio_query = f"{', '.join(all_hints[:2])}, 프로젝트, 경험"
-        additional_portfolio = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=10)
-        print(f"  포트폴리오 추가 검색: {len(str(additional_portfolio))}자")
-    
-    # 기존 컨텍스트에 추가
-    current_resume = state.get("resume_ctx") or ""
-    current_portfolio = state.get("portfolio_ctx") or ""
-    
-    new_resume = str(current_resume) + f"\n\n=== 힌트 기반 재검색 ({retry_count+1}회차) ===\n" + str(additional_resume)
-    
-    updates = {
-        "resume_ctx": new_resume,
+
+    def merge_query(base: str, addition: str) -> str:
+        base = (base or "").strip()
+        addition = (addition or "").strip()
+        if not addition:
+            return base
+        if not base:
+            return addition
+        if addition in base:
+            return base
+        return f"{base}; {addition}"
+
+    updated_plan = qp.model_copy(update={
+        "resume_query": merge_query(qp.resume_query, additional_query),
+        "portfolio_query": merge_query(
+            qp.portfolio_query or "",
+            f"{additional_query}, 프로젝트, 경험" if state.get("has_portfolio") else ""
+        ),
+        "competency_query": merge_query(qp.competency_query, additional_query)
+    })
+
+    print(f"  → 이력서 쿼리: {updated_plan.resume_query}")
+    if state.get("has_portfolio"):
+        print(f"  → 포트폴리오 쿼리: {updated_plan.portfolio_query}")
+    print(f"  → JD 쿼리: {updated_plan.competency_query}")
+
+    return {
+        "query_plan": updated_plan,
         "retry_count": retry_count + 1
     }
-    
-    if additional_portfolio:
-        new_portfolio = current_portfolio + f"\n\n=== 힌트 기반 재검색 ({retry_count+1}회차) ===\n" + str(additional_portfolio)
-        updates["portfolio_ctx"] = new_portfolio
-    
-    print(f"  추가된 이력서: +{len(str(additional_resume))}자")
-    print(f"  인터뷰: 재검색 안 함 (전체 데이터 이미 로드됨)")
-    
-    return updates
 
 async def node_retry_quality_full(state: ReportState) -> Dict[str, Any]:
     """품질 개선을 위한 재실행"""

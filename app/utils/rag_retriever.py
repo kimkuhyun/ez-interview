@@ -2,13 +2,23 @@ from app.db.db_connection import get_connection
 from app.utils.embedding import get_embedding
 from typing import Optional, Dict, List
 
-def search_similar_chunks(query: str, session_id: str = None, jd_id: str = None, doc_type: str = None, top_k=3, metadata_filter: Optional[Dict] = None):
+def search_similar_chunks(
+    query: str,
+    session_id: str = None,
+    jd_id: str = None,
+    doc_type: str = None,
+    top_k: int = 3,
+    offset: int = 0,
+    metadata_filter: Optional[Dict] = None,
+):
     print(f"\n📚 [RAG Retriever] 검색 시작")
     print(f"   - Query: {query[:100]}...")
     print(f"   - Session ID: {session_id}")
     print(f"   - JD ID: {jd_id}")
     print(f"   - Doc Type: {doc_type}")
     print(f"   - Top-K: {top_k}")
+    if offset:
+        print(f"   - Offset: {offset}")
     if metadata_filter:
         print(f"   - 🆕 Metadata Filter: {metadata_filter}")
     
@@ -44,9 +54,9 @@ def search_similar_chunks(query: str, session_id: str = None, jd_id: str = None,
                 FROM interview.job_descriptions
                 WHERE {where_clause} AND embedding IS NOT NULL
                 ORDER BY embedding <-> %s::vector
-                LIMIT %s;
+                LIMIT %s OFFSET %s;
             """
-            final_params = [emb] + params_list + [emb, top_k]
+            final_params = [emb] + params_list + [emb, top_k, offset]
         else:
             # Resume/Portfolio는 rag.documents에서 조회
             where_conditions = []
@@ -75,9 +85,9 @@ def search_similar_chunks(query: str, session_id: str = None, jd_id: str = None,
                 FROM rag.documents
                 WHERE {where_clause}
                 ORDER BY embedding <-> %s::vector
-                LIMIT %s;
+                LIMIT %s OFFSET %s;
             """
-            final_params = [emb] + params_list + [emb, top_k]
+            final_params = [emb] + params_list + [emb, top_k, offset]
         
         cur.execute(query_sql, final_params)
         results = cur.fetchall()
