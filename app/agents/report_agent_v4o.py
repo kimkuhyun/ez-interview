@@ -421,23 +421,29 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
     
     # Portfolio 검색 (질의 없으면 기본 키워드로 폴백)
     portfolio_query = (qp.portfolio_query or "").strip()
+    portfolio_ctx = ""  # 기본값을 빈 문자열로 통일
+    
     if not portfolio_query and state.get("has_portfolio"):
+        # QueryPlan에서 쿼리를 생성하지 않은 경우에만 폴백
         axes_hint = ", ".join(state.get("axes", [])[:2])
         base_keywords = "포트폴리오, 프로젝트, 성과"
         portfolio_query = f"{base_keywords}, {axes_hint}" if axes_hint else base_keywords
-        print(f"  포트폴리오 - 기본 질의 사용: {portfolio_query}")
-    portfolio_ctx = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=30) if portfolio_query else None
-    portfolio_len = len(str(portfolio_ctx)) if portfolio_ctx else 0
+        print(f"  포트폴리오 - 기본 질의 사용 (QueryPlan 미생성): {portfolio_query}")
+    
     if portfolio_query:
+        # 1차 검색
+        portfolio_ctx = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=30) or ""
+        portfolio_len = len(str(portfolio_ctx))
         print(f"  포트폴리오 - 질의: {portfolio_query[:80]}... → 결과: {portfolio_len}자")
         
-        if portfolio_len < 1500 and state.get("portfolio_text"):
+        # 결과가 부족하고 has_portfolio가 True인 경우에만 추가 검색
+        if portfolio_len < 1500 and state.get("has_portfolio"):
             additional_portfolio = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=50, offset=30)
             if additional_portfolio and len(str(additional_portfolio)) > 100:
                 portfolio_ctx = str(portfolio_ctx) + "\n\n=== 추가 관련 내용 ===\n" + str(additional_portfolio)
                 print(f"    → 추가 RAG 검색 (+{len(str(additional_portfolio))}자)")
     else:
-        print(f"  포트폴리오 - 검색 안 함 (데이터 없음)")
+        print(f"  포트폴리오 - 검색 안 함 (has_portfolio={state.get('has_portfolio', False)})")
     print()
     
     return {
