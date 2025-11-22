@@ -101,6 +101,29 @@ def _llm_solar_reasoning() -> ChatOpenAI:
     )
 
 
+def _rag_to_text(result: Any) -> str:
+    """RAG 검색 결과를 콘텐츠 문자열로 정규화"""
+    if not result:
+        return ""
+    if isinstance(result, str):
+        return result
+    if isinstance(result, dict):
+        return str(result.get("content", ""))
+    if isinstance(result, list):
+        parts = []
+        for item in result:
+            if isinstance(item, dict):
+                content = item.get("content", "")
+                if content:
+                    parts.append(str(content))
+            elif isinstance(item, str):
+                parts.append(item)
+            else:
+                parts.append(str(item))
+        return "\n\n".join(parts)
+    return str(result)
+
+
 # ==================== 핵심 역량/헤드라인 ====================
 class candiMeta(BaseModel):
     candidate_name: str = Field(default="", description="후보자 이름")
@@ -391,28 +414,32 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
     print("\n[RAG 검색]")
     
     # Resume 검색
-    resume_ctx = search_similar_chunks(qp.resume_query, session_id=session_id, doc_type="resume", top_k=30) if qp.resume_query else ""
-    resume_len = len(str(resume_ctx))
+    resume_raw = search_similar_chunks(qp.resume_query, session_id=session_id, doc_type="resume", top_k=30) if qp.resume_query else ""
+    resume_ctx = _rag_to_text(resume_raw)
+    resume_len = len(resume_ctx)
     print(f"  이력서 - 질의: {qp.resume_query[:80]}... → 결과: {resume_len}자")
     
     # RAG 결과가 부족하면 동일 쿼리로 추가 검색
     if resume_len < 2000 and state.get("resume_text"):
         # 동일 쿼리로 추가 청크 검색
         additional_resume = search_similar_chunks(qp.resume_query, session_id=session_id, doc_type="resume", top_k=50, offset=30)
-        if additional_resume and len(str(additional_resume)) > 100:
-            resume_ctx = str(resume_ctx) + "\n\n=== 추가 관련 내용 ===\n" + str(additional_resume)
-            print(f"    → 추가 RAG 검색 (+{len(str(additional_resume))}자)")
+        additional_resume_text = _rag_to_text(additional_resume)
+        if additional_resume_text and len(additional_resume_text) > 100:
+            resume_ctx = resume_ctx + "\n\n=== 추가 관련 내용 ===\n" + additional_resume_text
+            print(f"    → 추가 RAG 검색 (+{len(additional_resume_text)}자)")
     
     # JD 검색
-    jd_ctx = search_similar_chunks(qp.competency_query, jd_id=jd_id, doc_type="jd", top_k=15) if qp.competency_query else ""
-    jd_len = len(str(jd_ctx))
+    jd_raw = search_similar_chunks(qp.competency_query, jd_id=jd_id, doc_type="jd", top_k=15) if qp.competency_query else ""
+    jd_ctx = _rag_to_text(jd_raw)
+    jd_len = len(jd_ctx)
     print(f"  JD - 질의: {qp.competency_query[:80]}... → 결과: {jd_len}자")
     
     if jd_len < 1000 and state.get("jd_text"):
         additional_jd = search_similar_chunks(qp.competency_query, jd_id=jd_id, doc_type="jd", top_k=25, offset=15)
-        if additional_jd and len(str(additional_jd)) > 100:
-            jd_ctx = str(jd_ctx) + "\n\n=== 추가 관련 내용 ===\n" + str(additional_jd)
-            print(f"    → 추가 RAG 검색 (+{len(str(additional_jd))}자)")
+        additional_jd_text = _rag_to_text(additional_jd)
+        if additional_jd_text and len(additional_jd_text) > 100:
+            jd_ctx = jd_ctx + "\n\n=== 추가 관련 내용 ===\n" + additional_jd_text
+            print(f"    → 추가 RAG 검색 (+{len(additional_jd_text)}자)")
     
     # Interview 검색
     interview_ctx = retrieve_interview_context(session_id) if session_id else ""
@@ -428,15 +455,17 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
             portfolio_query = f"포트폴리오, 프로젝트 경험, 성과, {axes_hint}"
             print(f"  포트폴리오 - 기본 질의 사용: {portfolio_query}")
         
-        portfolio_ctx = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=30) or ""
-        portfolio_len = len(str(portfolio_ctx))
+        portfolio_raw = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=30) or ""
+        portfolio_ctx = _rag_to_text(portfolio_raw)
+        portfolio_len = len(portfolio_ctx)
         print(f"  포트폴리오 - 질의: {portfolio_query[:80]}... → 결과: {portfolio_len}자")
         
         if portfolio_len < 1500:
             additional_portfolio = search_similar_chunks(portfolio_query, session_id=session_id, doc_type="portfolio", top_k=50, offset=30)
-            if additional_portfolio and len(str(additional_portfolio)) > 100:
-                portfolio_ctx = str(portfolio_ctx) + "\n\n=== 추가 관련 내용 ===\n" + str(additional_portfolio)
-                print(f"    → 추가 RAG 검색 (+{len(str(additional_portfolio))}자)")
+            additional_portfolio_text = _rag_to_text(additional_portfolio)
+            if additional_portfolio_text and len(additional_portfolio_text) > 100:
+                portfolio_ctx = portfolio_ctx + "\n\n=== 추가 관련 내용 ===\n" + additional_portfolio_text
+                print(f"    → 추가 RAG 검색 (+{len(additional_portfolio_text)}자)")
     else:
         print(f"  포트폴리오 - 데이터 없음")
     print()
