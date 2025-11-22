@@ -7,6 +7,7 @@ from typing import AsyncGenerator
 
 from flask import Blueprint, render_template, request, jsonify, Response, stream_with_context
 from pydantic import ValidationError
+from app.db.db_connection import get_connection
 
 # PDF 생성을 위한 Playwright (별도 설치 필요)
 try:
@@ -34,6 +35,30 @@ _DEFAULT_AXES_KEYS = [
     "전문성",
 ]
 
+
+def _detect_has_portfolio(session_id: str, fallback: bool) -> bool:
+    """DB에 portfolio 문서가 있는지 확인하고, 없으면 fallback 사용"""
+    if not session_id:
+        return fallback
+    conn = None
+    cur = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT COUNT(*) FROM rag.documents WHERE session_id = %s AND doc_type = 'portfolio'",
+            (session_id,),
+        )
+        count = cur.fetchone()[0]
+        return count > 0 or fallback
+    except Exception as e:
+        print(f"⚠️  포트폴리오 확인 실패(session_id={session_id}): {e}")
+        return fallback
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 
 
@@ -126,13 +151,17 @@ def report_pdf():
             axes_keys = _DEFAULT_AXES_KEYS.copy()
 
         try:
+            has_portfolio = _detect_has_portfolio(
+                session_id=session_id,
+                fallback=bool(getattr(GLOBAL_STATE, "portfolio_len", 0)),
+            )
             report = create_report(
                 session_id=session_id,
                 candidate_name=candidate_name,
                 position_applied=position,
                 axes_keys=axes_keys,
                 user_prompt=user_prompt,
-                has_portfolio=bool(getattr(GLOBAL_STATE, "portfolio_len", 0)),
+                has_portfolio=has_portfolio,
                 jd_id=getattr(GLOBAL_STATE, "jd_id", None), 
             )
         except Exception as e:
@@ -287,6 +316,10 @@ def generate_stream():
         axes_keys = _DEFAULT_AXES_KEYS.copy()
     
     jd_id = getattr(GLOBAL_STATE, 'jd_id', None)
+    has_portfolio = _detect_has_portfolio(
+        session_id=session_id,
+        fallback=bool(getattr(GLOBAL_STATE, "portfolio_len", 0)),
+    )
 
     async def async_generate():
         """비동기 SSE 이벤트 생성기"""
@@ -297,7 +330,7 @@ def generate_stream():
                 position_applied=position,
                 axes_keys=axes_keys,
                 user_prompt=user_prompt,
-                has_portfolio=bool(getattr(GLOBAL_STATE, "portfolio_len", 0)),
+                has_portfolio=has_portfolio,
                 jd_id=jd_id,
             ):
                 if event["type"] == "debate":
