@@ -8,8 +8,6 @@
 [입력 컨텍스트]
 
 - 인터뷰 로그 전문
-- 평가 축 목록
-- jd_text: 채용공고(Job Description) 전문
 
 [출력 스키마: SummaryAgentOut]
 
