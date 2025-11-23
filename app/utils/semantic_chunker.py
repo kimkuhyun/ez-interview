@@ -287,21 +287,23 @@ def chunk_structured_resume(resume: StructuredResume) -> List[Dict[str, Any]]:
                     "type": "resume"
                 }
             })
-    raw_text = _scrub_contacts(resume.raw_text or "").strip()
-    if raw_text:
-        size, overlap = 1200, 300  
-        step = size - overlap
-        for i in range(0, len(raw_text), step):
-            chunk_text = raw_text[i:i + size]
-            chunks.append({
-                "content": chunk_text,
-                "metadata": {
-                    "section": "raw_text",
-                    "type": "resume",
-                    "part": i // step
-                }
-            })
-    
+
+    # raw_text = _scrub_contacts(resume.raw_text or "").strip()
+    # if raw_text:
+    #     size, overlap = 1200, 300
+    #     step = size - overlap
+    #     for i in range(0, len(raw_text), step):
+    #         chunk_text = raw_text[i:i + size]
+    #         chunks.append({
+    #             "content": chunk_text,
+    #             "metadata": {
+    #                 "section": "raw_text",
+    #                 "type": "resume",
+    #                 "part": i // step + 1
+    #             }
+    #         })
+    #     print(f"   📄 [원문 청킹] {len(raw_text)}자 → {(len(raw_text) + step - 1) // step}개 청크 생성")
+
     return chunks
 
 

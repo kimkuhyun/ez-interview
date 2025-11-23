@@ -24,71 +24,107 @@ def structure_resume(raw_text: str) -> StructuredResume:
     """
     print("   🔄 [Resume] OpenAI API로 구조화 중...")
     
-    system_prompt = """You are an expert resume parser. Parse the given resume text and extract structured information.
-Output ONLY a valid JSON object matching the provided schema. Do not include any explanations or markdown formatting.
+    system_prompt = """당신은 이력서 파싱 전문가입니다. 주어진 이력서 텍스트를 분석하여 구조화된 정보를 추출하세요.
+아래 스키마에 맞는 유효한 JSON 객체만 출력하세요. 설명이나 마크다운 형식은 포함하지 마세요.
 
-Schema:
+스키마:
 {
   "basic_info": {
-    "name": "string or null",
-    "email": "string or null",
-    "phone": "string or null",
-    "github": "string or null",
-    "linkedin": "string or null",
-    "blog": "string or null",
-    "summary": "string or null"
+    "name": "문자열 또는 null",
+    "email": "문자열 또는 null",
+    "phone": "문자열 또는 null",
+    "github": "문자열 또는 null",
+    "linkedin": "문자열 또는 null",
+    "blog": "문자열 또는 null",
+    "summary": "문자열 또는 null"
   },
   "education": [
     {
-      "school": "string",
-      "major": "string or null",
-      "degree": "string or null",
-      "period": "string or null",
-      "gpa": "string or null",
-      "activities": ["string"]
+      "school": "문자열",
+      "major": "문자열 또는 null",
+      "degree": "문자열 또는 null",
+      "period": "문자열 또는 null",
+      "gpa": "문자열 또는 null",
+      "activities": ["문자열"]
     }
   ],
   "experience": [
     {
-      "company": "string",
-      "role": "string",
-      "period": "string",
-      "description": "string or null",
-      "achievements": ["string"],
-      "tech_stack": ["string"]
+      "company": "문자열 (회사명)",
+      "role": "문자열 (직책/역할)",
+      "period": "문자열 (재직기간)",
+      "description": "문자열 또는 null (회사/부서 설명)",
+      "achievements": ["문자열 (담당 업무, 성과를 각각 배열 요소로)"],
+      "tech_stack": ["문자열 (사용 기술)"]
     }
   ],
   "projects": [
     {
-      "name": "string",
-      "period": "string or null",
-      "description": "string",
-      "role": "string or null",
-      "achievements": ["string"],
-      "tech_stack": ["string"],
-      "url": "string or null"
+      "name": "문자열 (프로젝트명)",
+      "period": "문자열 또는 null (프로젝트 기간)",
+      "description": "문자열 (프로젝트 목적, 배경, 개요)",
+      "role": "문자열 또는 null (프로젝트 내 역할)",
+      "achievements": ["문자열 (구현 내용, 성과를 각각 배열 요소로)"],
+      "tech_stack": ["문자열 (사용 기술, 도구)"],
+      "url": "문자열 또는 null"
     }
   ],
   "skills": {
-    "technical": ["string"],
-    "languages": ["string"],
-    "frameworks": ["string"],
-    "tools": ["string"],
-    "soft_skills": ["string"]
+    "technical": ["문자열"],
+    "languages": ["문자열 (프로그래밍 언어)"],
+    "frameworks": ["문자열"],
+    "tools": ["문자열"],
+    "soft_skills": ["문자열"]
   },
-  "certifications": ["string"],
-  "awards": ["string"],
-  "languages": ["string"],
-  "cover_letter": "string or null (full text of cover letter if present)",
-  "additional_info": "string or null (any other important information not fitting above categories: hobbies, military service, volunteer work, training programs, etc.)"
+  "certifications": ["문자열"],
+  "awards": ["문자열"],
+  "languages": ["문자열 (외국어)"],
+  "cover_letter": "문자열 또는 null (자기소개서 전문)",
+  "additional_info": "문자열 또는 null (취미, 병역, 봉사활동, 교육이수 등 기타 정보)"
 }
 
-Extract as much information as possible from the resume. If a field is not present, use null or empty array.
-IMPORTANT: Put any information that doesn't fit the standard fields into 'additional_info' to prevent data loss."""
+**🚨 중요: 완전성 우선 원칙 🚨**
+1. **절대 생략 금지**: 모든 정보를 원문 그대로 추출하세요. 요약, 압축, 의역 일체 금지.
+   - 예시: "React 프로젝트 3건 수행" (X) → 각 프로젝트를 개별 객체로 모두 나열 (O)
+   - 예시: achievements가 10개면 10개 모두 배열에 포함
 
-    user_prompt = f"""Parse this resume and extract structured information. Output ONLY the JSON object, no other text.
+2. **배열 요소 개수 유지**: 원문에 항목이 5개면 배열에도 정확히 5개.
+   - 나열된 업무/성과는 한 줄도 빠뜨리지 말고 전부 배열에 추가
+   - "등" "외 다수" 같은 표현으로 뭉치지 말고 모두 열거
 
-Resume:
+3. **텍스트 길이 유지**: 문장/문단을 축약하지 마세요.
+   - 3줄짜리 설명 → 3줄 그대로 유지
+   - "상세 내용 생략" 같은 표현 절대 금지
+
+4. **우선순위**: 토큰이 부족하면 아래 순서로 우선 추출 (절대 생략 X)
+   1) experience (경력) - 전체 내용
+   2) projects (프로젝트) - 전체 내용
+   3) skills, education
+   4) 나머지 필드
+
+5. **경력 vs 프로젝트 구분:**
+   - "경력", "재직 이력", "회사명 명시" → experience
+   - "수행 업무", "프로젝트", "개인 프로젝트", "팀 프로젝트" → projects
+   - 애매하면 둘 다 포함 (중복 허용)
+
+6. **자기소개서**: cover_letter 필드에 **전문** 그대로 넣으세요 (한 글자도 빠뜨리지 말 것).
+
+7. **분류 안 되는 정보**: additional_info에 **모두** 넣으세요. 버리지 마세요.
+
+8. **없는 필드**: null 또는 빈 배열([])을 사용하세요.
+
+9. **🔒 개인정보 제외 (CRITICAL)**: 다음 개인정보는 **절대 추출하지 마세요** (블라인드 채용):
+   - 이름 (name): 항상 null
+   - 전화번호 (phone): 항상 null
+   - 생년월일, 주소: 추출하지 마세요 (스키마에 없으므로 무시)
+   - 이메일 (email): null로 설정
+   ⚠️ GitHub, LinkedIn, Blog, Portfolio URL은 **유지** (기술 평가용)
+
+**검증**: 추출 완료 후 원문과 대조하여 누락된 항목이 있는지 스스로 확인하세요."""
+
+    user_prompt = f"""이 이력서를 분석하여 구조화된 정보를 추출하세요. JSON 객체만 출력하고 다른 텍스트는 포함하지 마세요.
+
+이력서:
 {raw_text}"""
 
     try:
@@ -100,7 +136,7 @@ Resume:
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.1,
-            max_tokens=4000
+            max_tokens=8000
         )
         
         result_text = response.choices[0].message.content.strip()
@@ -135,7 +171,7 @@ Resume:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.1,
-                max_tokens=4000
+                max_tokens=8000
             )
             
             result_text = response.choices[0].message.content.strip()
@@ -177,37 +213,37 @@ def structure_jd(raw_text: str) -> StructuredJD:
     """
     print("   🔄 [JD] OpenAI API로 구조화 중...")
     
-    system_prompt = """You are an expert job description parser. Parse the given JD text and extract structured information.
-Output ONLY a valid JSON object matching the provided schema. Do not include any explanations or markdown formatting.
+    system_prompt = """당신은 채용공고(JD) 파싱 전문가입니다. 주어진 JD 텍스트를 분석하여 구조화된 정보를 추출하세요.
+아래 스키마에 맞는 유효한 JSON 객체만 출력하세요. 설명이나 마크다운 형식은 포함하지 마세요.
 
-Schema:
+스키마:
 {
-  "company": "string or null",
-  "position": "string",
-  "department": "string or null",
-  "employment_type": "string or null",
-  "location": "string or null",
+  "company": "문자열 또는 null",
+  "position": "문자열",
+  "department": "문자열 또는 null",
+  "employment_type": "문자열 또는 null",
+  "location": "문자열 또는 null",
   "requirements": {
-    "required_skills": ["string"],
-    "preferred_skills": ["string"],
-    "required_experience": "string or null",
-    "preferred_experience": "string or null",
-    "education": "string or null",
-    "certifications": ["string"]
+    "required_skills": ["문자열"],
+    "preferred_skills": ["문자열"],
+    "required_experience": "문자열 또는 null",
+    "preferred_experience": "문자열 또는 null",
+    "education": "문자열 또는 null",
+    "certifications": ["문자열"]
   },
-  "responsibilities": ["string"],
-  "tech_stack": ["string"],
-  "preferred_qualifications": ["string"],
-  "benefits": ["string"],
-  "additional_info": "string or null (any other important information not fitting above categories: company culture, working hours, special notes, etc.)"
+  "responsibilities": ["문자열"],
+  "tech_stack": ["문자열"],
+  "preferred_qualifications": ["문자열"],
+  "benefits": ["문자열"],
+  "additional_info": "문자열 또는 null (위 카테고리에 맞지 않는 중요 정보: 기업문화, 근무시간, 특이사항 등)"
 }
 
-Extract as much information as possible from the JD. If a field is not present, use null or empty array.
-IMPORTANT: Put any information that doesn't fit the standard fields into 'additional_info' to prevent data loss."""
+JD에서 최대한 많은 정보를 추출하세요. 해당 필드가 없으면 null 또는 빈 배열을 사용하세요.
+중요: 표준 필드에 맞지 않는 정보는 반드시 'additional_info'에 넣어 데이터 손실을 방지하세요."""
 
-    user_prompt = f"""Parse this job description and extract structured information. Output ONLY the JSON object, no other text.
+    user_prompt = f"""이 채용공고를 분석하여 구조화된 정보를 추출하세요. JSON 객체만 출력하고 다른 텍스트는 포함하지 마세요.
 
-Job Description:
+채용공고:
 {raw_text}"""
 
     try:
@@ -219,7 +255,7 @@ Job Description:
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.1,
-            max_tokens=3000
+            max_tokens=8000
         )
         
         result_text = response.choices[0].message.content.strip()
@@ -253,7 +289,7 @@ Job Description:
                     {"role": "user", "content": user_prompt}
                 ],
                 temperature=0.1,
-                max_tokens=3000
+                max_tokens=8000
             )
             
             result_text = response.choices[0].message.content.strip()
