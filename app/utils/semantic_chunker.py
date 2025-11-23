@@ -9,6 +9,12 @@ import json
 import hashlib
 import hashlib
 import copy
+import re  
+
+def _scrub_contacts(text: str) -> str:
+    text = re.sub(r'[\w.+-]+@[\w.-]+', '[EMAIL]', text)
+    text = re.sub(r'\+?\d[\d\s()\-]{7,}\d', '[PHONE]', text)
+    return text
 
 
 def anonymize_personal_info(resume: StructuredResume) -> StructuredResume:
@@ -261,7 +267,7 @@ def chunk_structured_resume(resume: StructuredResume) -> List[Dict[str, Any]]:
         if len(cover_letter_text) > 2000:
             # 1500자씩 분할 (겹침 200자)
             chunk_size = 1500
-            overlap = 200
+            overlap = 300
             for i in range(0, len(cover_letter_text), chunk_size - overlap):
                 chunk_text = cover_letter_text[i:i + chunk_size]
                 chunks.append({
@@ -279,6 +285,20 @@ def chunk_structured_resume(resume: StructuredResume) -> List[Dict[str, Any]]:
                 "metadata": {
                     "section": "cover_letter",
                     "type": "resume"
+                }
+            })
+    raw_text = _scrub_contacts(resume.raw_text or "").strip()
+    if raw_text:
+        size, overlap = 1200, 300  
+        step = size - overlap
+        for i in range(0, len(raw_text), step):
+            chunk_text = raw_text[i:i + size]
+            chunks.append({
+                "content": chunk_text,
+                "metadata": {
+                    "section": "raw_text",
+                    "type": "resume",
+                    "part": i // step
                 }
             })
     
@@ -405,6 +425,7 @@ def chunk_structured_jd(jd: StructuredJD) -> List[Dict[str, Any]]:
                 "type": "jd"
             }
         })
+    
     
     # 8. 기타 정보
     if jd.additional_info:
