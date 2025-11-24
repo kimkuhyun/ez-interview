@@ -351,11 +351,34 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 
 ## 📤 출력 형식
 
-⚠️ **필수**: 질문은 **한 문장으로만** 작성하세요.
-- ✅ 좋은 예: "방금 말씀하신 'DB 스크립트 작성'은 이력서의 어느 프로젝트에서 하신 건가요?"
-- ❌ 나쁜 예: 여러 줄에 걸친 설명이나 부연 설명 추가
+⚠️ **필수**: 다음 형식으로 출력하세요.
 
-**출력**: 질문 1개, 한 문장, 번호 없이, 존중하는 톤"""),
+형식:
+[라벨]
+질문
+✓ 구체적으로 확인할 키워드들
+
+라벨 옵션:
+- 경력확인, 기술검증, 역할확인, 성과검증, 기간확인
+
+키워드 요구사항 (매우 중요):
+- 반드시 질문에서 묻고 있는 내용과 직접 연관된 확인 포인트만 작성
+- 질문에 없는 내용은 키워드에 절대 포함 금지
+- 명사 중심, 간결하게 3-5개 (각 2-4단어)
+- 질문을 다시 읽고 "이 질문에 대한 답변에서 뭘 확인해야 하나?"를 생각하고 작성
+
+예시:
+[경력확인]
+주로 어떤 프로젝트에서 일하셨나요?
+✓ 프로젝트명, 팀 규모, 본인 역할, 기간
+
+[기술검증]
+어떤 종류의 DB 작업이었나요?
+✓ 쿼리 종류, 성능 최적화, 인덱스 설계
+
+[성과검증]
+구체적으로 어느 정도 개선되었나요?
+✓ 개선 전후 수치, 측정 방법, 비즈니스 임팩트"""),
         ("user", common_context)
     ])
     
@@ -405,17 +428,34 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 
 ## 📤 출력 형식
 
-⚠️ **필수 규칙**:
-1. 질문은 **한 문장으로만** 작성
-2. **괄호나 예시를 절대 포함하지 마세요** (예: 같은 거 금지)
-3. 쌍따옴표나 인용 부호 사용 금지
-4. 핵심만 간결하게 물어보세요
+⚠️ **필수**: 다음 형식으로 출력하세요.
 
-- ✅ 좋은 예: "어떤 도구로 자동화했고 시간은 얼마나 절약되었나요?"
-- ❌ 나쁜 예: "어떤 도구(예: Jenkins, GitHub Actions)로 자동화했나요?"
-- ❌ 나쁜 예: 여러 줄에 걸친 설명
+형식:
+[라벨]
+질문
+✓ 구체적으로 파고들 키워드들
 
-**출력**: 질문 1개, 한 문장, 번호 없이, 존중하는 톤"""),
+라벨 옵션:
+- 깊이파기, 구체화, 상세확인, 배경파악
+
+키워드 요구사항 (매우 중요):
+- 반드시 질문에서 묻고 있는 내용과 직접 연관된 확인 포인트만 작성
+- 질문에 없는 내용은 키워드에 절대 포함 금지
+- 명사 중심, 간결하게 3-5개 (각 2-4단어)
+- 질문을 다시 읽고 "이 질문에 대한 답변에서 뭘 확인해야 하나?"를 생각하고 작성
+
+예시:
+[깊이파기]
+어떻게 해결하셨나요?
+✓ 문제 원인, 해결 과정, 시행착오, 최종 방법
+
+[구체화]
+어떤 도구로 얼마나 절약했나요?
+✓ 도구명, 적용 범위, 시간 절감률, 부작용
+
+[배경파악]
+왜 그 기술을 선택했나요?
+✓ 선택 이유, 대안 검토, 트레이드오프, 결과"""),
         ("user", common_context)
     ])
     
@@ -454,9 +494,34 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 
 ## 📤 출력 형식
 
-⚠️ **필수**: 질문은 **한 문장으로만** 작성하세요.
+⚠️ **필수**: 다음 형식으로 출력하세요.
 
-**출력**: 질문 1개, 한 문장, 번호 없이, 존중하는 톤"""),
+형식:
+[라벨]
+질문
+✓ 구체적으로 확인할 키워드들
+
+라벨 옵션:
+- 주제전환, 관점변경, 다른경험
+
+키워드 요구사항 (매우 중요):
+- 반드시 질문에서 묻고 있는 내용과 직접 연관된 확인 포인트만 작성
+- 질문에 없는 내용은 키워드에 절대 포함 금지
+- 명사 중심, 간결하게 3-5개 (각 2-4단어)
+- 질문을 다시 읽고 "이 질문에 대한 답변에서 뭘 확인해야 하나?"를 생각하고 작성
+
+예시:
+[관점변경]
+팀원들과 어떻게 협업하셨나요?
+✓ 소통 방식, 코드리뷰, 역할 분담, 갈등 해결
+
+[주제전환]
+다른 프로젝트 경험도 여쭤봐도 될까요?
+✓ 프로젝트명, 기술 스택, 담당 역할, 성과
+
+[다른경험]
+다른 기술 스택 경험도 있으신가요?
+✓ 기술명, 사용 기간, 프로젝트 규모, 숙련도"""),
         ("user", common_context)
     ])
     
@@ -485,31 +550,109 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
         # 비동기 실행
         questions = asyncio.run(generate_all_questions())
         
-        # 에러 체크 및 질문 정리
+        # 에러 체크 및 질문 파싱
         final_questions = []
-        for i, q in enumerate(questions, 1):
+        personas = ["검증자", "탐구자", "전환자"]
+        
+        for i, q in enumerate(questions):
             if isinstance(q, Exception):
-                print(f"❌ 질문 {i} 생성 오류: {q}")
-                final_questions.append(f"질문 생성 중 오류가 발생했습니다.")
+                print(f"❌ 질문 {i+1} 생성 오류: {q}")
+                final_questions.append({
+                    "label": "오류",
+                    "question": "질문 생성 중 오류가 발생했습니다.",
+                    "keywords": "",
+                    "persona": personas[i] if i < len(personas) else "기타"
+                })
             else:
-                # 그대로 사용 (이미 LLM이 한 문장으로 생성)
-                final_questions.append(q.strip())
+                # [라벨]\n질문\n✓ 키워드 형식 파싱
+                parsed = _parse_labeled_question(q.strip(), personas[i] if i < len(personas) else "기타")
+                final_questions.append(parsed)
         
         state["current_questions"] = final_questions
         print(f"✅ 질문 생성 완료 (병렬 처리)")
-        print(f"   1. [검증자] {final_questions[0][:50]}...")
-        print(f"   2. [탐구자] {final_questions[1][:50]}...")
-        print(f"   3. [전환자] {final_questions[2][:50]}...")
+        for i, q in enumerate(final_questions, 1):
+            print(f"   {i}. [{q['label']}] {q['question'][:40]}...")
         
     except Exception as e:
         print(f"❌ 질문 생성 오류: {e}")
         state["current_questions"] = [
-            "죄송합니다. AI 질문 생성 중 오류가 발생했습니다.",
-            "잠시 후 다시 시도해주세요.",
-            "또는 직접 질문을 입력해주세요."
+            {
+                "label": "오류",
+                "question": "죄송합니다. AI 질문 생성 중 오류가 발생했습니다.",
+                "keywords": "",
+                "persona": "시스템"
+            },
+            {
+                "label": "재시도",
+                "question": "잠시 후 다시 시도해주세요.",
+                "keywords": "",
+                "persona": "시스템"
+            },
+            {
+                "label": "대안",
+                "question": "또는 직접 질문을 입력해주세요.",
+                "keywords": "",
+                "persona": "시스템"
+            }
         ]
     
     return state
+
+
+def _parse_labeled_question(text, persona):
+    """
+    새로운 형식 파싱:
+    [라벨]
+    질문
+    ✓ 키워드1, 키워드2, 키워드3
+    
+    Args:
+        text: LLM이 생성한 텍스트
+        persona: 페르소나 이름 (검증자/탐구자/전환자)
+    
+    Returns:
+        dict: {"label": "라벨", "question": "질문", "keywords": "키워드들", "persona": "페르소나"}
+    """
+    try:
+        lines = text.strip().split('\n')
+        
+        # [라벨] 추출
+        label = "질문"
+        if lines and lines[0].startswith('[') and ']' in lines[0]:
+            label = lines[0].strip('[]').strip()
+            lines = lines[1:]
+        
+        # 질문과 키워드 분리
+        question_lines = []
+        keywords = ""
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('✓') or line.startswith('- '):
+                # 키워드 라인
+                keywords = line.lstrip('✓').lstrip('-').strip()
+                break
+            elif line:
+                # 질문 라인
+                question_lines.append(line)
+        
+        question = ' '.join(question_lines).strip()
+        
+        return {
+            "label": label,
+            "question": question if question else text,
+            "keywords": keywords,
+            "persona": persona
+        }
+        
+    except Exception as e:
+        # 파싱 실패 시 기본값
+        return {
+            "label": "질문",
+            "question": text,
+            "keywords": "",
+            "persona": persona
+        }
 
 
 def finalize_questions_node(state: InterviewState) -> InterviewState:
@@ -520,7 +663,20 @@ def finalize_questions_node(state: InterviewState) -> InterviewState:
     """
     current_questions = state.get("current_questions", [])
     
-    # operator.add로 자동 누적 (Checkpointer에 저장됨)
+    # 질문 텍스트만 추출 (asked_questions는 문자열 리스트)
+    question_texts = []
+    for q in current_questions:
+        if isinstance(q, dict):
+            question_texts.append(q.get("question", ""))
+        else:
+            question_texts.append(str(q))
+    
+    print(f"📝 질문 확정 완료 (현재 생성: {len(question_texts)}개)")
+    
+    # asked_questions에 추가할 항목만 반환
+    return {
+        "asked_questions": question_texts  # operator.add가 자동으로 extend
+    }
     state["asked_questions"] = current_questions
     
     print(f"📝 질문 확정 완료 (누적: {len(state.get('asked_questions', []))}개)")
