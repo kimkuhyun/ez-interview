@@ -710,7 +710,7 @@ const radarAxisHighlightPlugin = {
     
     ctx.save();
     ctx.strokeStyle = "rgba(57, 72, 103, 0.85)";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 1.0;
     ctx.lineCap = 'round';
     
     // 각 축을 명시적으로 개별 경로로 그리기
@@ -822,7 +822,7 @@ function renderReport(r) {
           label: '평가 점수',
           data: values,
           fill: true,
-          backgroundColor: 'rgba(107, 140, 181, 0.15)',
+          backgroundColor: 'rgba(107, 140, 181, 0.4)',
           borderColor: 'rgb(107, 140, 181)',
           borderWidth: 2,
           pointBackgroundColor: 'rgb(107, 140, 181)',
@@ -834,7 +834,7 @@ function renderReport(r) {
       },
       options: {
         responsive: true,
-        maintainAspectRatio: true,
+        maintainAspectRatio: false,
         scales: {
           r: {
             beginAtZero: true,
