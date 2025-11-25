@@ -61,6 +61,21 @@ def _detect_has_portfolio(session_id: str, fallback: bool) -> bool:
             conn.close()
 
 
+def _normalize_axes_keys(raw_axes) -> list[str]:
+    """axes_keys 입력을 5개로 정규화"""
+    if not raw_axes:
+        return _DEFAULT_AXES_KEYS.copy()
+    axes = []
+    if isinstance(raw_axes, str):
+        axes = [a.strip() for a in raw_axes.split(",") if a and a.strip()]
+    elif isinstance(raw_axes, (list, tuple)):
+        axes = [str(a).strip() for a in raw_axes if str(a).strip()]
+    axes = axes[:5]
+    while len(axes) < 5:
+        axes.append(_DEFAULT_AXES_KEYS[len(axes)])
+    return axes
+
+
 
 @report_bp.route("/panel/report")
 def report_panel():
@@ -71,6 +86,11 @@ def report_panel():
 def report_view():
     """리포트 전용 뷰 (사이드바 없이 리포트만 표시)"""
     return render_template("agents/report_view.html")
+
+@report_bp.route("/panel/report/lab")
+def report_lab():
+    """독립적인 리포트 생성 테스트 페이지"""
+    return render_template("agents/report_lab.html")
 
 
 @report_bp.route("/reports/pdf", methods=["GET", "POST"])
@@ -391,5 +411,46 @@ def generate_stream():
             'X-Accel-Buffering': 'no'
         }
     )
+
+
+@reports_bp.route("/lab/generate", methods=["POST"])
+def lab_generate():
+    """독립 테스트용 리포트 생성 엔드포인트"""
+    data = request.get_json(silent=True) or {}
+    session_id = data.get("session_id") or ""
+    candidate_name = data.get("candidate_name") or "지원자"
+    position = data.get("position") or "-"
+    user_prompt = data.get("user_prompt") or ""
+    jd_id = data.get("jd_id")
+    axes_keys = _normalize_axes_keys(data.get("axes_keys"))
+    has_portfolio = bool(data.get("has_portfolio", False))
+
+    try:
+        report = create_report(
+            session_id=session_id,
+            candidate_name=candidate_name,
+            position_applied=position,
+            axes_keys=axes_keys,
+            user_prompt=user_prompt,
+            has_portfolio=has_portfolio,
+            jd_id=jd_id,
+        )
+    except Exception as e:
+        return jsonify({"status": "failed", "message": str(e)}), 500
+
+    if isinstance(report, dict) and report.get("status") == "failed":
+        return jsonify(report), 400
+    return jsonify(report)
+
+
+@reports_bp.route("/lab/render", methods=["POST"])
+def lab_render():
+    """클라이언트가 전달한 report JSON을 바로 HTML로 렌더링"""
+    data = request.get_json(silent=True) or {}
+    report = data.get("report")
+    if not report:
+        return jsonify({"status": "failed", "message": "report payload가 없습니다"}), 400
+    html = render_template("agents/report_view_pdf.html", report=report)
+    return Response(html, mimetype="text/html")
 
 

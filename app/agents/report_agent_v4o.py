@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, AsyncGenerator
 import asyncio
+import re
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import PydanticOutputParser
@@ -122,6 +123,50 @@ def _rag_to_text(result: Any) -> str:
                 parts.append(str(item))
         return "\n\n".join(parts)
     return str(result)
+
+
+def chunk_interview(raw: str) -> List[str]:
+    """면접 로그를 턴/문단 단위로 분리"""
+    if not raw:
+        return []
+    parts = re.split(r"(?:\n{2,}|(?:^|\n)(?:질문:|답변:))", raw)
+    return [part.strip() for part in parts if part and part.strip()]
+
+
+def chunk_paragraph(raw: str) -> List[str]:
+    """문단 단위 분리"""
+    if not raw:
+        return []
+    return [part.strip() for part in re.split(r"\n{2,}", raw) if part and part.strip()]
+
+
+def _compact_chunks(chunks: List[str], top_k: int = 12) -> str:
+    """중복을 줄이고 상위 N개만 남긴 컨텍스트"""
+    seen = set()
+    compact: List[str] = []
+    for chunk in chunks:
+        text = chunk.strip()
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        compact.append(text)
+        if len(compact) >= top_k:
+            break
+    return "\n\n".join(compact)
+
+
+def _normalize_context(text: str, llm: ChatOpenAI) -> str:
+    """질문-답변-주체-시간 중심으로 정규화"""
+    if not text:
+        return ""
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "면접/자소서/포트폴리오/JD 내용을 질문-답변-주체-시간 중심으로 압축 정규화해 주세요. 중복과 군더더기는 제거하세요."),
+        ("user", "{text}")
+    ])
+    try:
+        return (prompt | llm).invoke({"text": text}).content
+    except Exception:
+        return text
 
 
 # ==================== 핵심 역량/헤드라인 ====================
@@ -442,8 +487,12 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
             print(f"    → 추가 RAG 검색 (+{len(additional_jd_text)}자)")
     
     # Interview 검색
-    interview_ctx = retrieve_interview_context(session_id) if session_id else ""
-    interview_len = len(str(interview_ctx))
+    interview_raw = retrieve_interview_context(session_id) if session_id else ""
+    interview_source = interview_raw or ""
+    user_logs = state.get("interview_logs") or ""
+    if user_logs:
+        interview_source = f"{interview_source}\n\n{user_logs}".strip()
+    interview_len = len(str(interview_source))
     print(f"  인터뷰로그 - 전체 조회 → 결과: {interview_len}자")
     
     # Portfolio 검색 (이력서와 동일한 패턴)
@@ -470,6 +519,23 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
         print(f"  포트폴리오 - 데이터 없음")
     print()
     
+    llm_norm = _llm_gpt_chat()
+
+    def _prepare_context(raw_text: str, chunker) -> str:
+        if not raw_text:
+            return ""
+        compact = _compact_chunks(chunker(raw_text))
+        if not compact:
+            return raw_text
+        normalized = _normalize_context(compact, llm_norm)
+        return normalized or raw_text
+
+    resume_ctx = _prepare_context(resume_ctx, chunk_paragraph)
+    jd_ctx = _prepare_context(jd_ctx, chunk_paragraph)
+    interview_ctx = _prepare_context(interview_source, chunk_interview)
+    if portfolio_ctx:
+        portfolio_ctx = _prepare_context(portfolio_ctx, chunk_paragraph)
+
     return {
         "resume_ctx": resume_ctx,
         "jd_ctx": jd_ctx,
@@ -904,7 +970,12 @@ def create_report(
             "has_portfolio": has_portfolio,
         }
         
-        final_state = graph.invoke(initial_state)
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            final_state = loop.run_until_complete(graph.ainvoke(initial_state))
+        finally:
+            loop.close()
         report = final_state["report"]
         
         if not report:
