@@ -351,34 +351,27 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 
 ## 📤 출력 형식
 
-⚠️ **필수**: 다음 형식으로 출력하세요.
+⚠️ **필수 규칙**:
+1. 라벨과 질문만 출력 (설명 금지)
+2. 마크다운 금지 (**, *, >, 등 사용 금지)
+3. 질문은 한 문장으로만
 
 형식:
-[라벨]
+라벨
 질문
-✓ 구체적으로 확인할 키워드들
 
 라벨 옵션:
 - 경력확인, 기술검증, 역할확인, 성과검증, 기간확인
 
-키워드 요구사항 (매우 중요):
-- 반드시 질문에서 묻고 있는 내용과 직접 연관된 확인 포인트만 작성
-- 질문에 없는 내용은 키워드에 절대 포함 금지
-- 명사 중심, 간결하게 3-5개 (각 2-4단어)
-- 질문을 다시 읽고 "이 질문에 대한 답변에서 뭘 확인해야 하나?"를 생각하고 작성
-
 예시:
-[경력확인]
+경력확인
 주로 어떤 프로젝트에서 일하셨나요?
-✓ 프로젝트명, 팀 규모, 본인 역할, 기간
 
-[기술검증]
+기술검증
 어떤 종류의 DB 작업이었나요?
-✓ 쿼리 종류, 성능 최적화, 인덱스 설계
 
-[성과검증]
-구체적으로 어느 정도 개선되었나요?
-✓ 개선 전후 수치, 측정 방법, 비즈니스 임팩트"""),
+성과검증
+구체적으로 어느 정도 개선되었나요?"""),
         ("user", common_context)
     ])
     
@@ -428,34 +421,27 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 
 ## 📤 출력 형식
 
-⚠️ **필수**: 다음 형식으로 출력하세요.
+⚠️ **필수 규칙**:
+1. 라벨과 질문만 출력 (설명 금지)
+2. 마크다운 금지 (**, *, >, 등 사용 금지)
+3. 질문은 한 문장으로만
 
 형식:
-[라벨]
+라벨
 질문
-✓ 구체적으로 파고들 키워드들
 
 라벨 옵션:
 - 깊이파기, 구체화, 상세확인, 배경파악
 
-키워드 요구사항 (매우 중요):
-- 반드시 질문에서 묻고 있는 내용과 직접 연관된 확인 포인트만 작성
-- 질문에 없는 내용은 키워드에 절대 포함 금지
-- 명사 중심, 간결하게 3-5개 (각 2-4단어)
-- 질문을 다시 읽고 "이 질문에 대한 답변에서 뭘 확인해야 하나?"를 생각하고 작성
-
 예시:
-[깊이파기]
+깊이파기
 어떻게 해결하셨나요?
-✓ 문제 원인, 해결 과정, 시행착오, 최종 방법
 
-[구체화]
+구체화
 어떤 도구로 얼마나 절약했나요?
-✓ 도구명, 적용 범위, 시간 절감률, 부작용
 
-[배경파악]
-왜 그 기술을 선택했나요?
-✓ 선택 이유, 대안 검토, 트레이드오프, 결과"""),
+배경파악
+왜 그 기술을 선택했나요?"""),
         ("user", common_context)
     ])
     
@@ -482,8 +468,8 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 - **창의적으로** 다양한 각도를 시도하세요
 
 ⚠️ **중요**: 갑자기 다른 주제로 점프하지 마세요. 이전 답변과 연결고리를 만드세요.
-- 나쁜 예: Python 스크립트 얘기 중 → 갑자기 "신규 입사자 교육은 어떻게 했나요?"
-- 좋은 예: "변경 이력 관리나 문서화를 경험하셨다고 했는데, 이것이 팀 전체 효율성에 어떤 도움이 되었나요?"
+- 나쁜 예: Python 스크립트 얘기 중 → 갑자기 신규 입사자 교육은 어떻게 했나요?
+- 좋은 예: 변경 이력 관리나 문서화를 경험하셨다고 했는데, 이것이 팀 전체 효율성에 어떤 도움이 되었나요?
 
 ### ✅ 주제 전환 (완전히 새로운 주제로)
 - 현재 주제를 충분히 파악했다고 판단되면
@@ -494,34 +480,27 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 
 ## 📤 출력 형식
 
-⚠️ **필수**: 다음 형식으로 출력하세요.
+⚠️ **필수 규칙**:
+1. 라벨과 질문만 출력 (설명 금지)
+2. 마크다운 금지 (**, *, >, 등 사용 금지)
+3. 질문은 한 문장으로만
 
 형식:
-[라벨]
+라벨
 질문
-✓ 구체적으로 확인할 키워드들
 
 라벨 옵션:
 - 주제전환, 관점변경, 다른경험
 
-키워드 요구사항 (매우 중요):
-- 반드시 질문에서 묻고 있는 내용과 직접 연관된 확인 포인트만 작성
-- 질문에 없는 내용은 키워드에 절대 포함 금지
-- 명사 중심, 간결하게 3-5개 (각 2-4단어)
-- 질문을 다시 읽고 "이 질문에 대한 답변에서 뭘 확인해야 하나?"를 생각하고 작성
-
 예시:
-[관점변경]
+관점변경
 팀원들과 어떻게 협업하셨나요?
-✓ 소통 방식, 코드리뷰, 역할 분담, 갈등 해결
 
-[주제전환]
+주제전환
 다른 프로젝트 경험도 여쭤봐도 될까요?
-✓ 프로젝트명, 기술 스택, 담당 역할, 성과
 
-[다른경험]
-다른 기술 스택 경험도 있으신가요?
-✓ 기술명, 사용 기간, 프로젝트 규모, 숙련도"""),
+다른경험
+다른 기술 스택 경험도 있으신가요?"""),
         ("user", common_context)
     ])
     
@@ -560,7 +539,6 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
                 final_questions.append({
                     "label": "오류",
                     "question": "질문 생성 중 오류가 발생했습니다.",
-                    "keywords": "",
                     "persona": personas[i] if i < len(personas) else "기타"
                 })
             else:
@@ -579,19 +557,16 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
             {
                 "label": "오류",
                 "question": "죄송합니다. AI 질문 생성 중 오류가 발생했습니다.",
-                "keywords": "",
                 "persona": "시스템"
             },
             {
                 "label": "재시도",
                 "question": "잠시 후 다시 시도해주세요.",
-                "keywords": "",
                 "persona": "시스템"
             },
             {
                 "label": "대안",
                 "question": "또는 직접 질문을 입력해주세요.",
-                "keywords": "",
                 "persona": "시스템"
             }
         ]
@@ -602,46 +577,40 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 def _parse_labeled_question(text, persona):
     """
     새로운 형식 파싱:
-    [라벨]
+    라벨
     질문
-    ✓ 키워드1, 키워드2, 키워드3
     
     Args:
         text: LLM이 생성한 텍스트
         persona: 페르소나 이름 (검증자/탐구자/전환자)
     
     Returns:
-        dict: {"label": "라벨", "question": "질문", "keywords": "키워드들", "persona": "페르소나"}
+        dict: {"label": "라벨", "question": "질문", "persona": "페르소나"}
     """
     try:
         lines = text.strip().split('\n')
         
-        # [라벨] 추출
+        # 첫 번째 줄을 라벨로, 나머지를 질문으로
         label = "질문"
-        if lines and lines[0].startswith('[') and ']' in lines[0]:
-            label = lines[0].strip('[]').strip()
-            lines = lines[1:]
-        
-        # 질문과 키워드 분리
         question_lines = []
-        keywords = ""
         
-        for line in lines:
-            line = line.strip()
-            if line.startswith('✓') or line.startswith('- '):
-                # 키워드 라인
-                keywords = line.lstrip('✓').lstrip('-').strip()
-                break
-            elif line:
-                # 질문 라인
-                question_lines.append(line)
+        if lines:
+            # 첫 줄이 라벨
+            label = lines[0].strip()
+            # 나머지가 질문 (✓로 시작하는 키워드 라인은 무시)
+            for line in lines[1:]:
+                line = line.strip()
+                # ✓로 시작하는 키워드 라인은 무시
+                if line.startswith('✓') or line.startswith('- '):
+                    continue
+                elif line:
+                    question_lines.append(line)
         
         question = ' '.join(question_lines).strip()
         
         return {
             "label": label,
             "question": question if question else text,
-            "keywords": keywords,
             "persona": persona
         }
         
@@ -650,7 +619,6 @@ def _parse_labeled_question(text, persona):
         return {
             "label": "질문",
             "question": text,
-            "keywords": "",
             "persona": persona
         }
 
