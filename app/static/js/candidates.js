@@ -176,6 +176,12 @@ function renderCandidates(candidates) {
         const portfolioBadge = candidate.has_portfolio 
             ? '<span class="badge green">제출 완료</span>' 
             : '<span class="badge">미제출</span>';
+        const positionLabel = (candidate.positions && candidate.positions.length)
+            ? candidate.positions.join(', ')
+            : (candidate.position || '-');
+        const primaryPosition = (candidate.positions && candidate.positions.length)
+            ? candidate.positions[0]
+            : (candidate.position || '');
         
         // 면접 완료, 합격, 보류, 불합격 상태인 경우 결과 선택 드롭다운 표시
         let resultDropdown = '-';
@@ -199,7 +205,7 @@ function renderCandidates(candidates) {
         return `
             <tr onclick="openCandidateDetail('${candidate.session_id}', '${escapeHtml(candidate.name)}')" style="cursor: pointer;">
                 <td>${escapeHtml(candidate.name || '-')}</td>
-                <td>${escapeHtml(candidate.position || '-')}</td>
+                <td>${escapeHtml(positionLabel)}</td>
                 <td>${createdDate}</td>
                 <td style="text-align: left;">${portfolioBadge}</td>
                 <td>${statusBadge}</td>
@@ -452,7 +458,7 @@ function filterCandidates() {
 if (!window.uploadState) {
     window.uploadState = {
         selectedFiles: [],
-        position: ''
+        positions: []
     };
 }
 
@@ -519,7 +525,7 @@ function closeUploadModal() {
 
 function resetUploadModal() {
     window.uploadState.selectedFiles = [];
-    window.uploadState.position = '';
+    window.uploadState.positions = [];
     
     const folderInput = document.getElementById('folderInput');
     const fileListContainer = document.getElementById('fileListContainer');
@@ -531,7 +537,7 @@ function resetUploadModal() {
     if (folderInput) folderInput.value = '';
     if (fileListContainer) fileListContainer.style.display = 'none';
     if (fileList) fileList.innerHTML = '';
-    if (positionSelect) positionSelect.value = '';
+    if (positionSelect) positionSelect.selectedIndex = -1;
     if (uploadSubmitBtn) uploadSubmitBtn.disabled = true;
     if (uploadProgress) uploadProgress.style.display = 'none';
 }
@@ -646,9 +652,10 @@ function updateFileItemStatus(index, status) {
 
 async function submitUpload() {
     const positionSelect = document.getElementById('positionSelect');
-    const position = positionSelect ? positionSelect.value.trim() : '';
+    const positions = positionSelect ? Array.from(positionSelect.selectedOptions || []).map(o => o.value.trim()).filter(Boolean) : [];
+    const primaryPosition = positions[0] || '';
     
-    if (!position) {
+    if (!positions.length) {
         alert('지원 포지션을 선택해주세요.');
         return;
     }
@@ -719,7 +726,8 @@ async function submitUpload() {
             try {
                 const formData = new FormData();
                 formData.append('file', file);
-                formData.append('position', position);
+                formData.append('positions', JSON.stringify(positions));
+                formData.append('position', primaryPosition);
                 
                 // 같은 그룹의 두 번째 파일부터는 session_id 전달
                 if (groupSessionId) {

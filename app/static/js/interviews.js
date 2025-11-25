@@ -76,11 +76,17 @@ function renderInterviews(interviews) {
     
     tbody.innerHTML = interviews.map(interview => {
         const statusBadge = getInterviewStatusBadge(interview.status);
+        const positionLabel = (interview.positions && interview.positions.length)
+            ? interview.positions.join(', ')
+            : (interview.position || '-');
+        const primaryPosition = (interview.positions && interview.positions.length)
+            ? interview.positions[0]
+            : (interview.position || '');
         
         return `
             <tr>
                 <td>${escapeHtml(interview.name || '-')}</td>
-                <td>${escapeHtml(interview.position || '-')}</td>
+                <td>${escapeHtml(positionLabel)}</td>
                 <td>
                     <input 
                         type="datetime-local" 
@@ -93,7 +99,7 @@ function renderInterviews(interviews) {
                 <td>
                     <button 
                         class="btn btn-sm primary" 
-                        onclick="startInterview('${interview.session_id}', '${escapeHtml(interview.name)}', '${interview.jd_id}', '${escapeHtml(interview.position)}')"
+                        onclick="startInterview('${interview.session_id}', '${escapeHtml(interview.name)}', '${interview.jd_id}', '${escapeHtml(primaryPosition)}')"
                         style="padding: 0.5rem 1rem; font-size: 0.875rem;"
                     >
                         면접 시작
