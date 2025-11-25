@@ -1,0 +1,17 @@
+<!-- 랜딩 페이지 -->
+<div class="landing-option1">
+    <div class="landing-bg-image"></div>
+    <div class="landing-content fade-in">
+        <h1 class="main-title">EZ-Interview</h1>
+        <p class="main-subtitle">Multi-Agent를 활용한 면접 보조 솔루션</p>
+        <button class="start-btn">시작하기</button>
+    </div>
+</div>
+
+<script>
+document.querySelector('.start-btn').addEventListener('click', function() {
+    if (window.loadTab) {
+        window.loadTab('candidates');
+    }
+});
+</script>

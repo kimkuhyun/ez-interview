@@ -112,6 +112,7 @@
   letter-spacing: 0.05em;
 }
 
+
 .position-table td {
   padding: 0.875rem 1rem;
   border-bottom: 1px solid var(--color-border-light);
@@ -119,6 +120,7 @@
   color: var(--color-text-primary);
   position: relative;
 }
+
 
 .position-table tr:last-child td {
   border-bottom: none;
@@ -160,18 +162,41 @@
 .jd-file-cell {
   cursor: pointer;
   position: relative;
-  color: var(--color-info);
+  color: var(--color-text-primary);
+  text-align: center;
+  vertical-align: middle;
 }
 
-.jd-file-cell:hover {
-  text-decoration: underline;
+.jd-file-cell:hover .file-icon-wrapper {
+  transform: translateY(-2px);
+  color: var(--color-primary);
+}
+
+.file-icon-wrapper {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  width: 100%;
+}
+
+.file-icon-svg {
+  width: 24px;
+  height: 24px;
+  color: var(--color-info);
+  transition: all 0.2s ease;
+}
+
+.jd-file-cell:hover .file-icon-svg {
+  color: var(--color-primary);
 }
 
 .jd-file-cell .edit-hint {
   display: none;
   position: absolute;
   top: -30px;
-  left: 0;
+  left: 50%;
+  transform: translateX(-50%);
   background: var(--color-gray-900);
   color: white;
   padding: 4px 8px;
@@ -187,6 +212,10 @@
 
 .position-table tbody tr:hover {
   background: var(--color-bg-secondary);
+}
+
+.position-table tbody tr[style*="cursor: pointer"]:hover {
+  background: var(--color-primary-light);
 }
 
 .keyword-badge {
@@ -416,4 +445,83 @@
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* =========================================
+   PDF 뷰어 모달
+   ========================================= */
+.pdf-modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+}
+
+.pdf-modal.active {
+  display: flex;
+}
+
+.pdf-modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 60%;
+  max-width: 900px;
+  height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.pdf-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--color-border-medium);
+}
+
+.pdf-modal-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.pdf-close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  color: var(--color-gray-500);
+  cursor: pointer;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.pdf-close-btn:hover {
+  background: var(--color-gray-100);
+  color: var(--color-text-primary);
+}
+
+.pdf-modal-body {
+  flex: 1;
+  padding: 1rem;
+  overflow: hidden;
+}
+
+.pdf-viewer {
+  width: 100%;
+  height: 100%;
+  border: none;
+  border-radius: 8px;
 }

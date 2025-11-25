@@ -1,10 +1,29 @@
 // SPA 방식 탭 관리 (interview.html 방식)
 (function() {
-    let currentTab = 'candidates';
+    let currentTab = null; // landing 시작
+    let isLandingMode = true; // 랜딩 페이지 모드
 
     // 탭 전환 함수
+    window.loadTab = async function(tabName) {
+        return switchTab(tabName);
+    };
+
     async function switchTab(tabName) {
         console.log(`🔄 ${tabName} 탭 로드 시작`);
+        
+        // 랜딩 페이지 숨기기, 탭 네비게이션 표시
+        if (isLandingMode) {
+            const landingContainer = document.querySelector('.landing-container');
+            const tabNavigation = document.getElementById('tab-navigation');
+            
+            if (landingContainer) {
+                landingContainer.style.display = 'none';
+            }
+            if (tabNavigation) {
+                tabNavigation.style.display = 'flex';
+            }
+            isLandingMode = false;
+        }
         
         try {
             const res = await fetch(`/api/admin/tabs/${tabName}`);
@@ -78,7 +97,26 @@
             }
         });
 
-        // 초기 탭 로드
-        switchTab(currentTab);
+        // 초기 랜딩 페이지 로드
+        const tabContent = document.getElementById('tab-content');
+        fetch('/api/admin/tabs/landing')
+            .then(res => res.text())
+            .then(html => {
+                tabContent.innerHTML = html;
+                
+                // 랜딩 페이지의 스크립트 실행
+                const scripts = tabContent.querySelectorAll("script");
+                scripts.forEach(old => {
+                    const s = document.createElement("script");
+                    s.textContent = old.textContent;
+                    document.body.appendChild(s);
+                    old.remove();
+                });
+            })
+            .catch(err => {
+                console.error('랜딩 페이지 로드 실패:', err);
+                // 실패 시 기본 탭 로드
+                switchTab('candidates');
+            });
     });
 })();

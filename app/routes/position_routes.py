@@ -116,11 +116,38 @@ def get_position(jd_id):
     
     return jsonify({
         "id": str(row[0]),
-        "name": row[1],
-        "jd_file": row[2],
-        "keywords": row[3] or [],
+        "name": row[1],  # title 컬럼
+        "jd_file": row[2],  # file_path 컬럼
+        "keywords": row[3],
+        "is_active": row[4],
         "created_at": row[5].isoformat() if row[5] else None
     })
+
+@position_bp.route('/<jd_id>/jd-file', methods=['GET'])
+def get_jd_file(jd_id):
+    """JD 파일 보기"""
+    from flask import send_file
+    
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT file_path FROM interview.job_descriptions
+        WHERE jd_id = %s::uuid
+    """, (jd_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if not row or not row[0]:
+        return jsonify({"error": "파일을 찾을 수 없습니다"}), 404
+    
+    # file_path는 'jds/JD_xxxxx.pdf' 형태로 저장되어 있음
+    file_path = Path(__file__).parent.parent.parent / 'uploads' / row[0]
+    
+    if not file_path.exists():
+        return jsonify({"error": "파일이 존재하지 않습니다"}), 404
+    
+    return send_file(file_path, mimetype='application/pdf')
 
 @position_bp.route('/<jd_id>/recommend-keywords', methods=['POST'])
 def recommend_keywords(jd_id):

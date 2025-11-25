@@ -20,10 +20,9 @@
 <body>
     <div class="container">
 
-
-        <!-- 탭 네비게이션 -->
-        <div class="tab-navigation" id="tab-navigation">
-            <button data-tab="candidates" class="tab-btn active">
+        <!-- 탭 네비게이션 (처음엔 숨김) -->
+        <div class="tab-navigation" id="tab-navigation" style="display: none;">
+            <button data-tab="candidates" class="tab-btn">
                 지원자 관리
             </button>
             <button data-tab="positions" class="tab-btn">
@@ -34,7 +33,7 @@
             </button>
         </div>
 
-        <!-- 탭 컨텐츠 -->
+        <!-- 탭 컨텐츠 (랜딩 페이지 또는 탭 내용) -->
         <div class="tab-content" id="tab-content">
             <!-- 동적으로 로드됩니다 -->
         </div>

@@ -14,8 +14,11 @@ async function loadPositions() {
     return;
   }
   
-  tbody.innerHTML = positions.map(p => `
-    <tr>
+  tbody.innerHTML = positions.map(p => {
+    const hasFile = p.jd_file ? 'true' : 'false';
+    
+    return `
+    <tr onclick="if(${hasFile}) { openPdfModal('${p.id}', '${p.name}', '${p.jd_file}'); }" style="cursor: ${hasFile ? 'pointer' : 'default'};">
       <td>
         <div class="position-name-cell">
           <strong>${p.name}</strong>
@@ -25,22 +28,22 @@ async function loadPositions() {
       <td>
         <span class="candidate-count-badge">${p.candidate_count || 0}명</span>
       </td>
-      <td class="jd-file-cell" onclick="editJdFile('${p.id}')">
-        <span class="edit-hint">클릭하여 파일 변경</span>
-        ${p.jd_file ? p.jd_file.split('/').pop().split('\\').pop() : '-'}
+      <td class="jd-file-cell" onclick="event.stopPropagation(); editJdFile('${p.id}')" title="파일 변경">
+        ${p.jd_file ? '<div class="file-icon-wrapper"><svg class="file-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div>' : '-'}
       </td>
-      <td>
+      <td onclick="event.stopPropagation();">
         <span class="keyword-badge ${(p.keywords && p.keywords.length > 0) ? 'set' : 'not-set'}">
           ${(p.keywords && p.keywords.length > 0) ? p.keywords.length + '개 설정됨' : '미설정'}
         </span>
       </td>
-      <td>
+      <td onclick="event.stopPropagation();">
         <button class="btn-action" onclick="openKeywordModal('${p.id}')">
           키워드 설정 및 심사 시작
         </button>
       </td>
     </tr>
-  `).join('');
+    `;
+  }).join('');
 }
 
 function setupDragDrop() {
@@ -229,4 +232,27 @@ if (window.MutationObserver) {
     const tab = document.querySelector('[data-tab="positions"].active');
     if (tab && document.getElementById('positionList')) loadPositions();
   }).observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+}
+
+// PDF 뷰어 모달 열기
+function openPdfModal(positionId, positionName, jdFilePath) {
+  const modal = document.getElementById('pdfModal');
+  const title = document.getElementById('pdfModalTitle');
+  const viewer = document.getElementById('pdfViewer');
+  
+  title.textContent = `${positionName} - JD 파일`;
+  
+  // API 엔드포인트를 통해 PDF 파일 로드
+  viewer.src = `/api/positions/${positionId}/jd-file`;
+  
+  modal.classList.add('active');
+}
+
+// PDF 뷰어 모달 닫기
+function closePdfModal() {
+  const modal = document.getElementById('pdfModal');
+  const viewer = document.getElementById('pdfViewer');
+  
+  modal.classList.remove('active');
+  viewer.src = '';
 }

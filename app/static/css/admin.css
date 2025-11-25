@@ -99,6 +99,85 @@ body {
     margin-bottom: 1.5rem;
 }
 
+/* =========================================
+   Landing Page (Option 1)
+   ========================================= */
+.landing-option1 {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.landing-bg-image {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, #394867 0%, #14274E 100%);
+    filter: brightness(0.7);
+}
+
+.landing-content {
+    position: relative;
+    z-index: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: white;
+}
+
+.fade-in {
+    animation: fadeIn 1.5s ease-in;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.main-title {
+    font-size: 5.5rem;
+    font-weight: 900;
+    margin: 0;
+    text-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    letter-spacing: -2px;
+}
+
+.main-subtitle {
+    font-size: 1.8rem;
+    margin: 1.5rem 0 3rem;
+    font-weight: 400;
+    opacity: 0.95;
+}
+
+.start-btn {
+    padding: 1rem 3rem;
+    font-size: 1.2rem;
+    font-weight: 600;
+    background: rgba(57, 72, 103, 0.2);
+    border: 2px solid rgba(255, 255, 255, 0.9);
+    color: white;
+    border-radius: 50px;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.start-btn:hover {
+    background: var(--color-primary);
+    border-color: var(--color-primary);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(57, 72, 103, 0.4);
+}
+
+/* =========================================
+   Tab Navigation (숨김 상태)
+   ========================================= */
+
 .header-title {
     font-size: 1.875rem;
     font-weight: 700;
