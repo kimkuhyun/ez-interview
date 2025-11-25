@@ -2,7 +2,8 @@
 면접 스트림 AI 에이전트 (LangGraph 기반)
 
 역할: 면접자의 답변을 받아 후속 질문 3개를 자동 생성
-구조: LangGraph StateGraph 기반 (load_rag → determine_phase → generate_questions → validate_questions)
+구조: load_rag → preprocess_input → generate_questions → finalize_questions
+상태 관리: LangGraph MemorySaver (세션별 자동 격리)
 """
 
 from typing import TypedDict, List, Annotated, Literal
@@ -10,6 +11,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 import operator
 
 from app.config.config import Config
@@ -19,18 +21,19 @@ from app.config.config import Config
 # State 정의
 # ========================================
 class InterviewState(TypedDict):
-    """면접 진행 상태"""
+    """면접 진행 상태 (LangGraph Checkpointer 관리)"""
     
     # 세션 정보
     session_id: str  # RAG 검색용 (이력서/포트폴리오)
-    question_id: str  # 현재 대질문 (q1, q2, ...)
+    question_id: str  # 현재 대질문 (q1, q2, ...) - 로깅용
     
-    # 대화 기록
+    # 대화 기록 (요청마다 전달)
     messages: Annotated[List[dict], operator.add]  # 자동 append
     history_text: str  # LLM에 전달할 히스토리 문자열
     
     # JD 원문 (DB에서 조회)
     jd_text: str
+    position: str  # 채용 포지션 (예: 백엔드 개발자, 프론트엔드 개발자)
     
     # RAG 컨텍스트 (동적 검색)
     rag_context: str  # 동적으로 생성되는 관련 컨텍스트
@@ -40,15 +43,15 @@ class InterviewState(TypedDict):
     
     # 생성된 질문
     current_questions: List[str]  # 현재 표시 중인 후속 질문 3개
-    asked_questions: List[str]  # 이미 물어본 질문들 (중복 방지)
     
-    # 면접자 답변
+    # 영속 필드 (Checkpointer에 저장되어 다음 호출 시 복원)
+    asked_questions: Annotated[List[str], operator.add]  # 자동 누적
+    regen_history: Annotated[List[str], operator.add]  # 자동 누적
+    regen_count: int  # 재생성 횟수
+    
+    # 면접자 답변 (요청마다 전달)
     interviewee_answer: str
-    
-    # 재생성 제어
-    regen_history: List[str]  # 재생성 시도 질문들 (임시 저장)
     is_regen: bool
-    regen_count: int  # 현재 답변에 대한 재생성 횟수
 
 
 # ========================================
@@ -165,8 +168,38 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
     history_text = state.get("history_text", "")
     interviewee_answer = state.get("interviewee_answer", "")
     asked_questions = state.get("asked_questions", [])
-    regen_history = state.get("regen_history", [])  # 재생성 시도 질문들
+    regen_history = state.get("regen_history", [])
+    regen_count = state.get("regen_count", 0)
+    is_regen = state.get("is_regen", False)
     session_id = state.get("session_id")
+    
+    # 재생성 횟수 체크
+    MAX_REGEN_COUNT = 2
+    
+    if is_regen:
+        regen_count += 1
+        
+        # 재생성 제한 체크
+        if regen_count > MAX_REGEN_COUNT:
+            print(f"⚠️ 재생성 제한 도달 ({regen_count}/{MAX_REGEN_COUNT})")
+            state["current_questions"] = [
+                "재생성 횟수가 초과되었습니다.",
+                "새로운 답변을 입력하거나 질문을 선택해주세요.",
+                "면접을 계속 진행해주세요."
+            ]
+            state["regen_count"] = regen_count
+            return state
+        
+        # 이전 질문을 regen_history에 추가 (자동 누적)
+        current_questions = state.get("current_questions", [])
+        if current_questions:
+            state["regen_history"] = current_questions  # operator.add가 자동 append
+    else:
+        # 새 답변이면 재생성 카운트 리셋
+        regen_count = 0
+        state["regen_history"] = []
+    
+    state["regen_count"] = regen_count
     
     # RAG 검색 쿼리 구성
     print(f"🔍 RAG 검색 시작...")
@@ -252,7 +285,12 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
     asked_questions_text = "\n".join(f"- {q}" for q in recent_asked) if recent_asked else "(없음)"
     regen_history_text = "\n".join(f"[{i//3 + 1}차 시도] {q}" for i, q in enumerate(regen_history[-9:])) if regen_history else "(없음)"
     
+    # 포지션 정보
+    position = state.get("position", "")
+    position_context = f"\n[채용 포지션]\n{position}\n" if position else ""
+    
     common_context = f"""
+{position_context}
 [면접 자료]
 {rag_context}
 
@@ -278,6 +316,8 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 **당신의 유일한 임무**: 면접자의 답변이 이력서와 일치하는지 검증하는 질문 1개 생성
 
 ⚠️ **중요**: 다른 역할(탐구, 전환)은 다른 전문가가 담당합니다. 오직 **검증**만 하세요.
+
+⚠️ **포지션 고려**: [채용 포지션]이 주어지면 해당 포지션과 관련된 경험을 우선 검증하세요.
 
 ---
 
@@ -311,11 +351,34 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 
 ## 📤 출력 형식
 
-⚠️ **필수**: 질문은 **한 문장으로만** 작성하세요.
-- ✅ 좋은 예: "방금 말씀하신 'DB 스크립트 작성'은 이력서의 어느 프로젝트에서 하신 건가요?"
-- ❌ 나쁜 예: 여러 줄에 걸친 설명이나 부연 설명 추가
+⚠️ **필수**: 다음 형식으로 출력하세요.
 
-**출력**: 질문 1개, 한 문장, 번호 없이, 존중하는 톤"""),
+형식:
+[라벨]
+질문
+✓ 구체적으로 확인할 키워드들
+
+라벨 옵션:
+- 경력확인, 기술검증, 역할확인, 성과검증, 기간확인
+
+키워드 요구사항 (매우 중요):
+- 반드시 질문에서 묻고 있는 내용과 직접 연관된 확인 포인트만 작성
+- 질문에 없는 내용은 키워드에 절대 포함 금지
+- 명사 중심, 간결하게 3-5개 (각 2-4단어)
+- 질문을 다시 읽고 "이 질문에 대한 답변에서 뭘 확인해야 하나?"를 생각하고 작성
+
+예시:
+[경력확인]
+주로 어떤 프로젝트에서 일하셨나요?
+✓ 프로젝트명, 팀 규모, 본인 역할, 기간
+
+[기술검증]
+어떤 종류의 DB 작업이었나요?
+✓ 쿼리 종류, 성능 최적화, 인덱스 설계
+
+[성과검증]
+구체적으로 어느 정도 개선되었나요?
+✓ 개선 전후 수치, 측정 방법, 비즈니스 임팩트"""),
         ("user", common_context)
     ])
     
@@ -328,6 +391,8 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 **당신의 유일한 임무**: 면접자의 답변을 더 깊게 파고드는 질문 1개 생성
 
 ⚠️ **중요**: 다른 역할(검증, 전환)은 다른 전문가가 담당합니다. 오직 **탐구**만 하세요.
+
+⚠️ **포지션 고려**: [채용 포지션]이 주어지면 해당 포지션에 필요한 핵심 역량을 중심으로 탐구하세요.
 
 ---
 
@@ -363,17 +428,34 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 
 ## 📤 출력 형식
 
-⚠️ **필수 규칙**:
-1. 질문은 **한 문장으로만** 작성
-2. **괄호나 예시를 절대 포함하지 마세요** (예: 같은 거 금지)
-3. 쌍따옴표나 인용 부호 사용 금지
-4. 핵심만 간결하게 물어보세요
+⚠️ **필수**: 다음 형식으로 출력하세요.
 
-- ✅ 좋은 예: "어떤 도구로 자동화했고 시간은 얼마나 절약되었나요?"
-- ❌ 나쁜 예: "어떤 도구(예: Jenkins, GitHub Actions)로 자동화했나요?"
-- ❌ 나쁜 예: 여러 줄에 걸친 설명
+형식:
+[라벨]
+질문
+✓ 구체적으로 파고들 키워드들
 
-**출력**: 질문 1개, 한 문장, 번호 없이, 존중하는 톤"""),
+라벨 옵션:
+- 깊이파기, 구체화, 상세확인, 배경파악
+
+키워드 요구사항 (매우 중요):
+- 반드시 질문에서 묻고 있는 내용과 직접 연관된 확인 포인트만 작성
+- 질문에 없는 내용은 키워드에 절대 포함 금지
+- 명사 중심, 간결하게 3-5개 (각 2-4단어)
+- 질문을 다시 읽고 "이 질문에 대한 답변에서 뭘 확인해야 하나?"를 생각하고 작성
+
+예시:
+[깊이파기]
+어떻게 해결하셨나요?
+✓ 문제 원인, 해결 과정, 시행착오, 최종 방법
+
+[구체화]
+어떤 도구로 얼마나 절약했나요?
+✓ 도구명, 적용 범위, 시간 절감률, 부작용
+
+[배경파악]
+왜 그 기술을 선택했나요?
+✓ 선택 이유, 대안 검토, 트레이드오프, 결과"""),
         ("user", common_context)
     ])
     
@@ -386,6 +468,8 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 **당신의 유일한 임무**: 주제 유지 vs 전환을 판단하여 질문 1개 생성
 
 ⚠️ **중요**: 다른 역할(검증, 탐구)은 다른 전문가가 담당합니다. 오직 **전환 판단**만 하세요.
+
+⚠️ **포지션 고려**: [채용 포지션]이 주어지면 해당 포지션에서 중요한 다양한 관점(협업, 기술선택, 문제해결 등)으로 질문하세요.
 
 ---
 
@@ -410,9 +494,34 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
 
 ## 📤 출력 형식
 
-⚠️ **필수**: 질문은 **한 문장으로만** 작성하세요.
+⚠️ **필수**: 다음 형식으로 출력하세요.
 
-**출력**: 질문 1개, 한 문장, 번호 없이, 존중하는 톤"""),
+형식:
+[라벨]
+질문
+✓ 구체적으로 확인할 키워드들
+
+라벨 옵션:
+- 주제전환, 관점변경, 다른경험
+
+키워드 요구사항 (매우 중요):
+- 반드시 질문에서 묻고 있는 내용과 직접 연관된 확인 포인트만 작성
+- 질문에 없는 내용은 키워드에 절대 포함 금지
+- 명사 중심, 간결하게 3-5개 (각 2-4단어)
+- 질문을 다시 읽고 "이 질문에 대한 답변에서 뭘 확인해야 하나?"를 생각하고 작성
+
+예시:
+[관점변경]
+팀원들과 어떻게 협업하셨나요?
+✓ 소통 방식, 코드리뷰, 역할 분담, 갈등 해결
+
+[주제전환]
+다른 프로젝트 경험도 여쭤봐도 될까요?
+✓ 프로젝트명, 기술 스택, 담당 역할, 성과
+
+[다른경험]
+다른 기술 스택 경험도 있으신가요?
+✓ 기술명, 사용 기간, 프로젝트 규모, 숙련도"""),
         ("user", common_context)
     ])
     
@@ -441,47 +550,136 @@ def generate_questions_node(state: InterviewState) -> InterviewState:
         # 비동기 실행
         questions = asyncio.run(generate_all_questions())
         
-        # 에러 체크 및 질문 정리
+        # 에러 체크 및 질문 파싱
         final_questions = []
-        for i, q in enumerate(questions, 1):
+        personas = ["검증자", "탐구자", "전환자"]
+        
+        for i, q in enumerate(questions):
             if isinstance(q, Exception):
-                print(f"❌ 질문 {i} 생성 오류: {q}")
-                final_questions.append(f"질문 생성 중 오류가 발생했습니다.")
+                print(f"❌ 질문 {i+1} 생성 오류: {q}")
+                final_questions.append({
+                    "label": "오류",
+                    "question": "질문 생성 중 오류가 발생했습니다.",
+                    "keywords": "",
+                    "persona": personas[i] if i < len(personas) else "기타"
+                })
             else:
-                # 그대로 사용 (이미 LLM이 한 문장으로 생성)
-                final_questions.append(q.strip())
+                # [라벨]\n질문\n✓ 키워드 형식 파싱
+                parsed = _parse_labeled_question(q.strip(), personas[i] if i < len(personas) else "기타")
+                final_questions.append(parsed)
         
         state["current_questions"] = final_questions
         print(f"✅ 질문 생성 완료 (병렬 처리)")
-        print(f"   1. [검증자] {final_questions[0][:50]}...")
-        print(f"   2. [탐구자] {final_questions[1][:50]}...")
-        print(f"   3. [전환자] {final_questions[2][:50]}...")
+        for i, q in enumerate(final_questions, 1):
+            print(f"   {i}. [{q['label']}] {q['question'][:40]}...")
         
     except Exception as e:
         print(f"❌ 질문 생성 오류: {e}")
         state["current_questions"] = [
-            "죄송합니다. AI 질문 생성 중 오류가 발생했습니다.",
-            "잠시 후 다시 시도해주세요.",
-            "또는 직접 질문을 입력해주세요."
+            {
+                "label": "오류",
+                "question": "죄송합니다. AI 질문 생성 중 오류가 발생했습니다.",
+                "keywords": "",
+                "persona": "시스템"
+            },
+            {
+                "label": "재시도",
+                "question": "잠시 후 다시 시도해주세요.",
+                "keywords": "",
+                "persona": "시스템"
+            },
+            {
+                "label": "대안",
+                "question": "또는 직접 질문을 입력해주세요.",
+                "keywords": "",
+                "persona": "시스템"
+            }
         ]
     
     return state
+
+
+def _parse_labeled_question(text, persona):
+    """
+    새로운 형식 파싱:
+    [라벨]
+    질문
+    ✓ 키워드1, 키워드2, 키워드3
+    
+    Args:
+        text: LLM이 생성한 텍스트
+        persona: 페르소나 이름 (검증자/탐구자/전환자)
+    
+    Returns:
+        dict: {"label": "라벨", "question": "질문", "keywords": "키워드들", "persona": "페르소나"}
+    """
+    try:
+        lines = text.strip().split('\n')
+        
+        # [라벨] 추출
+        label = "질문"
+        if lines and lines[0].startswith('[') and ']' in lines[0]:
+            label = lines[0].strip('[]').strip()
+            lines = lines[1:]
+        
+        # 질문과 키워드 분리
+        question_lines = []
+        keywords = ""
+        
+        for line in lines:
+            line = line.strip()
+            if line.startswith('✓') or line.startswith('- '):
+                # 키워드 라인
+                keywords = line.lstrip('✓').lstrip('-').strip()
+                break
+            elif line:
+                # 질문 라인
+                question_lines.append(line)
+        
+        question = ' '.join(question_lines).strip()
+        
+        return {
+            "label": label,
+            "question": question if question else text,
+            "keywords": keywords,
+            "persona": persona
+        }
+        
+    except Exception as e:
+        # 파싱 실패 시 기본값
+        return {
+            "label": "질문",
+            "question": text,
+            "keywords": "",
+            "persona": persona
+        }
 
 
 def finalize_questions_node(state: InterviewState) -> InterviewState:
     """
     4️⃣ 질문 확정
     
-    생성된 질문을 asked_questions에 추가
+    생성된 질문을 asked_questions에 추가 (operator.add로 자동 누적)
     """
     current_questions = state.get("current_questions", [])
-    asked_questions = state.get("asked_questions", [])
     
-    # 생성된 질문을 이미 물어본 질문 리스트에 추가
-    asked_questions.extend(current_questions)
-    state["asked_questions"] = asked_questions
+    # 질문 텍스트만 추출 (asked_questions는 문자열 리스트)
+    question_texts = []
+    for q in current_questions:
+        if isinstance(q, dict):
+            question_texts.append(q.get("question", ""))
+        else:
+            question_texts.append(str(q))
     
-    print(f"📝 질문 확정 완료 (누적: {len(asked_questions)}개)")
+    print(f"📝 질문 확정 완료 (현재 생성: {len(question_texts)}개)")
+    
+    # asked_questions에 추가할 항목만 반환
+    return {
+        "asked_questions": question_texts  # operator.add가 자동으로 extend
+    }
+    state["asked_questions"] = current_questions
+    
+    print(f"📝 질문 확정 완료 (누적: {len(state.get('asked_questions', []))}개)")
     
     return state
 
@@ -490,9 +688,12 @@ def finalize_questions_node(state: InterviewState) -> InterviewState:
 # LangGraph 구성
 # ========================================
 
+# 전역 Checkpointer (세션별 상태 관리)
+_checkpointer = MemorySaver()
+
 def create_interview_graph():
     """
-    LangGraph 생성 및 컴파일
+    LangGraph 생성 및 컴파일 (Checkpointer 연결)
     """
     workflow = StateGraph(InterviewState)
     
@@ -509,10 +710,10 @@ def create_interview_graph():
     workflow.add_edge("generate_questions", "finalize_questions")
     workflow.add_edge("finalize_questions", END)
     
-    # 컴파일
-    graph = workflow.compile()
+    # Checkpointer 연결하여 컴파일
+    graph = workflow.compile(checkpointer=_checkpointer)
     
-    print("✅ LangGraph 컴파일 완료")
+    print("✅ LangGraph 컴파일 완료 (Checkpointer: MemorySaver)")
     
     return graph
 
@@ -523,95 +724,77 @@ def create_interview_graph():
 
 class StreamAgent:
     """
-    면접 스트림 AI 에이전트 (LangGraph 기반)
+    면접 스트림 AI 에이전트 (LangGraph + MemorySaver)
     
-    기존 LCEL 방식과 동일한 API 제공
+    - 세션별 상태 자동 격리 (thread_id 기반)
+    - 재생성 제어, 질문 캐싱을 Checkpointer가 관리
     """
     
     def __init__(self):
         self.graph = create_interview_graph()
-        print("🎯 StreamAgent (LangGraph) 초기화 완료")
+        print("🎯 StreamAgent (LangGraph + MemorySaver) 초기화 완료")
     
     def generate_followups(self, text, question_id, history=None, session_id=None, 
-                          jd_text="", regen=False):
+                          jd_text="", position="", regen=False):
         """
-        후속 질문 3개 생성 (기존 Flask API와 호환)
+        후속 질문 3개 생성 (Checkpointer 기반 상태 관리)
         
         Args:
             text (str): 면접자의 최신 답변
-            question_id (str): 현재 질문 ID (q1, q2, ...)
+            question_id (str): 현재 질문 ID (q1, q2, ...) - 로깅용
             history (list or str, optional): 이전 대화 기록
-            session_id (str, optional): 세션 ID (RAG 검색용 - 이력서/포트폴리오)
+            session_id (str, optional): 세션 ID (RAG 검색용 + thread_id)
             jd_text (str, optional): JD 원문 (DB에서 조회)
+            position (str, optional): 채용 포지션 (백엔드/프론트엔드/풀스택 등)
             regen (bool, optional): 재생성 여부
         
         Returns:
             list[str]: 후속 질문 리스트 (최대 3개)
         
         Note:
-            - 이력서/포트폴리오는 RAG 임베딩 검색으로 처리 (session_id 사용)
+            - 이력서/포트폴리오는 RAG 임베딩 검색으로 처리
             - JD는 DB에서 조회한 전체 원문 사용
+            - 상태는 Checkpointer가 session_id(thread_id)별로 자동 관리
         """
         try:
-            # 재생성 히스토리 관리
-            if not hasattr(self, '_regen_history'):
-                self._regen_history = []
+            # Thread ID 설정 (세션별 격리)
+            config = {
+                "configurable": {
+                    "thread_id": session_id or "default"
+                }
+            }
             
-            # 재생성 횟수 체크
-            current_regen_count = getattr(self, '_regen_count', 0)
-            
-            # 재생성이면 카운트 증가 + 이전 시도 저장, 아니면 초기화
-            if regen:
-                current_regen_count += 1
-                # 이전 시도 질문을 히스토리에 추가
-                if hasattr(self, '_last_questions') and self._last_questions:
-                    self._regen_history.extend(self._last_questions)
-            else:
-                current_regen_count = 0  # 새 답변이면 카운트 리셋
-                self._regen_history = []  # 히스토리도 초기화
-            
-            # 초기 상태 구성
+            # 초기 상태 구성 (영속 필드는 Checkpointer가 자동 로드)
             initial_state = {
                 "session_id": session_id or "",
                 "question_id": question_id or "",
                 "messages": history if isinstance(history, list) else [],
                 "history_text": "",
                 "jd_text": jd_text or "",
+                "position": position or "",
                 "rag_context": "",
                 "current_questions": [],
-                "asked_questions": getattr(self, '_asked_questions_cache', []),
                 "interviewee_answer": text or "",
-                "regen_history": self._regen_history,  # 재생성 히스토리 전달
                 "is_regen": regen,
-                "regen_count": current_regen_count
+                
+                # 영속 필드는 빈 값으로 초기화 (Checkpointer가 덮어씀)
+                "asked_questions": [],
+                "regen_history": [],
+                "regen_count": 0,
             }
             
-            # 재생성 횟수 제한 (최대 2회)
-            MAX_REGEN_COUNT = 2
+            print(f"🔄 질문 생성 (재생성: {regen}, thread_id: {session_id or 'default'})")
             
-            if regen and current_regen_count > MAX_REGEN_COUNT:
-                print(f"⚠️ 재생성 제한 도달 ({current_regen_count}/{MAX_REGEN_COUNT}). 이전 질문 반환.")
-                # 카운트는 유지 (더 이상 재생성 못하게)
-                return getattr(self, '_last_questions', [
-                    "재생성 횟수가 초과되었습니다.",
-                    "새로운 답변을 입력하거나 질문을 선택해주세요.",
-                    "면접을 계속 진행해주세요."
-                ])
+            # LangGraph 실행 (config로 thread_id 전달)
+            result = self.graph.invoke(initial_state, config=config)
             
-            print(f"🔄 질문 생성 (재생성: {regen}, 카운트: {current_regen_count}/{MAX_REGEN_COUNT})")
-            
-            # LangGraph 실행
-            result = self.graph.invoke(initial_state)
-            
-            # asked_questions 캐싱 (재사용)
-            self._asked_questions_cache = result.get("asked_questions", [])
-            
-            # 생성된 질문 저장 (재생성 제한 시 반환용)
+            # 생성된 질문 반환
             questions = result.get("current_questions", [])
-            self._last_questions = questions
             
-            # 재생성 카운트 저장
-            self._regen_count = current_regen_count
+            # 디버그 로그
+            print(f"📊 체크포인트 상태:")
+            print(f"   - asked_questions: {len(result.get('asked_questions', []))}개")
+            print(f"   - regen_count: {result.get('regen_count', 0)}")
             
             return questions
             

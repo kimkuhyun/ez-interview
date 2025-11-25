@@ -447,15 +447,7 @@ function endInterview() {
     .then((data) => {
       console.log("✅ 면접 종료 완료:", data);
 
-      // 성공 알림
-      alert(
-        `면접이 종료되었습니다!\n\n` +
-          `총 질문: ${data.total_questions}개\n` +
-          `Session ID: ${data.session_id}\n\n` +
-          `리포트 페이지로 이동합니다.`
-      );
-
-      // 오른쪽 패널만 리포트로 변경 (전체 페이지 리다이렉트 방지)
+      // 오른쪽 패널만 리포트로 변경 (알림 없이 바로 이동)
       if (window.parent && window.parent.loadPanel) {
         // interview.html의 loadPanel 함수 호출
         window.parent.loadPanel('report');
@@ -513,8 +505,45 @@ function sendToAI(fullText, isRegen = false) {
         data.questions.forEach((q) => {
           const btn = document.createElement("button");
           btn.className = "followup-btn";
-          btn.textContent = q;
-          btn.onclick = () => selectFollowup(q, box, wrapper);
+          
+          // 질문이 객체인 경우 (라벨 + 키워드 포함)
+          if (typeof q === 'object' && q.label && q.question) {
+            // 페르소나별 색상 설정
+            const personaColors = {
+              '검증자': '#e74c3c',
+              '탐구자': '#3498db',
+              '전환자': '#2ecc71'
+            };
+            const color = personaColors[q.persona] || '#95a5a6';
+            
+            // 라벨 요소
+            const labelEl = document.createElement("div");
+            labelEl.className = "intent-label";
+            labelEl.textContent = q.label;
+            labelEl.style.borderLeftColor = color;
+            btn.appendChild(labelEl);
+            
+            // 질문 텍스트
+            const questionEl = document.createElement("div");
+            questionEl.className = "question-text";
+            questionEl.textContent = q.question;
+            btn.appendChild(questionEl);
+            
+            // 키워드 (있으면)
+            if (q.keywords) {
+              const keywordsEl = document.createElement("div");
+              keywordsEl.className = "question-keywords";
+              keywordsEl.textContent = "✓ " + q.keywords;
+              btn.appendChild(keywordsEl);
+            }
+            
+            btn.onclick = () => selectFollowup(q.question, box, wrapper);
+          } else {
+            // 기존 형식 (문자열)
+            btn.textContent = typeof q === 'string' ? q : q.question || '';
+            btn.onclick = () => selectFollowup(typeof q === 'string' ? q : q.question, box, wrapper);
+          }
+          
           wrapper.appendChild(btn);
         });
 

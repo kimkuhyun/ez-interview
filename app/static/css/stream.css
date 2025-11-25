@@ -342,18 +342,19 @@ body {
   background: #ffffff;
   color: #1e293b;
   border: 2px solid #e2e8f0;
-  border-radius: 12px;
-  padding: 8px 12px;
+  border-radius: 10px;
+  padding: 8px 10px;
   cursor: pointer;
   transition: all 0.3s ease;
-  max-width: 90%;
+  max-width: 85%;
   text-align: left;
-  font-weight: 500;
-  font-size: 13px;
-  line-height: 1.5;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
   word-wrap: break-word;
   white-space: normal;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-left: 3px solid #cbd5e1;
 }
 
 .followup-btn:hover {
@@ -362,6 +363,49 @@ body {
   border-color: #394867;
   transform: translateX(-4px);
   box-shadow: 0 4px 16px rgba(57, 72, 103, 0.3);
+}
+
+.followup-btn:hover .intent-label {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.followup-btn:hover .question-keywords {
+  color: #cbd5e1;
+  border-top-color: rgba(255, 255, 255, 0.2);
+}
+
+/* 라벨 스타일 */
+.intent-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  background: #f1f5f9;
+  border-radius: 3px;
+  align-self: flex-start;
+  transition: all 0.3s ease;
+}
+
+/* 질문 텍스트 */
+.question-text {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: inherit;
+}
+
+/* 키워드 체크리스트 */
+.question-keywords {
+  font-size: 10px;
+  font-weight: 400;
+  color: #64748b;
+  line-height: 1.4;
+  padding-top: 5px;
+  border-top: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
 }
 
 .followup-regen {

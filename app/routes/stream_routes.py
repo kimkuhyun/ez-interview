@@ -261,6 +261,7 @@ def ai_followup():
         history=history_with_docs,
         session_id=GLOBAL_STATE.session_id,  # RAG 검색용 (이력서/포트폴리오)
         jd_text=jd_content,  # DB에서 조회한 JD 원문
+        position=GLOBAL_STATE.position or "",  # 채용 포지션
         regen=data.get("regen", False),
     )
     
