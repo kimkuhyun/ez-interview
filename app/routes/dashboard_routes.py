@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, Response, request
 from pathlib import Path
+import json
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -85,7 +86,7 @@ def get_candidates():
             params.append(status)
         
         if position != 'all':
-            where_clauses.append("position = %s")
+            where_clauses.append("%s = ANY(positions)")
             params.append(position)
         
         if search:
@@ -105,6 +106,7 @@ def get_candidates():
                 c.name,
                 c.status,
                 c.position,
+                c.positions,
                 c.jd_id,
                 c.created_at,
                 c.uploaded_at,
@@ -130,11 +132,14 @@ def get_candidates():
         # 결과 포맷팅
         candidates = []
         for row in rows:
+            pos_list = row['positions'] or []
+            primary_pos = pos_list[0] if pos_list else (row['position'] or '-')
             candidates.append({
                 'session_id': row['session_id'],
                 'name': row['name'],
                 'status': row['status'],
-                'position': row['position'] or '-',
+                'position': primary_pos,
+                'positions': pos_list,
                 'jd_id': row['jd_id'],
                 'created_at': row['created_at'].isoformat() if row['created_at'] else None,
                 'uploaded_at': row['uploaded_at'].isoformat() if row['uploaded_at'] else None,
@@ -323,6 +328,16 @@ def upload_candidate():
         
         file = request.files['file']
         position = request.form.get('position', '')
+        raw_positions = request.form.get('positions', '')
+        positions = []
+        if raw_positions:
+            try:
+                positions = [p.strip() for p in json.loads(raw_positions) if p and str(p).strip()]
+            except Exception:
+                positions = [p.strip() for p in raw_positions.split(',') if p and p.strip()]
+        if not positions and position:
+            positions = [position.strip()]
+        primary_position = positions[0] if positions else (position.strip() if position else '')
         
         if file.filename == '':
             return jsonify({"success": False, "error": "파일이 선택되지 않았습니다."}), 400
@@ -374,12 +389,18 @@ def upload_candidate():
             session_id = provided_session_id
             print(f"✓ [업로드] 기존 세션 사용: {candidate_name} ({session_id})")
             
-            # uploaded_at 업데이트
-            cur.execute("""
+            # uploaded_at 및 포지션 정보 업데이트
+            update_fields = ["uploaded_at = %s"]
+            update_params = [datetime.now()]
+            if positions:
+                update_fields.extend(["position = %s", "positions = %s"])
+                update_params.extend([primary_position or None, positions])
+            update_params.append(session_id)
+            cur.execute(f"""
                 UPDATE interview.candidates 
-                SET uploaded_at = %s 
+                SET {', '.join(update_fields)} 
                 WHERE session_id = %s
-            """, (datetime.now(), session_id))
+            """, update_params)
         else:
             # 새 세션 생성
             session_id = str(uuid.uuid4())
@@ -387,15 +408,16 @@ def upload_candidate():
             # candidates 테이블에 삽입
             cur.execute("""
                 INSERT INTO interview.candidates (
-                    session_id, name, uploaded_at, status, created_at, position
-                ) VALUES (%s, %s, %s, %s, %s, %s)
+                    session_id, name, uploaded_at, status, created_at, position, positions
+                ) VALUES (%s, %s, %s, %s, %s, %s, %s)
             """, (
                 session_id,
                 candidate_name,
                 datetime.now(),
                 'pending',
                 datetime.now(),
-                position or None
+                primary_position or None,
+                positions or None
             ))
             
             print(f"✓ [업로드] 새 지원자 생성: {candidate_name} ({session_id})")
@@ -568,6 +590,7 @@ def get_pending_interviews():
                 session_id,
                 name,
                 position,
+                positions,
                 jd_id,
                 status,
                 interview_at,
@@ -584,10 +607,13 @@ def get_pending_interviews():
         # 결과 포맷팅
         interviews = []
         for row in rows:
+            pos_list = row['positions'] or []
+            primary_pos = pos_list[0] if pos_list else (row['position'] or '-')
             interviews.append({
                 'session_id': row['session_id'],
                 'name': row['name'],
-                'position': row['position'] or '-',
+                'position': primary_pos,
+                'positions': pos_list,
                 'jd_id': row['jd_id'],
                 'status': row['status'],
                 'interview_at': row['interview_at'].isoformat() if row['interview_at'] else None,
@@ -1001,6 +1027,7 @@ def get_candidate_info(session_id):
                 c.session_id,
                 c.name,
                 c.position,
+                c.positions,
                 c.interview_at,
                 c.status,
                 c.jd_id,
@@ -1018,6 +1045,9 @@ def get_candidate_info(session_id):
             return jsonify({"success": False, "error": "지원자를 찾을 수 없습니다."}), 404
         
         candidate_dict = dict(candidate)
+        pos_list = candidate_dict.get('positions') or []
+        if pos_list:
+            candidate_dict['position'] = pos_list[0]
         
         # JD 파일 경로 조회 (job_descriptions 테이블에서)
         if candidate_dict.get('jd_id'):

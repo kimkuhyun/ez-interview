@@ -34,7 +34,7 @@ def get_positions():
         cur.execute("""
             SELECT COUNT(*) 
             FROM interview.candidates 
-            WHERE position = %s AND status = 'pending'
+            WHERE %s = ANY(positions) AND status = 'pending'
         """, (row[1],))
         candidate_count = cur.fetchone()[0]
         
@@ -338,7 +338,7 @@ def match_candidates(jd_id):
         SELECT session_id, name 
         FROM interview.candidates 
         WHERE status = 'pending' 
-          AND position = %s
+          AND %s = ANY(positions)
     """, (position_title,))
     candidates = cur.fetchall()
     
