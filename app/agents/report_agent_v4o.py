@@ -140,7 +140,7 @@ def chunk_paragraph(raw: str) -> List[str]:
     return [part.strip() for part in re.split(r"\n{2,}", raw) if part and part.strip()]
 
 
-def _compact_chunks(chunks: List[str], top_k: int = 12) -> str:
+def _compact_chunks(chunks: List[str], top_k: int = 40) -> str:
     """중복을 줄이고 상위 N개만 남긴 컨텍스트"""
     seen = set()
     compact: List[str] = []
@@ -527,8 +527,8 @@ def node_retrieve(state: ReportState) -> Dict[str, Any]:
         compact = _compact_chunks(chunker(raw_text))
         if not compact:
             return raw_text
-        normalized = _normalize_context(compact, llm_norm)
-        return normalized or raw_text
+        # LLM 정규화는 건너뛰고 압축된 컨텍스트만 반환
+        return compact
 
     resume_ctx = _prepare_context(resume_ctx, chunk_paragraph)
     jd_ctx = _prepare_context(jd_ctx, chunk_paragraph)
