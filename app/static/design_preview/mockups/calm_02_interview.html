@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EZ Interview · 실시간 면접</title>
+<link rel="stylesheet" href="../assets/ezi-calm.css">
+<style>
+  .stage{display:grid;grid-template-columns:1.7fr 1fr;gap:16px;align-items:start;}
+  .conv{display:flex;flex-direction:column;height:600px;}
+  .scroll{flex:1;overflow:auto;display:flex;flex-direction:column;gap:14px;padding:4px 2px;}
+  .qtag{align-self:center;font-size:11.5px;font-weight:600;color:var(--muted);background:var(--surface-soft);border:1px solid var(--line-soft);padding:4px 11px;border-radius:var(--pill);}
+  .msg{display:flex;gap:10px;max-width:88%;} .msg .who{width:32px;height:32px;border-radius:8px;display:grid;place-items:center;font-size:12px;font-weight:700;flex:none;}
+  .msg.ai .who{background:var(--accent-50);color:var(--accent);} .msg.user{align-self:flex-end;flex-direction:row-reverse;} .msg.user .who{background:var(--surface-soft);color:var(--ink-2);border:1px solid var(--line);}
+  .msg .bubble{padding:11px 14px;border-radius:12px;font-size:13.5px;line-height:1.6;}
+  .msg.ai .bubble{background:var(--surface-soft);border:1px solid var(--line);border-top-left-radius:4px;color:var(--ink-2);}
+  .msg.user .bubble{background:var(--accent-50);border:1px solid var(--accent-100);border-top-right-radius:4px;color:var(--ink-2);}
+  .listen{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--accent-100);background:var(--accent-50);border-radius:10px;margin-top:10px;}
+  .listen .rec{width:36px;height:36px;border-radius:8px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:15px;}
+  .listen .txt{flex:1;font-size:13px;color:var(--ink-2);} .listen .cur{display:inline-block;width:2px;height:13px;background:var(--accent);vertical-align:-2px;margin-left:1px;}
+  .meter{display:flex;align-items:center;gap:10px;margin-bottom:11px;font-size:13px;} .meter .nm{width:92px;color:var(--ink-2);flex:none;} .meter b{width:24px;text-align:right;}
+  .hint{font-size:12.5px;line-height:1.55;color:var(--ink-2);background:var(--surface-soft);border:1px solid var(--line);border-radius:9px;padding:11px 13px;} .hint .lbl{display:block;font-size:11px;font-weight:700;color:var(--accent);margin-bottom:5px;letter-spacing:.03em;}
+  .qrow{display:flex;align-items:center;gap:9px;padding:9px 0;border-top:1px solid var(--line-soft);font-size:13px;} .qrow:first-child{border-top:0;}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar">
+    <div class="brand"><div class="logo">EZ</div><div class="name">EZ <b>Interview</b></div></div>
+    <span class="badge neg" style="margin-left:4px"><span class="dot"></span> 실시간 면접 진행 중</span>
+    <div class="grow"></div>
+    <div class="kpi-chip" style="padding:6px 12px"><b style="font-size:16px">14:22</b><span>경과</span></div>
+    <a class="btn sm" href="#">일시정지</a><a class="btn primary sm" href="#">면접 종료 · 평가</a>
+  </div>
+
+  <div class="row between" style="margin:22px 2px 16px">
+    <div class="row center" style="gap:12px">
+      <div class="avatar" style="width:44px;height:44px;border-radius:11px;font-size:16px">김</div>
+      <div><div class="h2">김하늘 <span class="sub" style="font-weight:500">· AI 엔지니어 지원</span></div>
+        <div class="tag-list" style="margin-top:6px"><span class="badge">Python</span><span class="badge">RAG</span><span class="badge">LangGraph</span></div></div>
+    </div>
+    <span class="badge accent" style="font-size:13px">질문 5 / 8</span>
+  </div>
+
+  <div class="stage">
+    <div class="card conv">
+      <div class="card-hd"><div class="h3">면접 대화</div><span class="badge"><span class="dot"></span> 자동 전사(STT)</span></div>
+      <div class="scroll">
+        <div class="qtag">기술 질문 4 · 이력서 기반</div>
+        <div class="msg ai"><div class="who">AI</div><div class="bubble">이전 회사에서 RAG 챗봇의 응답 정확도를 개선하셨다고 했는데, 어떤 문제가 있었고 어떻게 해결하셨는지 설명해주세요.</div></div>
+        <div class="msg user"><div class="who">김</div><div class="bubble">단순 청킹 후 top-k 검색만 써서 환각이 잦았습니다. 청크 앞에 문서 제목·섹션 헤더를 prefix로 붙이는 contextual 임베딩을 적용해 자유서술형 정확도가 0.56에서 0.87로 올랐고, 리랭커로 근거 인용률을 높였습니다.</div></div>
+        <div class="qtag">꼬리 질문</div>
+        <div class="msg ai"><div class="who">AI</div><div class="bubble">정확도 측정은 어떤 기준으로 하셨나요?</div></div>
+        <div class="msg user"><div class="who">김</div><div class="bubble">정답 근거가 top-3에 포함되는지(Recall@3)와 LLM-as-judge 5점 척도로 평가했고, 200개 평가셋을 직접 라벨링해 회귀 테스트로 돌렸습니다.</div></div>
+        <div class="qtag">기술 질문 5 · JD 기반</div>
+        <div class="msg ai"><div class="who">AI</div><div class="bubble">멀티에이전트 파이프라인에서 한 에이전트가 잘못된 결과를 내면 전체 품질이 떨어지는데, 어떻게 방어하시겠어요?</div></div>
+      </div>
+      <div class="listen">
+        <div class="rec">●</div>
+        <div class="txt">검증 노드를 따로 둬서 각 에이전트 출력을 교차 검증하고<span class="cur"></span></div>
+        <span class="badge">0.92 신뢰도</span>
+      </div>
+    </div>
+
+    <div class="col">
+      <div class="card">
+        <div class="card-hd"><div class="h3">실시간 역량 추적</div><span class="badge accent">AI 채점</span></div>
+        <div class="meter"><span class="nm">문제해결력</span><div class="bar grow"><span style="width:88%"></span></div><b>88</b></div>
+        <div class="meter"><span class="nm">AI·LLM 전문성</span><div class="bar grow"><span style="width:92%"></span></div><b>92</b></div>
+        <div class="meter"><span class="nm">데이터 엔지니어링</span><div class="bar grow"><span style="width:79%"></span></div><b>79</b></div>
+        <div class="meter"><span class="nm">커뮤니케이션</span><div class="bar grow warn"><span style="width:74%"></span></div><b>74</b></div>
+        <div class="meter" style="margin-bottom:2px"><span class="nm">학습·성장</span><div class="bar grow"><span style="width:85%"></span></div><b>85</b></div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><div class="h3">AI 면접관 제안</div></div>
+        <div class="hint"><span class="lbl">추천 꼬리질문</span>교차 검증을 "어떻게" 구현했는지 모호합니다. 검증 노드의 판정 기준(점수 임계값·재시도 조건)을 구체적으로 되물어 깊이를 확인하세요.</div>
+        <div class="hint" style="margin-top:9px"><span class="lbl" style="color:var(--warn)">관찰</span>최근 답변에서 정량 지표 언급이 줄고 있습니다. 커뮤니케이션 축 추이 관찰 필요.</div>
+      </div>
+      <div class="card">
+        <div class="card-hd"><div class="h3">남은 질문</div></div>
+        <div class="qrow"><span class="badge accent">기술</span>대규모 트래픽에서 벡터 검색 지연을 줄인 경험</div>
+        <div class="qrow"><span class="badge">인성</span>동료와 기술 선택이 충돌했을 때 대처</div>
+        <div class="qrow"><span class="badge">인성</span>최근 스스로 학습한 새로운 기술</div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
