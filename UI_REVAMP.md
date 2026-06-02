@@ -4,14 +4,14 @@
 
 ---
 
-## 1. 디자인 시스템 (청록 teal/cyan 라이트)
+## 1. 디자인 시스템 (다크 AI · 네온 보라/시안)
 
-- `app/static/css/ezi-theme.css` — 토큰(청록 그라데이션·글래스·글로우·소프트섀도) + 컴포넌트 + 애니메이션.
-- 메인 컬러 **teal `#14B8A6` → cyan `#06B6D4`** 그라데이션, 화이트 카드 + 청록 메시 배경. 폰트 Pretendard.
+- `app/static/css/ezi-dark.css` — **다크 AI 테마**(딥네이비 배경 + 네온 보라 `#8B5CF6`·시안 `#22D3EE`, 다크 글래스 카드·네온 글로우). 멀티에이전트/실시간 면접 제품 정체성을 강조하고, 다른 프로젝트(예: 녹색 라이트 UI)와 시각적으로 분리.
+- `app/static/css/ezi-theme.css` — 라이트(teal) 변형(보관용).
 
 ### 실제 적용된 화면
-- **홈 랜딩** `app/templates/admin/tabs/landing.html` — 새 청록 히어로로 **전면 교체 완료**(다크 그라데이션·기능 칩·통계·orbit 모티프). 앱 실행 시 `/`에서 바로 보임.
-- **리뉴얼 화면 목업 + 스크린샷** `app/static/design_preview/` — 대시보드 / 실시간 면접 / 평가 파이프라인 / v4o→v5 다이어그램 / 평가 리포트(추천·보류). 각 템플릿 이식용 레퍼런스(데이터 구조는 실제 ReportOut·파이프라인에 맞춤).
+- **홈 랜딩** `app/templates/admin/tabs/landing.html` — 다크 보라/시안 히어로로 **전면 교체 완료**(그라데이션 헤드라인·기능 칩·통계·orbit 모티프). 앱 실행 시 `/`에서 바로 보임.
+- **리뉴얼 화면 목업 + 스크린샷** `app/static/design_preview/` (다크) — 대시보드 / 실시간 면접 / 평가 파이프라인 / LangGraph 아키텍처 / 평가 리포트(추천·보류). 각 템플릿 이식용 레퍼런스(데이터 구조는 실제 ReportOut·파이프라인에 맞춤).
 
 > 나머지 템플릿(`report_view.html` 등)은 `design_preview/mockups`의 마크업을 Jinja 바인딩으로 옮기면 적용됨. 기존 동작을 깨지 않도록 점진 이식 권장.
 

@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>평가 리포트 · 이서연</title>
-<link rel="stylesheet" href="../assets/ezi-theme.css">
+<link rel="stylesheet" href="../assets/ezi-dark.css">
 <style>
   .report { max-width: 1020px; margin: 0 auto; }
   .hero { background: var(--grad-deep); color:#fff; border-radius:var(--radius-lg); padding:30px 34px; position:relative; overflow:hidden; box-shadow:var(--sh-lg); }
-  .hero::before { content:""; position:absolute; right:-60px; top:-60px; width:280px;height:280px; background:radial-gradient(circle,rgba(52,211,153,.45),transparent 65%); }
-  .hero::after { content:""; position:absolute; right:120px; bottom:-90px; width:240px;height:240px; background:radial-gradient(circle,rgba(45,212,191,.35),transparent 65%); }
+  .hero::before { content:""; position:absolute; right:-60px; top:-60px; width:280px;height:280px; background:radial-gradient(circle,rgba(139,92,246,.45),transparent 65%); }
+  .hero::after { content:""; position:absolute; right:120px; bottom:-90px; width:240px;height:240px; background:radial-gradient(circle,rgba(34,211,238,.35),transparent 65%); }
   .hero .inner { position:relative; z-index:1; }
-  .hero .tag-list .badge { background:rgba(255,255,255,.16); color:#CFFAFE; border-color:rgba(255,255,255,.2); }
+  .hero .tag-list .badge { background:rgba(255,255,255,.16); color:#2E1065; border-color:rgba(255,255,255,.2); }
   .decision { text-align:center; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.25); border-radius:20px; padding:18px 26px; backdrop-filter:blur(8px); }
   .decision .v { font-size:40px; font-weight:800; letter-spacing:-.04em; line-height:1; }
   .grid2 { display:grid; grid-template-columns:1.05fr 1fr; gap:18px; align-items:start; }
@@ -58,7 +58,7 @@
       </div>
       <div class="decision">
         <div style="font-size:12px;opacity:.85;font-weight:700;letter-spacing:.1em">최종 판정</div>
-        <div class="v" style="margin:8px 0;color:#A5F3FC">추천</div>
+        <div class="v" style="margin:8px 0;color:#A5B4FC">추천</div>
         <div style="font-size:13px;opacity:.85">종합 역량 적합도</div>
         <div style="font-size:30px;font-weight:800;letter-spacing:-.03em">89<span style="font-size:16px">/100</span></div>
       </div>
@@ -90,24 +90,24 @@
       <div class="card-hd"><div class="h3"><span class="ic">🎯</span> 핵심역량 5축</div><span class="badge solid">평균 90</span></div>
       <svg viewBox="-30 0 360 300" width="100%" height="300">
         <!-- grid -->
-        <polygon points="150,40 254.6,116 214.7,239 85.3,239 45.4,116" fill="none" stroke="#E2ECE6" stroke-width="1"/>
-        <polygon points="150,95 202.3,133 184.8,194.5 115.2,194.5 97.7,133" fill="none" stroke="#EDF3EF" stroke-width="1"/>
-        <line x1="150" y1="150" x2="150" y2="40" stroke="#EDF3EF"/>
-        <line x1="150" y1="150" x2="254.6" y2="116" stroke="#EDF3EF"/>
-        <line x1="150" y1="150" x2="214.7" y2="239" stroke="#EDF3EF"/>
-        <line x1="150" y1="150" x2="85.3" y2="239" stroke="#EDF3EF"/>
-        <line x1="150" y1="150" x2="45.4" y2="116" stroke="#EDF3EF"/>
+        <polygon points="150,40 254.6,116 214.7,239 85.3,239 45.4,116" fill="none" stroke="#2E3A57" stroke-width="1"/>
+        <polygon points="150,95 202.3,133 184.8,194.5 115.2,194.5 97.7,133" fill="none" stroke="#24304A" stroke-width="1"/>
+        <line x1="150" y1="150" x2="150" y2="40" stroke="#24304A"/>
+        <line x1="150" y1="150" x2="254.6" y2="116" stroke="#24304A"/>
+        <line x1="150" y1="150" x2="214.7" y2="239" stroke="#24304A"/>
+        <line x1="150" y1="150" x2="85.3" y2="239" stroke="#24304A"/>
+        <line x1="150" y1="150" x2="45.4" y2="116" stroke="#24304A"/>
         <!-- data: 92,94,86,88,90 -->
-        <polygon points="150,48.8 248.3,118.1 205.6,226.5 93.1,228.3 55.9,119.4" fill="rgba(20,184,166,.22)" stroke="#14B8A6" stroke-width="2.5"/>
-        <circle cx="150" cy="48.8" r="4" fill="#0D9488"/><circle cx="248.3" cy="118.1" r="4" fill="#0D9488"/>
-        <circle cx="205.6" cy="226.5" r="4" fill="#0D9488"/><circle cx="93.1" cy="228.3" r="4" fill="#0D9488"/>
-        <circle cx="55.9" cy="119.4" r="4" fill="#0D9488"/>
+        <polygon points="150,48.8 248.3,118.1 205.6,226.5 93.1,228.3 55.9,119.4" fill="rgba(139,92,246,.22)" stroke="#8B5CF6" stroke-width="2.5"/>
+        <circle cx="150" cy="48.8" r="4" fill="#7C3AED"/><circle cx="248.3" cy="118.1" r="4" fill="#7C3AED"/>
+        <circle cx="205.6" cy="226.5" r="4" fill="#7C3AED"/><circle cx="93.1" cy="228.3" r="4" fill="#7C3AED"/>
+        <circle cx="55.9" cy="119.4" r="4" fill="#7C3AED"/>
         <!-- labels -->
-        <text x="150" y="28" text-anchor="middle" font-size="12" font-weight="700" fill="#0E211B">문제해결력 92</text>
-        <text x="285" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#0E211B">AI·LLM 94</text>
-        <text x="248" y="262" text-anchor="middle" font-size="12" font-weight="700" fill="#0E211B">데이터 86</text>
-        <text x="52" y="262" text-anchor="middle" font-size="12" font-weight="700" fill="#0E211B">협업 88</text>
-        <text x="15" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#0E211B">학습 90</text>
+        <text x="150" y="28" text-anchor="middle" font-size="12" font-weight="700" fill="#EAEEF8">문제해결력 92</text>
+        <text x="285" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#EAEEF8">AI·LLM 94</text>
+        <text x="248" y="262" text-anchor="middle" font-size="12" font-weight="700" fill="#EAEEF8">데이터 86</text>
+        <text x="52" y="262" text-anchor="middle" font-size="12" font-weight="700" fill="#EAEEF8">협업 88</text>
+        <text x="15" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#EAEEF8">학습 90</text>
       </svg>
     </div>
 
