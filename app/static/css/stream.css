@@ -1,0 +1,524 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  background: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+/* 🎙️ STT 상단 바 */
+.stt-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 24px;
+  background: linear-gradient(to right, #394867, #2c3850);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.15);
+  justify-content: flex-start;
+}
+
+/* 🔘 STT 상태 표시 */
+.stt-indicator {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #64748b;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  transition: all 0.3s ease;
+}
+
+/* 준비 중 상태 */
+.stt-indicator.preparing {
+  background: #e8a95d;
+  animation: preparingPulse 1s infinite;
+}
+
+@keyframes preparingPulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(232, 169, 93, 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(232, 169, 93, 0);
+  }
+}
+
+/* STT 활성 시 (pulse 효과) */
+.stt-indicator.active {
+  background: #d96459;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(217, 100, 89, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(217, 100, 89, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(217, 100, 89, 0);
+  }
+}
+
+/* 🎛️ STT 버튼 */
+.stt-bar button {
+  border: none;
+  background: linear-gradient(135deg, #6b8cb5, #5a7a9f);
+  color: white;
+  padding: 10px 20px;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(107, 140, 181, 0.3);
+}
+
+.stt-bar button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5a7a9f, #4a6a8f);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(107, 140, 181, 0.4);
+}
+
+.stt-bar button:disabled {
+  background: #64748b;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+/* 🕓 타이머 */
+.timer {
+  margin-left: auto;
+  font-weight: bold;
+  color: #f1f5f9;
+  font-size: 16px;
+}
+
+.chat-container {
+  position: relative;
+  background: #ffffff;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tab-bar {
+  display: flex;
+  justify-content: space-around;
+  background: #F1F6F9;
+  border-bottom: 2px solid #d1dce5;
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.tab-bar::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tab-bar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.tab {
+  flex: 1;
+  min-width: 80px;
+  text-align: center;
+  padding: 14px 16px;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  color: #64748b;
+  transition: all 0.3s ease;
+  border-bottom: 3px solid transparent;
+  position: relative;
+}
+
+.tab:hover {
+  background: #e8f0f7;
+  color: #394867;
+}
+
+.tab.active {
+  background: linear-gradient(to bottom, #e8f0f7, #ffffff);
+  color: #394867;
+  border-bottom: 3px solid #394867;
+}
+
+.chat-box {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: linear-gradient(to bottom, #F1F6F9, #ffffff);
+  scrollbar-width: thin;
+}
+
+.chat-box::-webkit-scrollbar {
+  width: 8px;
+}
+
+.chat-box::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.chat-box::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* 💬 기본 메시지 스타일 */
+.message {
+  max-width: 75%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  line-height: 1.5;
+  font-size: 14px;
+  word-break: break-word;
+  white-space: pre-wrap;
+  display: inline-block;
+  position: relative;
+  transition: all 0.25s ease;
+}
+
+/* 면접자 */
+.assistant {
+  background: linear-gradient(135deg, #394867, #2c3850);
+  color: white;
+  align-self: flex-end;
+  border-bottom-right-radius: 4px;
+}
+
+/* 면접관 */
+.user {
+  background: #e7edf1;
+  color: #1e293b;
+  align-self: flex-start;
+}
+
+/* 입력창 */
+.input-area {
+  display: flex;
+  border-top: 2px solid #e2e8f0;
+  background: #ffffff;
+  height: 70px;
+  flex-shrink: 0;
+  padding: 12px;
+  gap: 12px;
+  box-shadow: 0 -4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.input-area input {
+  flex: 1;
+  border: 2px solid #e2e8f0;
+  padding: 14px 16px;
+  outline: none;
+  background: #f8fafc;
+  border-radius: 12px;
+  font-size: 13px;
+  transition: all 0.3s ease;
+}
+
+.input-area input:focus {
+  border-color: #6b8cb5;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(107, 140, 181, 0.1);
+}
+
+.input-area button {
+  background: linear-gradient(135deg, #394867, #2c3850);
+  color: white;
+  border: none;
+  padding: 0 24px;
+  cursor: pointer;
+  font-weight: 600;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(57, 72, 103, 0.3);
+}
+
+.input-area button:hover {
+  background: linear-gradient(135deg, #2c3850, #1f2938);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(57, 72, 103, 0.4);
+}
+
+/* 💬 STT 실시간 말풍선 */
+.message.stt {
+  background: #f1f5f9;
+  padding: 10px 14px;
+  border-radius: 16px;
+  max-width: 75%;
+  line-height: 1.5;
+  font-size: 14px;
+  margin: 4px 0;
+  color: #64748b;
+  align-self: flex-start;
+  animation: fadeIn 0.25s ease-in;
+  transition: all 0.25s ease;
+}
+
+.message.stt.final {
+  background: #e2e8f0;
+  color: #475569;
+  font-weight: 400;
+  transform: scale(1.02);
+}
+
+/* LLM 교정된 텍스트 */
+.message.stt.corrected {
+  background: #e8f0f7;
+  color: #394867;
+  font-weight: 500;
+  animation: correctPulse 0.5s ease;
+}
+
+@keyframes correctPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 부드러운 등장 효과 */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* 면접 종료 버튼 */
+.end-btn {
+  background: linear-gradient(135deg, #d96459, #c54f45);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(217, 100, 89, 0.3);
+  transition: all 0.3s ease;
+}
+
+.end-btn:hover {
+  background: linear-gradient(135deg, #c54f45, #b13a30);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(217, 100, 89, 0.4);
+}
+
+.end-btn:active {
+  transform: translateY(0);
+}
+
+/* 💬 후속 질문 선택 버튼 */
+.followup-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0;
+  align-items: flex-end;
+}
+
+.followup-btn {
+  background: #ffffff;
+  color: #1e293b;
+  border: 2px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: background 0.25s ease, color 0.25s ease, box-shadow 0.25s ease, transform 0.25s ease;
+  max-width: 85%;
+  text-align: left;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  word-wrap: break-word;
+  white-space: normal;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-left: 3px solid #cbd5e1;
+}
+
+.followup-btn:hover {
+  background: #394867; /* 단색으로 변경하여 자극 감소 */
+  color: #f8fafc;
+  border-color: #394867;
+  transform: translateX(-2px); /* 이동 거리 감소 */
+  box-shadow: 0 2px 8px rgba(57, 72, 103, 0.25); /* 그림자 약화 */
+}
+
+.followup-btn:hover .intent-label {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.15); /* 대비 약화 */
+}
+
+.followup-btn:hover .question-keywords {
+  color: #e2e8f0; /* 약간 더 읽기 쉬운 색상 유지 */
+  border-top-color: rgba(255, 255, 255, 0.15);
+}
+
+/* 라벨 스타일 */
+.intent-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 2px 6px;
+  background: #f1f5f9;
+  border-radius: 3px;
+  align-self: flex-start;
+  transition: all 0.3s ease;
+}
+
+/* 질문 텍스트 */
+.question-text {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: inherit;
+}
+
+/* 키워드 체크리스트 */
+.question-keywords {
+  font-size: 10px;
+  font-weight: 400;
+  color: #64748b;
+  line-height: 1.4;
+  padding-top: 5px;
+  border-top: 1px solid #e2e8f0;
+  transition: all 0.3s ease;
+}
+
+.followup-regen {
+  background: #f1f5f9;
+  border: 2px solid #cbd5e1;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 600;
+  border-radius: 8px;
+  padding: 8px 16px;
+  cursor: pointer;
+  align-self: flex-end;
+  transition: all 0.3s ease;
+}
+
+.followup-regen:hover {
+  background: #e2e8f0;
+  border-color: #94a3b8;
+  transform: rotate(180deg);
+}
+
+.ai-thinking {
+  color: #6b8cb5;
+  font-weight: 400;
+  margin: 12px 0;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 14px;
+  align-self: flex-end;
+  text-align: right;
+  padding: 10px 16px;
+  border-radius: 16px;
+  max-width: 75%;
+}
+
+.ai-thinking span {
+  display: inline-block;
+}
+
+@keyframes dotBlink {
+  0%,
+  20% {
+    opacity: 0;
+  }
+  40%,
+  100% {
+    opacity: 1;
+  }
+}
+
+.dot1 {
+  animation: dotBlink 1.4s infinite;
+  animation-delay: 0s;
+}
+.dot2 {
+  animation: dotBlink 1.4s infinite;
+  animation-delay: 0.2s;
+}
+.dot3 {
+  animation: dotBlink 1.4s infinite;
+  animation-delay: 0.4s;
+}
+
+/* 🤖 AI 질문 자동 생성 토글 버튼 */
+.ai-toggle {
+  margin-left: auto;
+  border: none;
+  background: linear-gradient(135deg, #4a9d8e, #3d8375);
+  color: white;
+  padding: 10px 18px;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(74, 157, 142, 0.3);
+}
+
+.ai-toggle:hover {
+  background: linear-gradient(135deg, #3d8375, #306960);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(74, 157, 142, 0.4);
+}
+
+.ai-toggle.off {
+  background: linear-gradient(135deg, #64748b, #475569);
+  box-shadow: 0 4px 12px rgba(100, 116, 139, 0.3);
+}
+
+.ai-toggle.off:hover {
+  background: linear-gradient(135deg, #475569, #334155);
+}
+
+/* 🧠 면접관(assistant) 쪽 질문 생성 버튼 */
+.inline-ai-btn {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #394867, #2c3850);
+  color: white;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  margin-top: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(57, 72, 103, 0.3);
+  animation: fadeIn 0.3s ease-in;
+}
+
+.inline-ai-btn:hover {
+  background: linear-gradient(135deg, #2c3850, #1f2938);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(57, 72, 103, 0.4);
+}

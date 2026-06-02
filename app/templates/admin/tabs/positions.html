@@ -1,0 +1,70 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin_position.css') }}">
+
+<div class="positions-tab">
+  <div class="header">
+    <h2>등록된 포지션 목록</h2>
+    <button onclick="openModal()" class="btn-add">+ 포지션 등록</button>
+  </div>
+
+  <table class="position-table">
+    <thead>
+      <tr>
+        <th>포지션명</th>
+        <th>현재 지원자</th>
+        <th>JD 파일</th>
+        <th>키워드 설정 상태</th>
+        <th>작업</th>
+      </tr>
+    </thead>
+    <tbody id="positionList"></tbody>
+  </table>
+</div>
+
+<div id="modal" class="modal">
+  <div class="modal-content">
+    <h3>새 채용 포지션 등록</h3>
+    <div class="form-group">
+      <label>포지션명</label>
+      <input type="text" id="positionName" placeholder="UI/UX 디자이너">
+    </div>
+    <div class="form-group">
+      <label>JD 파일명</label>
+      <div class="file-upload-area" id="fileUploadArea">
+        <input type="file" id="jdFileInput" accept=".pdf,.docx,.txt" style="display:none;">
+        <div class="upload-placeholder" id="uploadPlaceholder">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          <p>파일을 드래그하거나 클릭하여 업로드</p>
+          <span class="file-types">PDF, DOCX, TXT</span>
+        </div>
+        <div class="upload-filename" id="uploadFilename" style="display:none;"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button onclick="submitPosition()" class="btn-submit" id="submitBtn">포지션 등록</button>
+      <button onclick="closeModal()" class="btn-cancel" id="cancelBtn">닫기</button>
+    </div>
+    <div class="modal-loading" id="modalLoading" style="display: none;">
+      <div class="spinner"></div>
+      <p>포지션 등록 중...</p>
+    </div>
+  </div>
+</div>
+
+<!-- PDF 뷰어 모달 -->
+<div id="pdfModal" class="pdf-modal">
+  <div class="pdf-modal-content">
+    <div class="pdf-modal-header">
+      <h3 id="pdfModalTitle">JD 파일 보기</h3>
+      <button onclick="closePdfModal()" class="pdf-close-btn">×</button>
+    </div>
+    <div class="pdf-modal-body">
+      <iframe id="pdfViewer" class="pdf-viewer" frameborder="0"></iframe>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/positions.js') }}"></script>

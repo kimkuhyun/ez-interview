@@ -1,0 +1,698 @@
+/* =========================================
+   CSS Variables - 색상 관리
+   ========================================= */
+:root {
+    /* Primary Colors - #394867 (네이비 블루) */
+    --color-primary: #394867;
+    --color-primary-dark: #14274E;
+    --color-primary-light: rgba(57, 72, 103, 0.1);
+    
+    /* Success Colors - 오션 그린 */
+    --color-success: #4a9d8e;
+    --color-success-dark: #3a7d71;
+    --color-success-light: #e8f5f2;
+    
+    /* Danger Colors - 코랄 레드 */
+    --color-danger: #d96459;
+    --color-danger-dark: #b94f45;
+    --color-danger-light: #fbeae9;
+    
+    /* Warning Colors - 골든 옐로우 */
+    --color-warning: #e8a95d;
+    --color-warning-dark: #c98d47;
+    --color-warning-light: #fef5eb;
+    
+    /* Info Colors - 스틸 블루 */
+    --color-info: #6b8cb5;
+    --color-info-light: rgba(107, 140, 181, 0.12);
+    
+    /* Gray Scale - 쿨 그레이 기반 (#9BA4B4) */
+    --color-gray-50: #fafbfc;
+    --color-gray-100: #F1F6F9;
+    --color-gray-200: #e5eaef;
+    --color-gray-300: #d0d7e0;
+    --color-gray-400: #9BA4B4;
+    --color-gray-500: #7d8799;
+    --color-gray-600: #5f6a7d;
+    --color-gray-700: #394867;
+    --color-gray-800: #2a3549;
+    --color-gray-900: #14274E;
+    
+    /* Background - 화이트 베이스 */
+    --color-bg-primary: #ffffff;
+    --color-bg-secondary: #F1F6F9;
+    --color-bg-tertiary: #e5eaef;
+    
+    /* Text Colors - 다크 네이비 */
+    --color-text-primary: #14274E;
+    --color-text-secondary: #394867;
+    --color-text-tertiary: #7d8799;
+    
+    /* Border Colors */
+    --color-border-light: #F1F6F9;
+    --color-border-medium: #e5eaef;
+    --color-border-dark: #d0d7e0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--color-bg-secondary);
+}
+
+.keyword-match-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 30px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h2,
+.section-header h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.btn-close {
+  background: var(--color-gray-100);
+  color: var(--color-gray-600);
+  border: none;
+  padding: 0.625rem 1.25rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-close:hover {
+  background: var(--color-gray-200);
+}
+
+.keyword-section {
+  background: var(--color-bg-primary);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.keyword-manager {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* 키워드 후보군 영역 */
+.keyword-pool-section {
+  border: 2px dashed var(--color-border-dark);
+  border-radius: 0.5rem;
+  padding: 1rem;
+  background: var(--color-bg-primary);
+}
+
+.pool-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.pool-header h4 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.pool-actions {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  max-width: 500px;
+}
+
+.pool-actions input {
+  flex: 1;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--color-border-dark);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+.pool-actions input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
+}
+
+.btn-pool-add {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  background: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 18px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-pool-add:hover {
+  background: var(--color-primary-dark);
+}
+
+.btn-recommend {
+  padding: 0.625rem 1rem;
+  background: var(--color-info);
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-recommend:hover {
+  background: var(--color-primary);
+}
+
+.keywords-pool {
+  min-height: 60px;
+  padding: 0.75rem;
+  background: var(--color-bg-primary);
+  border-radius: 0.375rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.keywords-selected {
+  min-height: 60px;
+  padding: 0.75rem;
+  background: var(--color-bg-primary);
+  border-radius: 0.375rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* 드래그 앤 드롭 영역 (선택 해제용) */
+.keywords-selected[ondragover] {
+  background: #dcfce7;
+  border: 2px dashed #10b981;
+}
+
+.empty-text {
+  color: var(--color-text-tertiary);
+  font-size: 0.875rem;
+}
+
+.keyword-pool-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.5rem 0.75rem;
+  background: var(--color-info-light);
+  color: var(--color-info);
+  border: 2px solid transparent;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+}
+
+.keyword-pool-tag:hover {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+}
+
+.keyword-pool-tag.selected {
+  background: var(--color-primary);
+  color: white;
+  border-color: var(--color-primary-dark);
+}
+
+.keyword-pool-remove {
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity 0.2s;
+  margin-left: 2px;
+}
+
+.keyword-pool-remove:hover {
+  opacity: 1;
+}
+
+/* 선택된 키워드 영역 */
+.keyword-selected-section {
+  border: 1px solid var(--color-border-dark);
+  padding: 0.75rem;
+  background: var(--color-bg-primary);
+  border-radius: 0.375rem;
+  min-height: 80px;
+}
+
+.selected-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.625rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-border-medium);
+}
+
+.selected-header h4 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.selected-count {
+  background: var(--color-gray-600);
+  color: white;
+  padding: 0.25rem 0.625rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.keywords-selected {
+  min-height: 50px;
+  padding: 0.5rem;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-medium);
+  border-radius: 0.375rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+  align-items: center;
+}
+
+.keyword-selected-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.625rem;
+  background: var(--color-primary);
+  color: white;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: move;
+  user-select: none;
+}
+
+.keyword-selected-tag:hover {
+  background: var(--color-primary-dark);
+}
+
+.keyword-selected-remove {
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.keyword-selected-remove:hover {
+  opacity: 1;
+}
+
+.btn-match {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--color-success);
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-match:hover {
+  background: var(--color-success-dark);
+}
+
+.btn-match:disabled {
+  background: var(--color-gray-200);
+  color: var(--color-gray-400);
+  cursor: not-allowed;
+}
+
+.candidates-section {
+  background: var(--color-bg-primary);
+  border-radius: 0.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.candidate-count {
+  background: var(--color-info);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.candidates-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 200px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.25rem;
+  color: var(--color-text-tertiary);
+}
+
+.empty-state svg {
+  margin-bottom: 16px;
+}
+
+.empty-state p {
+  margin: 0;
+  font-size: 14px;
+}
+
+.candidate-card {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  border: 1px solid var(--color-border-medium);
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.candidate-card:hover {
+  border-color: var(--color-primary);
+  background: var(--color-bg-secondary);
+}
+
+.candidate-info {
+  flex: 1;
+  cursor: pointer;
+}
+
+.candidate-name {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+  margin-bottom: 0.5rem;
+}
+
+.candidate-snippets {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+}
+
+.snippet-line {
+  padding: 0.25rem 0;
+  border-left: 2px solid var(--color-border-medium);
+  padding-left: 0.5rem;
+}
+
+.snippet-line.no-match {
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+.candidate-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.meta-tag {
+  padding: 0.25rem 0.5rem;
+  background: var(--color-info-light);
+  color: var(--color-info);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+}
+
+.match-score {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin-left: 1.25rem;
+  margin-right: 1.25rem;
+  cursor: pointer;
+}
+
+.card-actions {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.btn-card-pass,
+.btn-card-reject {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.btn-card-pass {
+  background: var(--color-success);
+  color: white;
+}
+
+.btn-card-pass:hover {
+  background: var(--color-success-dark);
+}
+
+.btn-card-pass:disabled {
+  background: var(--color-gray-200);
+  color: var(--color-gray-400);
+  cursor: not-allowed;
+}
+
+.btn-card-reject {
+  background: var(--color-danger);
+  color: white;
+}
+
+.btn-card-reject:hover {
+  background: var(--color-danger-dark);
+}
+
+.btn-card-reject:disabled {
+  background: var(--color-gray-200);
+  color: var(--color-gray-400);
+  cursor: not-allowed;
+}
+
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal.active {
+  display: flex;
+}
+
+.modal-large {
+  width: 90%;
+  max-width: 900px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-content {
+  background: var(--color-bg-primary);
+  border-radius: 0.75rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--color-border-medium);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--color-gray-900);
+}
+
+.btn-modal-close {
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  background: transparent;
+  border-radius: 0.25rem;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--color-gray-500);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-modal-close:hover {
+  background: var(--color-gray-100);
+  color: var(--color-gray-900);
+}
+
+.modal-body {
+  padding: 24px;
+}
+
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-bottom: 1.25rem;
+  border-bottom: 1px solid var(--color-border-medium);
+}
+
+.tab-btn {
+  padding: 0.625rem 1rem;
+  background: none;
+  border: none;
+  border-bottom: 4px solid transparent;
+  margin-bottom: -1px;
+  border-radius: 0.375rem 0.375rem 0 0;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-tertiary);
+  transition: all 0.2s ease;
+}
+
+.tab-btn:hover {
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+}
+
+.tab-btn.active {
+  color: var(--color-primary-dark);
+  background: var(--color-primary-light);
+  border-bottom-color: var(--color-primary);
+}
+
+.tab-btn.active::after {
+  display: none;
+}
+
+.document-viewer {
+  display: none;
+}
+
+.document-viewer.active {
+  display: block;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.btn-pass,
+.btn-reject {
+  flex: 1;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-pass {
+  background: var(--color-success);
+  color: white;
+}
+
+.btn-pass:hover {
+  background: var(--color-success-dark);
+}
+
+.btn-pass:disabled {
+  background: var(--color-gray-200);
+  color: var(--color-gray-400);
+  cursor: not-allowed;
+}
+
+.btn-reject {
+  background: var(--color-danger);
+  color: white;
+}
+
+.btn-reject:hover {
+  background: var(--color-danger-dark);
+}
+
+.btn-reject:disabled {
+  background: var(--color-gray-200);
+  color: var(--color-gray-400);
+  cursor: not-allowed;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}

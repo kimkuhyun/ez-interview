@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EZ Interview · 대시보드</title>
+<link rel="stylesheet" href="../assets/ezi-theme.css">
+<style>
+  .grid-stats { grid-template-columns: repeat(4, 1fr); }
+  .grid-main  { grid-template-columns: 1.9fr 1fr; align-items: start; }
+  .pipe { display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; }
+  .pipe .stage { background: var(--surface-soft); border: 1px solid var(--line-soft); border-radius: 14px; padding: 12px 12px 14px; }
+  .pipe .stage .top { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; font-weight: 700; color: var(--muted); margin-bottom: 10px; }
+  .pipe .stage .cnt { font-size: 26px; font-weight: 800; letter-spacing: -.04em; }
+  .pipe .card-mini { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 9px 10px; margin-top: 8px; font-size: 12px; box-shadow: var(--sh-xs); }
+  .pipe .card-mini b { font-weight: 700; } .pipe .card-mini span { color: var(--faint); }
+  .activity { display: flex; flex-direction: column; gap: 0; }
+  .activity .it { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line-soft); }
+  .activity .it:first-child { border-top: 0; }
+  .activity .it .ic { width: 34px; height: 34px; flex: none; border-radius: 10px; display: grid; place-items: center; background: var(--green-50); color: var(--green-600); }
+  .engine-node { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border-radius: 11px; background: var(--surface-soft); border: 1px solid var(--line-soft); font-size: 13px; font-weight: 600; }
+  .engine-node .led { width: 8px; height: 8px; border-radius: 50%; background: var(--green-500); box-shadow: 0 0 8px var(--green-400); }
+  .pos-row { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-top: 1px solid var(--line-soft); }
+  .pos-row:first-child { border-top: 0; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <!-- TOPBAR -->
+  <div class="topbar reveal">
+    <div class="brand"><div class="logo">🌿</div><div class="name">EZ <b>Interview</b></div></div>
+    <nav class="nav">
+      <a href="#" class="active">대시보드</a>
+      <a href="#">지원자</a>
+      <a href="#">포지션 · 서류전형</a>
+      <a href="#">면접 관리</a>
+      <a href="#">평가 리포트</a>
+    </nav>
+    <div class="grow"></div>
+    <span class="badge"><span class="dot pulse"></span> 평가 엔진 정상</span>
+    <div class="avatar">KH</div>
+  </div>
+
+  <!-- GREETING -->
+  <div class="row between reveal d1" style="margin:30px 4px 22px;">
+    <div>
+      <div class="eyebrow">2026.06.02 · 좋은 저녁입니다</div>
+      <div class="h1" style="margin-top:8px;">오늘의 <span class="gtext">채용 현황</span></div>
+      <div class="sub" style="margin-top:6px;">진행 중인 면접 3건 · 검토 대기 평가 리포트 2건</div>
+    </div>
+    <div class="row">
+      <a class="btn" href="#">＋ 지원자 등록</a>
+      <a class="btn" href="#">＋ 포지션</a>
+      <a class="btn primary lg" href="#">🎙️ 새 면접 시작</a>
+    </div>
+  </div>
+
+  <!-- STAT CARDS -->
+  <div class="bento grid-stats" style="margin-bottom:18px;">
+    <div class="stat reveal d1"><div class="ico">👥</div><div class="big">48</div><div class="lbl">등록 지원자</div><div class="delta up">▲ 이번 주 +6</div></div>
+    <div class="stat reveal d2"><div class="ico teal">🎙️</div><div class="big">3</div><div class="lbl">진행 중 면접</div><div class="delta up">실시간 1건 진행</div></div>
+    <div class="stat reveal d3"><div class="ico violet">📑</div><div class="big">21</div><div class="lbl">생성된 평가 리포트</div><div class="delta up">▲ 멀티에이전트 자동 생성</div></div>
+    <div class="stat reveal d4"><div class="ico amber">🎯</div><div class="big">82<small style="font-size:18px;">점</small></div><div class="lbl">평균 역량 적합도</div><div class="delta up">▲ 지난달 대비 +4</div></div>
+  </div>
+
+  <!-- MAIN BENTO -->
+  <div class="bento grid-main">
+    <div class="col">
+
+      <!-- pipeline -->
+      <div class="card topline reveal d2">
+        <div class="card-hd"><div class="h3"><span class="ic">🗂️</span> 채용 파이프라인</div><a class="link" href="#">전체 보기 →</a></div>
+        <div class="pipe">
+          <div class="stage"><div class="top">서류 검토 <span class="badge">12</span></div><div class="cnt">12</div>
+            <div class="card-mini"><b>이서연</b> · 백엔드<br><span>적합도 88%</span></div>
+            <div class="card-mini"><b>박준호</b> · AI<br><span>적합도 74%</span></div>
+          </div>
+          <div class="stage"><div class="top">면접 대기 <span class="badge amber">5</span></div><div class="cnt">5</div>
+            <div class="card-mini"><b>최민재</b> · 데이터<br><span>예정 14:00</span></div>
+          </div>
+          <div class="stage"><div class="top">면접 진행 <span class="badge solid">1</span></div><div class="cnt">1</div>
+            <div class="card-mini" style="border-color:var(--green-300);box-shadow:var(--glow)"><b>김하늘</b> · AI<br><span style="color:var(--green-600)">● 실시간 진행</span></div>
+          </div>
+          <div class="stage"><div class="top">평가 완료 <span class="badge violet">21</span></div><div class="cnt">21</div>
+            <div class="card-mini"><b>정유진</b> · 추천<br><span>89점</span></div>
+          </div>
+          <div class="stage"><div class="top">최종 <span class="badge">9</span></div><div class="cnt">9</div>
+            <div class="card-mini"><b>합격</b> 6 · <b>보류</b> 3</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- recent interviews -->
+      <div class="card reveal d3">
+        <div class="card-hd"><div class="h3"><span class="ic">🕒</span> 최근 면접 · 평가</div><a class="link" href="#">평가 리포트 →</a></div>
+        <table class="tbl">
+          <thead><tr><th>지원자</th><th>포지션</th><th>역량 적합도</th><th>판정</th><th>일자</th></tr></thead>
+          <tbody>
+            <tr><td><div class="row center" style="gap:10px"><div class="avatar">정</div><b>정유진</b></div></td><td>AI 엔지니어</td>
+              <td><div class="row center" style="gap:8px"><div class="bar" style="width:90px"><span style="width:89%"></span></div>89</div></td>
+              <td><span class="badge solid">추천</span></td><td class="sub">06.01</td></tr>
+            <tr><td><div class="row center" style="gap:10px"><div class="avatar">한</div><b>한지우</b></div></td><td>백엔드 개발자</td>
+              <td><div class="row center" style="gap:8px"><div class="bar" style="width:90px"><span style="width:76%"></span></div>76</div></td>
+              <td><span class="badge amber">보류</span></td><td class="sub">05.31</td></tr>
+            <tr><td><div class="row center" style="gap:10px"><div class="avatar">오</div><b>오세훈</b></div></td><td>데이터 분석가</td>
+              <td><div class="row center" style="gap:8px"><div class="bar" style="width:90px"><span style="width:63%"></span></div>63</div></td>
+              <td><span class="badge rose">비추천</span></td><td class="sub">05.30</td></tr>
+            <tr><td><div class="row center" style="gap:10px"><div class="avatar">이</div><b>이서연</b></div></td><td>백엔드 개발자</td>
+              <td><div class="row center" style="gap:8px"><div class="bar" style="width:90px"><span style="width:91%"></span></div>91</div></td>
+              <td><span class="badge solid">추천</span></td><td class="sub">05.29</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- right column -->
+    <div class="col">
+      <!-- eval engine -->
+      <div class="card grad glow reveal d3">
+        <div class="card-hd"><div class="h3"><span class="ic">🧠</span> 멀티에이전트 평가 엔진</div></div>
+        <div class="col" style="gap:8px">
+          <div class="engine-node"><span class="led"></span> 프롬프트 옵티마이저 <span class="grow"></span><span class="badge">Solar</span></div>
+          <div class="engine-node"><span class="led"></span> 역량·요약·품질 분석 <span class="grow"></span><span class="badge">3 병렬</span></div>
+          <div class="engine-node"><span class="led" style="background:var(--violet);box-shadow:0 0 8px var(--violet)"></span> 적대적 Critic 검증 <span class="grow"></span><span class="badge violet">NEW</span></div>
+          <div class="engine-node"><span class="led"></span> 최종 추천 합의 <span class="grow"></span><span class="badge">GPT-5.1</span></div>
+        </div>
+        <div class="divider"></div>
+        <div class="row between"><span class="sub">평균 리포트 생성</span><b>38초</b></div>
+        <div class="row between" style="margin-top:8px"><span class="sub">Critic 재검증 통과율</span><b style="color:var(--green-600)">94%</b></div>
+      </div>
+
+      <!-- completeness ring -->
+      <div class="card reveal d4">
+        <div class="card-hd"><div class="h3"><span class="ic">📊</span> 이번 분기 평가 분포</div></div>
+        <div class="row center" style="gap:20px">
+          <div class="ring" style="--p:68;"><div class="val">68<small>%</small></div></div>
+          <div class="col" style="gap:10px;flex:1">
+            <div class="row between"><span class="badge solid">추천</span><b>14</b></div>
+            <div class="bar"><span style="width:67%"></span></div>
+            <div class="row between"><span class="badge amber">보류</span><b>5</b></div>
+            <div class="bar amber"><span style="width:24%"></span></div>
+            <div class="row between"><span class="badge rose">비추천</span><b>2</b></div>
+            <div class="bar rose"><span style="width:9%"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- positions -->
+      <div class="card reveal d5">
+        <div class="card-hd"><div class="h3"><span class="ic">💼</span> 포지션별 현황</div><a class="link" href="#">관리 →</a></div>
+        <div class="pos-row"><div class="avatar" style="background:var(--grad-green2)">AI</div><div class="grow"><b>AI 엔지니어</b><div class="sub">지원 18 · 면접 4</div></div><span class="badge">채용중</span></div>
+        <div class="pos-row"><div class="avatar" style="background:var(--grad-deep)">BE</div><div class="grow"><b>백엔드 개발자</b><div class="sub">지원 21 · 면접 6</div></div><span class="badge">채용중</span></div>
+        <div class="pos-row"><div class="avatar" style="background:linear-gradient(135deg,#A78BFA,#7C3AED)">DA</div><div class="grow"><b>데이터 분석가</b><div class="sub">지원 9 · 면접 2</div></div><span class="badge amber">마감임박</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

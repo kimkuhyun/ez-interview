@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>리포트 생성 랩</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #111827;
+      --card: #1f2937;
+      --muted: #94a3b8;
+      --accent: #22d3ee;
+      --border: #2d3748;
+      --text: #e2e8f0;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at 20% 20%, rgba(34,211,238,0.08), transparent 30%), radial-gradient(circle at 80% 0%, rgba(99,102,241,0.12), transparent 30%), var(--bg);
+      color: var(--text);
+      font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+      min-height: 100vh;
+    }
+    .shell {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-end;
+      margin-bottom: 20px;
+    }
+    .title { font-size: 24px; font-weight: 800; letter-spacing: -0.02em; }
+    .subtitle { color: var(--muted); font-size: 14px; margin-top: 6px; }
+    .pill {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--muted);
+      font-weight: 600;
+      letter-spacing: 0.03em;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 16px;
+    }
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00)) , var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.3);
+    }
+    .card h3 { margin: 0 0 12px; font-size: 16px; }
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 12px;
+    }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 13px; color: var(--muted); }
+    input, textarea {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: #0b1220;
+      color: var(--text);
+      font-size: 14px;
+      outline: none;
+    }
+    textarea { min-height: 68px; resize: vertical; }
+    .row { display: flex; align-items: center; gap: 10px; }
+    .btn {
+      border: none;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-weight: 700;
+      cursor: pointer;
+      color: #0b1220;
+      background: linear-gradient(135deg, #22d3ee, #60a5fa);
+      transition: transform 0.1s ease, box-shadow 0.2s ease;
+      box-shadow: 0 8px 20px rgba(34,211,238,0.25);
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(34,211,238,0.3); }
+    .btn.secondary {
+      background: #1f2937;
+      color: var(--text);
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .status { font-size: 13px; color: var(--muted); margin-top: 8px; }
+    pre {
+      background: #0b1220;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      color: #e2e8f0;
+      font-size: 12px;
+      overflow: auto;
+      max-height: 280px;
+      white-space: pre-wrap;
+    }
+    iframe {
+      width: 100%;
+      height: 680px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #0b1220;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="hero">
+      <div>
+        <div class="title">리포트 생성 랩</div>
+        <div class="subtitle">프로덕션 흐름과 분리된 테스트용 페이지입니다.</div>
+      </div>
+      <div class="pill">/reports/lab/*</div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <h3>입력</h3>
+        <form id="labForm" class="form-grid">
+          <div class="form-group">
+            <label for="session_id">session_id</label>
+            <input id="session_id" name="session_id" placeholder="예: 7ac7d0..."/>
+          </div>
+          <div class="form-group">
+            <label for="jd_id">jd_id (옵션)</label>
+            <input id="jd_id" name="jd_id" placeholder="예: job-123"/>
+          </div>
+          <div class="form-group">
+            <label for="candidate_name">지원자 이름</label>
+            <input id="candidate_name" name="candidate_name" placeholder="지원자" value="지원자"/>
+          </div>
+          <div class="form-group">
+            <label for="position">포지션</label>
+            <input id="position" name="position" placeholder="백엔드 엔지니어" value="백엔드 엔지니어"/>
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label for="axes_keys">axes_keys (쉼표 구분, 5개)</label>
+            <input id="axes_keys" name="axes_keys" value="문제해결,커뮤니케이션,학습능력,업무역량,전문성"/>
+          </div>
+          <div class="form-group" style="grid-column: span 2;">
+            <label for="user_prompt">user_prompt (옵션)</label>
+            <textarea id="user_prompt" name="user_prompt" placeholder="추가 지침을 적어주세요."></textarea>
+          </div>
+          <div class="form-group row" style="grid-column: span 2; align-items: center;">
+            <input type="checkbox" id="has_portfolio" name="has_portfolio" style="width:auto;">
+            <label for="has_portfolio" style="margin:0;">포트폴리오 포함</label>
+          </div>
+          <div class="form-group row" style="grid-column: span 2; gap:8px;">
+            <button type="submit" class="btn" id="submitBtn">리포트 생성</button>
+            <button type="button" class="btn secondary" id="downloadPdf" disabled>PDF 다운로드</button>
+            <button type="button" class="btn secondary" id="openView" disabled>뷰 미리보기</button>
+          </div>
+          <div class="status" id="statusText">준비됨</div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>결과 (JSON)</h3>
+        <pre id="jsonBox">아직 생성된 리포트가 없습니다.</pre>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;" class="card">
+      <h3>뷰 미리보기 (PDF 템플릿)</h3>
+      <iframe id="previewFrame" title="리포트 뷰 미리보기"></iframe>
+    </div>
+  </div>
+
+  <script>
+    const form = document.getElementById('labForm');
+    const jsonBox = document.getElementById('jsonBox');
+    const previewFrame = document.getElementById('previewFrame');
+    const statusText = document.getElementById('statusText');
+    const submitBtn = document.getElementById('submitBtn');
+    const downloadBtn = document.getElementById('downloadPdf');
+    const viewBtn = document.getElementById('openView');
+    let currentReport = null;
+
+    function setBusy(busy) {
+      submitBtn.disabled = busy;
+      statusText.textContent = busy ? '생성 중...' : '준비됨';
+    }
+
+    async function renderPreview(report) {
+      try {
+        const res = await fetch('/reports/lab/render', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ report })
+        });
+        const html = await res.text();
+        previewFrame.srcdoc = html;
+      } catch (e) {
+        previewFrame.srcdoc = '<p style="color:#f87171;padding:12px;">뷰 렌더링 실패</p>';
+      }
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      setBusy(true);
+      jsonBox.textContent = '요청 중...';
+      previewFrame.srcdoc = '';
+
+      const payload = {
+        session_id: form.session_id.value.trim(),
+        jd_id: form.jd_id.value.trim() || null,
+        candidate_name: form.candidate_name.value.trim() || '지원자',
+        position: form.position.value.trim() || '-',
+        axes_keys: form.axes_keys.value,
+        user_prompt: form.user_prompt.value,
+        has_portfolio: form.has_portfolio.checked
+      };
+
+      try {
+        const res = await fetch('/reports/lab/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (!res.ok || data.status === 'failed') {
+          throw new Error(data.message || data.error || '생성 실패');
+        }
+        currentReport = data;
+        jsonBox.textContent = JSON.stringify(data, null, 2);
+        downloadBtn.disabled = false;
+        viewBtn.disabled = false;
+        renderPreview(data);
+        statusText.textContent = '생성 완료';
+      } catch (err) {
+        jsonBox.textContent = `ERROR: ${err.message}`;
+        downloadBtn.disabled = true;
+        viewBtn.disabled = true;
+        statusText.textContent = '실패';
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    downloadBtn.addEventListener('click', async () => {
+      if (!currentReport) return;
+      downloadBtn.disabled = true;
+      try {
+        const res = await fetch('/reports/pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ report: currentReport })
+        });
+        if (!res.ok) throw new Error('PDF 생성 실패');
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${currentReport?.metadata?.session_id || 'report'}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert(err.message || 'PDF 다운로드 실패');
+      } finally {
+        downloadBtn.disabled = false;
+      }
+    });
+
+    viewBtn.addEventListener('click', () => {
+      if (!currentReport) return;
+      renderPreview(currentReport);
+      previewFrame.scrollIntoView({ behavior: 'smooth' });
+    });
+  </script>
+</body>
+</html>

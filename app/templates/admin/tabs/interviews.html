@@ -1,0 +1,36 @@
+<div class="interviews-tab">
+  <div class="toolbar">
+    <div class="toolbar-left">진행 중인 면접</div>
+  </div>
+
+  <div class="filters">
+    <select class="select" id="position-filter" onchange="filterInterviews()" style="max-width: 200px;">
+      <option value="">전체 포지션</option>
+    </select>
+    <input class="input" id="search-input" placeholder="이름 검색..." oninput="filterInterviews()" style="max-width: 200px;" />
+  </div>
+
+  <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>지원자</th>
+            <th>지원 포지션</th>
+            <th>면접 일시</th>
+            <th>면접 상태</th>
+            <th>인터뷰 진행</th>
+          </tr>
+        </thead>
+        <tbody id="interviews-tbody">
+          <tr>
+            <td colspan="5" class="text-sm" style="text-align: center; padding: 40px; color: var(--subtext);">
+              대기 중인 면접이 없습니다.
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/interviews.js') }}"></script>

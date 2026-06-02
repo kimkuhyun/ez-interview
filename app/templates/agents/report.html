@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>면접 리포트</title>
+  <style>{% include 'css/report.css' %}</style>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div>
+      <h1>면접 리포트</h1>
+      <p>AI 기반 면접 평가 및 분석 결과</p>
+    </div>
+    <div class="header-actions">
+      <button id="genBtn" class="btn btn-primary no-print">리포트 생성</button>
+    </div>
+  </div>
+  <div class="header-line"></div>
+
+  <div id="promptSection" class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header">리포트 생성 프롬프트</div>
+    <textarea id="userPrompt" rows="3" placeholder="예:DBA직무 적합성 위주로 평가해주세요" style="width:100%;padding:0.75rem;border:1px solid #d1d5db;border-radius:0.5rem;font-size:0.875rem;resize:vertical;"></textarea>
+  </div>
+
+  <div class="card" style="margin-bottom:1.5rem;">
+    <div class="card-header">프롬프트 파일 관리</div>
+    <div style="padding:1rem;">
+      <div id="promptList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:0.75rem;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+
+// 프롬프트 파일 목록 로드
+async function loadPromptList(){
+  try{
+    const res=await fetch('/api/prompts');
+    const prompts=await res.json();
+    const list=$('promptList');
+    list.innerHTML=prompts.map(name=>`
+      <button onclick="openPromptEditor('${name}')" style="padding:0.75rem;background:#f3f4f6;border:1px solid #d1d5db;border-radius:0.5rem;cursor:pointer;text-align:left;transition:all 0.2s;" onmouseover="this.style.background='#e5e7eb'" onmouseout="this.style.background='#f3f4f6'">
+        <div style="font-weight:600;font-size:0.875rem;color:#1f2937;margin-bottom:0.25rem;">${name}</div>
+        <div style="font-size:0.75rem;color:#6b7280;">클릭하여 수정</div>
+      </button>
+    `).join('');
+  }catch(e){console.error('프롬프트 목록 로드 실패:',e);}
+}
+
+// 프롬프트 편집기 열기
+function openPromptEditor(name){
+  const w=window.open(`/prompts?file=${name}`,'PromptEditor','width=1200,height=800');
+  if(!w)alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.');
+}
+
+async function generateReport(){
+  const prompt=($("userPrompt")?$("userPrompt").value.trim():"");
+  let sid=null,axes=null;
+  try{
+    const res=await fetch('/api/state');
+    if(res.ok){
+      const d=await res.json();
+      const st=d.state||d;
+      sid=st.session_id;
+      if(st.metrics&&st.metrics.length>0)axes=st.metrics.join(',');
+    }
+  }catch(e){}
+  const p=new URLSearchParams();
+  if(sid)p.set('session_id',sid);
+  if(axes)p.set('axes_keys',axes);
+  if(prompt)p.set('user_prompt',prompt);
+  const w=window.open('/panel/report/view?'+p.toString(),'_blank','width=1400,height=900');
+  if(!w)alert('팝업이 차단되었습니다. 팝업 허용 후 다시 시도해주세요.');
+}
+
+$("genBtn").onclick=generateReport;
+loadPromptList();
+</script>
+</body>
+</html>

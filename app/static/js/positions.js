@@ -1,0 +1,258 @@
+let positions = [];
+let uploadedFile = null;
+
+async function loadPositions() {
+  const tbody = document.getElementById('positionList');
+  if (!tbody) return;
+  
+  const res = await fetch('/api/positions');
+  const data = await res.json();
+  positions = data.positions || [];
+  
+  if (positions.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#94a3b8;padding:40px;">등록된 포지션이 없습니다.</td></tr>';
+    return;
+  }
+  
+  tbody.innerHTML = positions.map(p => {
+    const hasFile = p.jd_file ? 'true' : 'false';
+    
+    return `
+    <tr onclick="if(${hasFile}) { openPdfModal('${p.id}', '${p.name}', '${p.jd_file}'); }" style="cursor: ${hasFile ? 'pointer' : 'default'};">
+      <td>
+        <div class="position-name-cell">
+          <strong>${p.name}</strong>
+          <div class="delete-icon" onclick="deletePosition('${p.id}', event)">×</div>
+        </div>
+      </td>
+      <td>
+        <span class="candidate-count-badge">${p.candidate_count || 0}명</span>
+      </td>
+      <td class="jd-file-cell" onclick="event.stopPropagation(); editJdFile('${p.id}')" title="파일 변경">
+        ${p.jd_file ? '<div class="file-icon-wrapper"><svg class="file-icon-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg></div>' : '-'}
+      </td>
+      <td onclick="event.stopPropagation();">
+        <span class="keyword-badge ${(p.keywords && p.keywords.length > 0) ? 'set' : 'not-set'}">
+          ${(p.keywords && p.keywords.length > 0) ? p.keywords.length + '개 설정됨' : '미설정'}
+        </span>
+      </td>
+      <td onclick="event.stopPropagation();">
+        <button class="btn-action" onclick="openKeywordModal('${p.id}')">
+          키워드 설정 및 심사 시작
+        </button>
+      </td>
+    </tr>
+    `;
+  }).join('');
+}
+
+function setupDragDrop() {
+  const area = document.getElementById('fileUploadArea');
+  const input = document.getElementById('jdFileInput');
+  const placeholder = document.getElementById('uploadPlaceholder');
+  const filename = document.getElementById('uploadFilename');
+  
+  area.onclick = () => input.click();
+  
+  ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+    area.addEventListener(e, evt => {
+      evt.preventDefault();
+      evt.stopPropagation();
+    });
+  });
+  
+  ['dragenter', 'dragover'].forEach(e => {
+    area.addEventListener(e, () => area.classList.add('dragover'));
+  });
+  
+  ['dragleave', 'drop'].forEach(e => {
+    area.addEventListener(e, () => area.classList.remove('dragover'));
+  });
+  
+  area.addEventListener('drop', e => {
+    const files = e.dataTransfer.files;
+    if (files.length) handleFile(files[0]);
+  });
+  
+  input.addEventListener('change', e => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+  
+  function handleFile(file) {
+    uploadedFile = file;
+    placeholder.style.display = 'none';
+    filename.style.display = 'block';
+    filename.textContent = '✓ ' + file.name;
+  }
+}
+
+function openModal() {
+  document.getElementById('modal').classList.add('active');
+  setupDragDrop();
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+  document.getElementById('positionName').value = '';
+  document.getElementById('uploadPlaceholder').style.display = 'block';
+  document.getElementById('uploadFilename').style.display = 'none';
+  uploadedFile = null;
+}
+
+async function submitPosition() {
+  const name = document.getElementById('positionName').value.trim();
+  if (!name) return alert('포지션명을 입력하세요.');
+  if (!uploadedFile) return alert('JD 파일을 업로드하세요.');
+  
+  // 로딩 상태 표시
+  const loading = document.getElementById('modalLoading');
+  const submitBtn = document.getElementById('submitBtn');
+  const cancelBtn = document.getElementById('cancelBtn');
+  
+  loading.style.display = 'flex';
+  submitBtn.disabled = true;
+  cancelBtn.disabled = true;
+  
+  try {
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('file', uploadedFile);
+    
+    const res = await fetch('/api/positions', {
+      method: 'POST',
+      body: formData
+    });
+    
+    if (res.ok) {
+      const data = await res.json();
+      alert(`'${name}' 포지션이 등록되었습니다.`);
+      closeModal();
+      loadPositions();
+    } else {
+      alert('등록 실패');
+    }
+  } catch (error) {
+    console.error('등록 오류:', error);
+    alert('등록 중 오류가 발생했습니다.');
+  } finally {
+    // 로딩 상태 해제
+    loading.style.display = 'none';
+    submitBtn.disabled = false;
+    cancelBtn.disabled = false;
+  }
+}
+
+async function deletePosition(id, event) {
+  event.stopPropagation();
+  if (!confirm('정말 삭제하시겠습니까?')) return;
+  
+  const res = await fetch(`/api/positions/${id}`, {method: 'DELETE'});
+  if (res.ok) {
+    alert('삭제되었습니다.');
+    loadPositions();
+  } else {
+    alert('삭제 실패');
+  }
+}
+
+function editJdFile(id) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,.docx,.txt';
+  input.onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    const res = await fetch(`/api/positions/${id}/jd`, {
+      method: 'PUT',
+      body: formData
+    });
+    
+    if (res.ok) {
+      alert('JD 파일이 변경되었습니다.');
+      loadPositions();
+    } else {
+      alert('변경 실패');
+    }
+  };
+  input.click();
+}
+
+function openKeywordModal(id) {
+  // SPA 방식으로 키워드 매칭 화면 로드
+  loadKeywordMatchView(id);
+}
+
+async function loadKeywordMatchView(positionId) {
+  const rightPanel = document.querySelector('#right-panel') || document.querySelector('.tab-content');
+  
+  if (!rightPanel) {
+    console.error('Right panel not found');
+    return;
+  }
+  
+  try {
+    const res = await fetch(`/panel/keyword-match?position_id=${positionId}`);
+    const html = await res.text();
+    
+    rightPanel.innerHTML = html;
+    
+    // ✅ position ID를 data attribute로 저장
+    const container = rightPanel.querySelector('.keyword-match-container');
+    if (container) {
+      container.setAttribute('data-position-id', positionId);
+    }
+    
+    // 스크립트 재실행
+    const scripts = rightPanel.querySelectorAll('script');
+    scripts.forEach(old => {
+      const s = document.createElement('script');
+      if (old.src) {
+        s.src = old.src;
+      } else {
+        s.textContent = old.textContent;
+      }
+      document.body.appendChild(s);
+      old.remove();
+    });
+  } catch (error) {
+    console.error('Failed to load keyword match view:', error);
+  }
+}
+
+// 초기 로드
+if (document.getElementById('positionList')) loadPositions();
+
+// 탭 전환 시 재로드
+if (window.MutationObserver) {
+  new MutationObserver(() => {
+    const tab = document.querySelector('[data-tab="positions"].active');
+    if (tab && document.getElementById('positionList')) loadPositions();
+  }).observe(document.body, { attributes: true, subtree: true, attributeFilter: ['class'] });
+}
+
+// PDF 뷰어 모달 열기
+function openPdfModal(positionId, positionName, jdFilePath) {
+  const modal = document.getElementById('pdfModal');
+  const title = document.getElementById('pdfModalTitle');
+  const viewer = document.getElementById('pdfViewer');
+  
+  title.textContent = `${positionName} - JD 파일`;
+  
+  // API 엔드포인트를 통해 PDF 파일 로드
+  viewer.src = `/api/positions/${positionId}/jd-file`;
+  
+  modal.classList.add('active');
+}
+
+// PDF 뷰어 모달 닫기
+function closePdfModal() {
+  const modal = document.getElementById('pdfModal');
+  const viewer = document.getElementById('pdfViewer');
+  
+  modal.classList.remove('active');
+  viewer.src = '';
+}

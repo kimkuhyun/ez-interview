@@ -1,105 +1,47 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 인터뷰 시뮬레이터</title>
-    
-    <!-- Tailwind CSS -->
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    
-    <!-- HTMX -->
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    
-    <!-- Chart.js for radar charts -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    
-    <!-- Custom styles -->
-    <link rel="stylesheet" href="/static/style.css">
-    
-    <!-- Meta tags -->
-    <meta name="description" content="AI 기반 면접 시뮬레이션 및 피드백 시스템">
-    <meta name="theme-color" content="#f3f4f6">
+    <title>{% block title %}지원자 풀 관리 시스템{% endblock %}</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- Admin CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+
+    {% block extra_css %}{% endblock %}
 </head>
 
-<body class="bg-gray-100 font-sans antialiased">
-    <!-- Main container -->
-    <div class="flex h-screen">
-        <!-- Left panel -->
-        <div id="left" class="w-1/2 p-6 overflow-y-auto bg-gray-50 border-r border-gray-200">
-            {% block left %}{% endblock %}
+<body>
+    <div class="container">
+
+        <!-- 탭 네비게이션 (처음엔 숨김) -->
+        <div class="tab-navigation" id="tab-navigation" style="display: none;">
+            <button data-tab="candidates" class="tab-btn">
+                지원자 관리
+            </button>
+            <button data-tab="positions" class="tab-btn">
+                포지션 관리 및 서류 전형
+            </button>
+            <button data-tab="interviews" class="tab-btn">
+                면접 관리
+            </button>
         </div>
-        
-        <!-- Right panel -->
-        <div id="right" class="w-1/2 p-6 overflow-y-auto bg-gray-50">
-            {% block right %}{% endblock %}
+
+        <!-- 탭 컨텐츠 (랜딩 페이지 또는 탭 내용) -->
+        <div class="tab-content" id="tab-content">
+            <!-- 동적으로 로드됩니다 -->
         </div>
     </div>
 
-    <!-- Preview zoom functionality -->
-    <script>
-        class PreviewZoom {
-            constructor(root) {
-                if (!root) return;
-                
-                this.stage = root.querySelector('[data-stage]');
-                this.label = root.querySelector('[data-zoom-label]');
-                this.btnIn = root.querySelector('[data-zoom-button="in"]');
-                this.btnOut = root.querySelector('[data-zoom-button="out"]');
-                this.widthTarget = root.querySelector('[data-zoom-target="width"]');
-                this.transformTarget = root.querySelector('[data-zoom-target="transform"]');
-                
-                this.zoom = parseFloat(this.stage?.dataset.zoom || '1');
-                this.init();
-            }
-
-            init() {
-                this.apply();
-                this.bindEvents();
-            }
-
-            apply() {
-                if (this.label) {
-                    this.label.textContent = `${Math.round(this.zoom * 100)}%`;
-                }
-                if (this.widthTarget) {
-                    this.widthTarget.style.width = `${100 * this.zoom}%`;
-                }
-                if (this.transformTarget) {
-                    this.transformTarget.style.transform = `scale(${this.zoom})`;
-                    this.transformTarget.style.transformOrigin = '0 0';
-                }
-                if (this.stage) {
-                    this.stage.dataset.zoom = String(this.zoom);
-                }
-            }
-
-            bindEvents() {
-                if (this.btnIn) {
-                    this.btnIn.addEventListener('click', () => {
-                        this.zoom = Math.min(3.5, Number((this.zoom + 0.1).toFixed(2)));
-                        this.apply();
-                    });
-                }
-                
-                if (this.btnOut) {
-                    this.btnOut.addEventListener('click', () => {
-                        this.zoom = Math.max(0.6, Number((this.zoom - 0.1).toFixed(2)));
-                        this.apply();
-                    });
-                }
-            }
-        }
-
-        function initPreviews() {
-            document.querySelectorAll('[data-preview-root]')
-                .forEach(root => new PreviewZoom(root));
-        }
-
-        // Initialize on page load and after HTMX updates
-        document.addEventListener('DOMContentLoaded', initPreviews);
-        htmx.on('htmx:afterSwap', initPreviews);
-        htmx.on('htmx:oobAfterSwap', initPreviews);
-    </script>
+    <!-- 공통 JavaScript -->
+    <script src="{{ url_for('static', filename='js/common.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
+
 </html>
