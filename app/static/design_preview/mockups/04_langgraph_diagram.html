@@ -3,101 +3,73 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>EZ Interview · LangGraph 고도화</title>
+<title>EZ Interview · LangGraph 아키텍처</title>
 <link rel="stylesheet" href="../assets/ezi-theme.css">
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <style>
-  .cmp { display:grid; grid-template-columns:1fr 1fr; gap:18px; align-items:stretch; }
-  .mtitle { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+  .wrap { display:grid; grid-template-columns:1.15fr 1fr; gap:18px; align-items:start; }
   .mermaid { background:transparent; display:flex; justify-content:center; }
-  .legend { display:flex; gap:18px; flex-wrap:wrap; margin-top:8px; }
+  .pt { display:flex; gap:12px; padding:15px 17px; border-radius:14px; background:var(--surface-soft); border:1px solid var(--line-soft); margin-bottom:12px; }
+  .pt .ic { width:38px; height:38px; flex:none; border-radius:11px; display:grid; place-items:center; font-size:19px; color:#fff; background:var(--grad-green); box-shadow:var(--glow); }
+  .pt.v .ic { background:linear-gradient(135deg,#A78BFA,#7C3AED); box-shadow:0 10px 26px -8px rgba(124,58,237,.45); }
+  .pt b { font-size:15px; } .pt p { font-size:13px; color:var(--muted); line-height:1.55; margin:5px 0 0; }
+  .legend { display:flex; gap:18px; flex-wrap:wrap; justify-content:center; margin-top:10px; }
   .legend span { display:inline-flex; align-items:center; gap:7px; font-size:12.5px; color:var(--muted); font-weight:600; }
   .legend i { width:14px; height:14px; border-radius:4px; display:inline-block; }
-  .pt { display:flex; gap:10px; padding:11px 13px; border-radius:12px; background:var(--surface-soft); border:1px solid var(--line-soft); font-size:13px; }
-  .pt b { color:var(--green-700); }
-  .pt.new { background:linear-gradient(160deg,#F5F3FF,#fff); border-color:#DDD6FE; }
-  .pt.new b { color:#6D28D9; }
 </style>
 </head>
 <body>
 <div class="shell">
   <div class="topbar reveal">
     <div class="brand"><div class="logo">🌿</div><div class="name">EZ <b>Interview</b></div></div>
-    <span class="badge violet" style="margin-left:6px">LangGraph 평가 엔진 고도화</span>
+    <span class="badge" style="margin-left:6px">LangGraph · 멀티에이전트 평가 엔진</span>
     <div class="grow"></div>
-    <span class="badge">v4o → v5</span>
+    <span class="badge">9 nodes</span>
   </div>
 
   <div class="row between reveal d1" style="margin:24px 4px 20px">
     <div>
       <div class="eyebrow">MULTI-AGENT · DEBATE LOOP</div>
-      <div class="h1" style="margin-top:7px">멀티에이전트 평가 그래프 <span class="gtext">고도화</span></div>
-      <div class="sub" style="margin-top:6px">"self-scoring 가짜 디베이트" → 독립 Critic 3종의 실제 적대적 검증 + 증거 교차검증 + 선택적 재실행</div>
+      <div class="h1" style="margin-top:7px">멀티에이전트 <span class="gtext">평가 그래프</span></div>
+      <div class="sub" style="margin-top:6px">검색 → 병렬 분석 → 증거 교차검증 → 적대적 디베이트 → 선택적 재실행 → 합의 추천</div>
     </div>
   </div>
 
-  <div class="cmp">
-    <!-- BEFORE -->
-    <div class="card reveal d2">
-      <div class="mtitle"><span class="badge rose">BEFORE</span><div class="h3">v4o · 단순 self-scoring</div></div>
-      <div class="sub" style="margin-bottom:14px">각 분석 에이전트가 <b>자기 결과를 스스로 채점</b> → 제3자 검증 부재, debate_log 형식만 존재</div>
-      <div class="mermaid" id="before">
+  <div class="wrap">
+    <!-- single architecture diagram -->
+    <div class="card glow reveal d2">
+      <div class="card-hd"><div class="h3"><span class="ic">🧬</span> 그래프 토폴로지</div><span class="badge">LangGraph 1.0</span></div>
+      <div class="mermaid" id="g">
 flowchart TD
   S([START]) --> O[프롬프트 옵티마이저]
   O --> Q[쿼리 플래너]
-  Q --> R[RAG 리트리버]
-  R --> P["병렬 분석<br/>역량 · 요약 · 품질<br/><i>각자 self-score</i>"]
-  P --> RT{"재시도 라우터<br/>자기 점수 기반"}
-  RT -->|retry_data| R
-  RT -->|retry_quality| RT
-  RT -->|final| F[최종 추천]
-  F --> A[리포트 조립]
-  A --> E([END])
-  classDef weak fill:#FFF1F2,stroke:#FDA4AF,color:#9F1239;
-  class P,RT weak;
-      </div>
-    </div>
-
-    <!-- AFTER -->
-    <div class="card glow reveal d3">
-      <div class="mtitle"><span class="badge solid">AFTER</span><div class="h3">v5 · 실제 적대적 디베이트</div></div>
-      <div class="sub" style="margin-bottom:14px">독립 <b>Critic 3종이 결과를 반박</b> → 실패 항목만 피드백 주입해 선택적 재실행 (최대 2라운드)</div>
-      <div class="mermaid" id="after">
-flowchart TD
-  S([START]) --> O[프롬프트 옵티마이저]
-  O --> Q[쿼리 플래너]
-  Q --> R[RAG 리트리버]
+  Q --> R[RAG 리트리버<br/>pgvector HNSW]
   R --> P["병렬 분석<br/>역량 · 요약 · 품질"]
-  P --> CC["증거 교차검증<br/>환각·약한근거 차단"]
-  CC --> D["적대적 디베이트<br/>Critic A·B·C 병렬 반박"]
+  P --> CC["증거 교차검증<br/>EID ↔ 로그 ↔ JD"]
+  CC --> D["적대적 디베이트<br/>Critic A · B · C"]
   D --> RT{"디베이트<br/>라우터"}
   RT -->|"데이터 부족"| R
-  RT -->|"품질 부족: 실패 분석만 재실행"| P
+  RT -->|"품질 부족 · 실패 분석만 재실행"| P
   RT -->|"통과 / 최대 2R"| F[최종 합의 추천]
   F --> A[리포트 조립]
   A --> E([END])
-  classDef new fill:#F5F3FF,stroke:#A78BFA,color:#5B21B6,stroke-width:2px;
-  classDef ok fill:#ECFEFF,stroke:#5EEAD4,color:#115E59;
-  class CC,D,RT new;
-  class P,F ok;
+  classDef verify fill:#F5F3FF,stroke:#A78BFA,color:#5B21B6,stroke-width:2px;
+  classDef core fill:#ECFEFF,stroke:#5EEAD4,color:#115E59;
+  class CC,D,RT verify;
+  class P,F core;
+      </div>
+      <div class="legend">
+        <span><i style="background:#ECFEFF;border:1px solid #5EEAD4"></i> 분석 · 합의</span>
+        <span><i style="background:#F5F3FF;border:2px solid #A78BFA"></i> 검증 단계</span>
       </div>
     </div>
-  </div>
 
-  <div class="legend reveal d4" style="justify-content:center;margin:18px 0 6px">
-    <span><i style="background:#F5F3FF;border:2px solid #A78BFA"></i> 신규 노드 (v5)</span>
-    <span><i style="background:#ECFEFF;border:1px solid #5EEAD4"></i> 기존 + 강화</span>
-    <span><i style="background:#FFF1F2;border:1px solid #FDA4AF"></i> 제거된 약점 (v4o)</span>
-  </div>
-
-  <!-- improvement points -->
-  <div class="card reveal d5" style="margin-top:18px">
-    <div class="card-hd"><div class="h3"><span class="ic">✨</span> 무엇이 달라졌나</div></div>
-    <div class="bento" style="grid-template-columns:repeat(2,1fr)">
-      <div class="pt new"><span>1</span><div><b>증거 교차검증 노드 신설</b><br><span class="sub">역량 근거(EID)가 실제 면접 로그·JD에 트레이스되는지 확인 → 환각·견강부회 근거 차단</span></div></div>
-      <div class="pt new"><span>2</span><div><b>적대적 Critic 3종 병렬</b><br><span class="sub">점수타당성 / 증거-발언일치 / 모순·환각 — 서로 다른 렌즈로 결과를 "반박" 시도</span></div></div>
-      <div class="pt new"><span>3</span><div><b>디베이트 라우터 + 선택적 재실행</b><br><span class="sub">실패한 분석만 골라 Critic 피드백을 주입해 재실행 (전체 재실행 대비 비용↓)</span></div></div>
-      <div class="pt"><span>4</span><div><b>무한 루프 방지 · 강제 통과</b><br><span class="sub">최대 2라운드 후 종료. 데이터 부족 시 재검색, 품질 부족 시 재분석으로 분기</span></div></div>
+    <!-- design points -->
+    <div class="col reveal d3">
+      <div class="pt v"><div class="ic">⚖️</div><div><b>적대적 디베이트 검증</b><p>독립 Critic 3종이 서로 다른 렌즈(점수 타당성 · 증거 일치 · 모순/환각)로 분석 결과를 반박해 품질을 판정한다.</p></div></div>
+      <div class="pt v"><div class="ic">🔗</div><div><b>증거 교차검증</b><p>역량 점수의 근거(EID)가 실제 면접 로그·JD에 트레이스되는지 확인해 환각·견강부회 근거를 차단한다.</p></div></div>
+      <div class="pt"><div class="ic">♻️</div><div><b>선택적 재실행 루프</b><p>검증에 실패한 분석만 Critic 피드백을 주입해 재실행한다. 전체 재실행 대비 비용을 줄이고 최대 2라운드로 종료를 보장한다.</p></div></div>
+      <div class="pt"><div class="ic">🧱</div><div><b>구조화 출력 강제</b><p>모든 노드 출력을 Pydantic 스키마로 파싱해 단계 간 계약을 보장하고, 최종 리포트(ReportOut)로 직렬화한다.</p></div></div>
     </div>
   </div>
 </div>
@@ -106,8 +78,7 @@ flowchart TD
     themeVariables: { fontFamily: 'Pretendard, sans-serif', fontSize: '14px',
       primaryColor: '#ECFEFF', primaryTextColor: '#115E59', primaryBorderColor: '#2DD4BF',
       lineColor: '#5E6F67', tertiaryColor: '#fff' }});
-  window.__diagramsReady = false;
-  mermaid.run().then(() => { window.__diagramsReady = true; });
+  mermaid.run();
 </script>
 </body>
 </html>
