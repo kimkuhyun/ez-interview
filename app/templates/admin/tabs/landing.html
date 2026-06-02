@@ -2,13 +2,13 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
 <style>
   .ezi-landing{
-    --t1:#14B8A6; --t2:#06B6D4; --t3:#0D9488; --deep:#115E59; --ink:#0E211B;
+    --t1:#8B5CF6; --t2:#22D3EE; --t3:#7C3AED; --deep:#2E1065; --ink:#0E211B;
     font-family:'Pretendard',system-ui,sans-serif; position:relative; min-height:78vh;
     border-radius:28px; overflow:hidden; display:flex; align-items:center; padding:64px;
     background:
       radial-gradient(900px 560px at 88% -10%, rgba(34,211,238,.30), transparent 60%),
-      radial-gradient(760px 600px at -5% 110%, rgba(20,184,166,.26), transparent 55%),
-      linear-gradient(135deg,#0E211B 0%, #0F3B36 55%, #115E59 100%);
+      radial-gradient(760px 600px at -5% 110%, rgba(139,92,246,.26), transparent 55%),
+      linear-gradient(135deg,#0E211B 0%, #1E1B4B 55%, #2E1065 100%);
     box-shadow:0 24px 60px -20px rgba(13,148,136,.5);
   }
   .ezi-landing .grid{position:absolute; inset:0; opacity:.5;
@@ -16,31 +16,31 @@
     background-size:48px 48px; mask-image:linear-gradient(120deg,transparent 35%,#000 100%);}
   .ezi-landing .inner{position:relative; z-index:2; max-width:760px; color:#fff;}
   .ezi-landing .eyebrow{display:inline-flex; align-items:center; gap:9px; font-size:14px; font-weight:800;
-    letter-spacing:.16em; color:#5EEAD4; background:rgba(94,234,212,.1); border:1px solid rgba(94,234,212,.25);
+    letter-spacing:.16em; color:#C4B5FD; background:rgba(34,211,238,.1); border:1px solid rgba(34,211,238,.25);
     padding:7px 15px; border-radius:999px;}
-  .ezi-landing .eyebrow .dot{width:8px;height:8px;border-radius:50%;background:#2DD4BF;box-shadow:0 0 10px #2DD4BF;}
+  .ezi-landing .eyebrow .dot{width:8px;height:8px;border-radius:50%;background:#A78BFA;box-shadow:0 0 10px #A78BFA;}
   .ezi-landing h1{font-size:68px; font-weight:900; letter-spacing:-.04em; line-height:1.04; margin:22px 0 0;}
-  .ezi-landing h1 .g{background:linear-gradient(100deg,#5EEAD4,#22D3EE 60%,#2DD4BF);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .ezi-landing h1 .g{background:linear-gradient(100deg,#C4B5FD,#22D3EE 60%,#A78BFA);-webkit-background-clip:text;background-clip:text;color:transparent;}
   .ezi-landing .sub{font-size:20px; color:rgba(255,255,255,.82); margin-top:18px; line-height:1.6;}
   .ezi-landing .chips{display:flex; gap:10px; flex-wrap:wrap; margin-top:26px;}
-  .ezi-landing .chip{font-size:13.5px; font-weight:700; color:#CFFAFE; background:rgba(255,255,255,.08);
+  .ezi-landing .chip{font-size:13.5px; font-weight:700; color:#C4B5FD; background:rgba(255,255,255,.08);
     border:1px solid rgba(255,255,255,.16); padding:8px 14px; border-radius:999px;}
   .ezi-landing .start-btn{margin-top:38px; cursor:pointer; font-family:inherit; font-weight:800; font-size:17px;
-    color:#08312C; border:0; padding:16px 32px; border-radius:15px;
-    background:linear-gradient(135deg,#2DD4BF,#14B8A6 55%,#06B6D4); box-shadow:0 14px 36px -8px rgba(20,184,166,.7);
+    color:#0B1120; border:0; padding:16px 32px; border-radius:15px;
+    background:linear-gradient(135deg,#A78BFA,#8B5CF6 55%,#22D3EE); box-shadow:0 14px 36px -8px rgba(139,92,246,.7);
     transition:.18s;}
   .ezi-landing .start-btn:hover{transform:translateY(-2px); box-shadow:0 20px 48px -10px rgba(6,182,212,.8);}
   .ezi-landing .stats{display:flex; gap:34px; margin-top:46px;}
   .ezi-landing .stats .s b{font-size:30px; font-weight:900; color:#fff; letter-spacing:-.03em;}
   .ezi-landing .stats .s span{display:block; font-size:13px; color:rgba(255,255,255,.6); margin-top:2px;}
   .ezi-landing .orb{position:absolute; right:-40px; top:50%; transform:translateY(-50%); width:520px; height:520px; z-index:1; opacity:.9;}
-  .ezi-landing .orb .ring{position:absolute; inset:0; border:1.5px dashed rgba(94,234,212,.3); border-radius:50%;}
+  .ezi-landing .orb .ring{position:absolute; inset:0; border:1.5px dashed rgba(34,211,238,.3); border-radius:50%;}
   .ezi-landing .orb .ring.b{inset:80px;} .ezi-landing .orb .ring.c{inset:165px;}
   .ezi-landing .orb .core{position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); width:130px;height:130px;
-    border-radius:30px; background:linear-gradient(135deg,#2DD4BF,#0D9488); display:grid; place-items:center; font-size:58px;
-    box-shadow:0 0 0 1px rgba(94,234,212,.3), 0 18px 50px -10px rgba(6,182,212,.7);}
+    border-radius:30px; background:linear-gradient(135deg,#A78BFA,#7C3AED); display:grid; place-items:center; font-size:58px;
+    box-shadow:0 0 0 1px rgba(34,211,238,.3), 0 18px 50px -10px rgba(6,182,212,.7);}
   .ezi-landing .orb .p{position:absolute; padding:8px 13px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2);
-    border-radius:11px; font-size:13px; font-weight:700; color:#CFFAFE; backdrop-filter:blur(6px);}
+    border-radius:11px; font-size:13px; font-weight:700; color:#C4B5FD; backdrop-filter:blur(6px);}
   @keyframes ezfade{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
   .ezi-landing .inner>*{animation:ezfade .6s cubic-bezier(.2,.8,.2,1) both;}
   .ezi-landing .inner>*:nth-child(2){animation-delay:.08s} .ezi-landing .inner>*:nth-child(3){animation-delay:.16s}

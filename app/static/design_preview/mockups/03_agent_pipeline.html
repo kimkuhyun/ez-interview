@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EZ Interview · 평가 파이프라인</title>
-<link rel="stylesheet" href="../assets/ezi-theme.css">
+<link rel="stylesheet" href="../assets/ezi-dark.css">
 <style>
   .top-grid { display:grid; grid-template-columns: 1.25fr 1fr; gap:18px; align-items:start; }
   .flow { display:flex; flex-direction:column; gap:0; position:relative; }
@@ -17,11 +17,11 @@
   .node .body { flex:1; } .node .body b { font-size:14px; } .node .body .d { font-size:12px;color:var(--muted); }
   .node .st { font-size:11px;font-weight:800;padding:3px 9px;border-radius:var(--pill); }
   .node.done { border-color:var(--green-200); background:var(--green-50); }
-  .node.done .num { background:var(--grad-green);color:#fff; } .node.done .st { color:var(--green-700);background:#fff; }
+  .node.done .num { background:var(--grad-green);color:#fff; } .node.done .st { color:var(--green-700);background:#0E1530; }
   .node.active { border-color:var(--violet); box-shadow:0 0 0 1px rgba(139,92,246,.3), 0 12px 30px -8px rgba(139,92,246,.4); }
   .node.active .num { background:linear-gradient(135deg,#A78BFA,#7C3AED);color:#fff; } .node.active .st { color:#fff;background:var(--violet); }
   .node.wait .st { color:var(--faint);background:var(--surface-soft); }
-  .node.newbadge::after { content:"NEW"; position:absolute; top:-9px; right:12px; font-size:9px;font-weight:800;letter-spacing:.05em; color:#fff;background:var(--violet);padding:2px 7px;border-radius:var(--pill);box-shadow:var(--sh-sm); }
+  /* 검증 단계 노드: 보라 액센트 강조 (배지 없음) */
   .fan { display:flex; gap:8px; margin-left:40px; }
   .fan .chip { flex:1; background:var(--green-50); border:1px solid var(--green-100); border-radius:11px; padding:9px 11px; font-size:12px; font-weight:700; color:var(--green-700); text-align:center; }
   .loopnote { margin-left:40px; font-size:11.5px; color:var(--violet); font-weight:700; display:flex; align-items:center; gap:6px; padding:3px 0; }
@@ -29,7 +29,7 @@
   .critic .ch { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
   .critic .ch b { font-size:13px; } .critic .refute { font-size:12px; color:var(--ink-2); line-height:1.5; }
   .critic.pass { background:var(--green-50); border-color:var(--green-200); }
-  .critic.fail { background:#FFFBEB; border-color:#FDE68A; }
+  .critic.fail { background:#2A2310; border-color:#5A4A1A; }
 </style>
 </head>
 <body>
