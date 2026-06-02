@@ -169,6 +169,7 @@ async def node_parallel_analysis_v5(state: ReportStateV5) -> Dict[str, Any]:
             "comp_out": comp_out,
             "summary_out": _empty_summary(),
             "quality_out": _empty_quality(),
+            "retry_targets": [],   # 인터뷰 없음: 재실행 대상 없음(빈 결과 반복 방지)
         }
 
     if not is_retry or "competency" in retry_targets:
@@ -272,6 +273,13 @@ async def node_debate_critic(state: ReportStateV5) -> Dict[str, Any]:
     quality = state.get("quality_out")
     crosscheck = state.get("crosscheck_out")
 
+    # 인터뷰 로그가 없으면 적대적 디베이트는 의미가 없음 → 통과 처리
+    # (빈 요약/품질로 Critic 호출·재실행 라운드를 낭비하지 않음)
+    interview = state.get("interview_ctx") or state.get("interview_logs") or ""
+    if not (interview and interview.strip()):
+        print("[디베이트] 인터뷰 로그 없음 → 검증 생략, 통과 처리")
+        return {"debate_out": DebateOut(verdicts=[], avg_quality=0.0, passed=True)}
+
     payload = {
         "comp": comp.model_dump_json() if comp else "{}",
         "summary": summary.model_dump_json() if summary else "{}",
@@ -314,7 +322,7 @@ def node_debate_router(state: ReportStateV5) -> Dict[str, Any]:
         tgt = target_map.get(v.target, v.target)
         if tgt not in targets:
             targets.append(tgt)
-        feedbacks.setdefault(tgt, []).extend(v.suggestions or [v.refutation])
+        feedbacks.setdefault(tgt, []).extend(v.suggestions or ([v.refutation] if v.refutation else []))
 
     # 교차검증의 약한근거/환각도 역량 재실행 피드백에 합류
     if crosscheck and (crosscheck.weak_links or crosscheck.hallucination_flags):
@@ -327,7 +335,20 @@ def node_debate_router(state: ReportStateV5) -> Dict[str, Any]:
             targets.append("competency")
 
     print(f"[라우터] 재실행 대상: {targets} (round {rnd + 1}/{MAX_DEBATE_ROUNDS})")
-    return {"retry_targets": targets, "retry_feedbacks": feedbacks, "debate_round": rnd + 1}
+    updates: Dict[str, Any] = {"retry_targets": targets, "retry_feedbacks": feedbacks, "debate_round": rnd + 1}
+
+    # 데이터 부족(환각 다수)으로 재검색하는 경우, 동일 쿼리 반복을 막기 위해 검색 질의를 강화
+    if crosscheck and len(crosscheck.hallucination_flags) >= 3:
+        qp = state.get("query_plan")
+        if qp is not None:
+            axes_hint = ", ".join(state.get("axes", [])[:3])
+            boost = f"; 구체적 사례, 프로젝트 경험, 성과, {axes_hint}"
+            updates["query_plan"] = qp.model_copy(update={
+                "resume_query": (qp.resume_query or "") + boost,
+                "competency_query": (qp.competency_query or "") + boost,
+                "portfolio_query": ((qp.portfolio_query or "") + boost) if state.get("has_portfolio") else (qp.portfolio_query or ""),
+            })
+    return updates
 
 
 def route_after_debate(state: ReportStateV5) -> str:
