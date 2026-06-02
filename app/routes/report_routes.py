@@ -16,7 +16,8 @@ except Exception:  # pragma: no cover - 런타임 환경에 따라 없을 수 �
     sync_playwright = None
 
 # report_agent에서 create_report, create_report_async 가져오기
-from app.agents.report_agent_v4o import create_report, create_report_async
+# v5: 적대적 디베이트 그래프(증거 교차검증 + Critic 3종 + 선택적 재실행) 적용
+from app.agents.report_agent_v5 import create_report, create_report_async
 
 """
 리포트 생성/검증 HTTP 라우트. LangGraph 기반 report_agent와 연동

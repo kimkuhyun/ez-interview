@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EZ Interview · 평가 파이프라인</title>
+<link rel="stylesheet" href="../assets/ezi-theme.css">
+<style>
+  .top-grid { display:grid; grid-template-columns: 1.25fr 1fr; gap:18px; align-items:start; }
+  .flow { display:flex; flex-direction:column; gap:0; position:relative; }
+  .step { display:flex; align-items:center; gap:14px; padding:6px 0; }
+  .step .node { flex:1; }
+  .step .conn { width:30px; text-align:center; color:var(--green-400); font-weight:800; }
+  .vline { width:2px; height:14px; background:var(--green-200); margin-left:18px; }
+  .node { border-radius:14px; padding:13px 16px; background:var(--surface); border:1.5px solid var(--line); box-shadow:var(--sh-sm); display:flex; align-items:center; gap:12px; position:relative; transition:.2s; }
+  .node .num { width:26px;height:26px;border-radius:8px;background:var(--surface-soft);color:var(--muted);display:grid;place-items:center;font-weight:800;font-size:12px;flex:none; }
+  .node .body { flex:1; } .node .body b { font-size:14px; } .node .body .d { font-size:12px;color:var(--muted); }
+  .node .st { font-size:11px;font-weight:800;padding:3px 9px;border-radius:var(--pill); }
+  .node.done { border-color:var(--green-200); background:var(--green-50); }
+  .node.done .num { background:var(--grad-green);color:#fff; } .node.done .st { color:var(--green-700);background:#fff; }
+  .node.active { border-color:var(--violet); box-shadow:0 0 0 1px rgba(139,92,246,.3), 0 12px 30px -8px rgba(139,92,246,.4); }
+  .node.active .num { background:linear-gradient(135deg,#A78BFA,#7C3AED);color:#fff; } .node.active .st { color:#fff;background:var(--violet); }
+  .node.wait .st { color:var(--faint);background:var(--surface-soft); }
+  .node.newbadge::after { content:"NEW"; position:absolute; top:-9px; right:12px; font-size:9px;font-weight:800;letter-spacing:.05em; color:#fff;background:var(--violet);padding:2px 7px;border-radius:var(--pill);box-shadow:var(--sh-sm); }
+  .fan { display:flex; gap:8px; margin-left:40px; }
+  .fan .chip { flex:1; background:var(--green-50); border:1px solid var(--green-100); border-radius:11px; padding:9px 11px; font-size:12px; font-weight:700; color:var(--green-700); text-align:center; }
+  .loopnote { margin-left:40px; font-size:11.5px; color:var(--violet); font-weight:700; display:flex; align-items:center; gap:6px; padding:3px 0; }
+  .critic { border-radius:13px; padding:12px 13px; margin-bottom:10px; border:1px solid var(--line); }
+  .critic .ch { display:flex; align-items:center; justify-content:space-between; margin-bottom:7px; }
+  .critic .ch b { font-size:13px; } .critic .refute { font-size:12px; color:var(--ink-2); line-height:1.5; }
+  .critic.pass { background:var(--green-50); border-color:var(--green-200); }
+  .critic.fail { background:#FFFBEB; border-color:#FDE68A; }
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="topbar reveal">
+    <div class="brand"><div class="logo">🌿</div><div class="name">EZ <b>Interview</b></div></div>
+    <span class="badge violet" style="margin-left:6px"><span class="dot pulse" style="background:var(--violet)"></span> 멀티에이전트 평가 생성 중</span>
+    <div class="grow"></div>
+    <span class="sub">김하늘 · AI 엔지니어</span>
+    <span class="badge solid">재검증 라운드 1/2</span>
+  </div>
+
+  <div class="row between reveal d1" style="margin:24px 4px 18px">
+    <div>
+      <div class="eyebrow">LANGGRAPH · MULTI-AGENT</div>
+      <div class="h1" style="margin-top:7px">평가 <span class="gtext">파이프라인</span> 실행</div>
+      <div class="sub" style="margin-top:5px">9개 노드 · 적대적 디베이트 검증 + 증거 교차검증 + 선택적 재실행 루프</div>
+    </div>
+    <div class="row">
+      <div class="kpi-chip"><b>6/9</b><span>완료 노드</span></div>
+      <div class="kpi-chip"><b>0.91</b><span>평균 검증 품질</span></div>
+      <div class="kpi-chip"><b>34s</b><span>경과</span></div>
+    </div>
+  </div>
+
+  <div class="top-grid">
+    <!-- PIPELINE GRAPH -->
+    <div class="card reveal d2">
+      <div class="card-hd"><div class="h3"><span class="ic">🧬</span> 그래프 토폴로지</div><span class="badge">LangGraph 1.0</span></div>
+      <div class="flow">
+        <div class="node done"><div class="num">1</div><div class="body"><b>프롬프트 옵티마이저</b><div class="d">평가 관점·포커스 추출 · Solar Pro2</div></div><span class="st">✓ 완료</span></div>
+        <div class="vline"></div>
+        <div class="node done"><div class="num">2</div><div class="body"><b>쿼리 플래너</b><div class="d">이력서/JD/포폴/인터뷰 검색 질의 설계</div></div><span class="st">✓ 완료</span></div>
+        <div class="vline"></div>
+        <div class="node done"><div class="num">3</div><div class="body"><b>RAG 리트리버</b><div class="d">pgvector HNSW · 4개 문서 컨텍스트</div></div><span class="st">✓ 완료</span></div>
+        <div class="vline"></div>
+        <div class="node done"><div class="num">4</div><div class="body"><b>병렬 분석 (3 에이전트)</b><div class="d">역량 · 요약 · 품질 동시 실행</div></div><span class="st">✓ 완료</span></div>
+        <div class="fan">
+          <div class="chip">역량 분석</div><div class="chip">면접 요약</div><div class="chip">품질 평가</div>
+        </div>
+        <div class="vline"></div>
+        <div class="node done newbadge"><div class="num">5</div><div class="body"><b>증거 교차검증</b><div class="d">EID ↔ 면접로그 ↔ JD 매핑 · 환각 차단</div></div><span class="st">✓ 완료</span></div>
+        <div class="vline"></div>
+        <div class="node active newbadge"><div class="num">6</div><div class="body"><b>적대적 디베이트 검증</b><div class="d">3 Critic 에이전트가 분석 결과 반박 시도</div></div><span class="st">● 실행 중</span></div>
+        <div class="vline"></div>
+        <div class="node wait newbadge"><div class="num">7</div><div class="body"><b>디베이트 라우터</b><div class="d">검증 실패 항목만 선택적 재실행 결정</div></div><span class="st">대기</span></div>
+        <div class="loopnote">↻ 품질 부족 시 → 노드 4 선택적 재실행 (최대 2회) · 데이터 부족 시 → 노드 3 재검색</div>
+        <div class="vline"></div>
+        <div class="node wait"><div class="num">8</div><div class="body"><b>최종 합의 추천</b><div class="d">검증된 출력으로 채용 판정 · GPT-5.1</div></div><span class="st">대기</span></div>
+        <div class="vline"></div>
+        <div class="node wait"><div class="num">9</div><div class="body"><b>리포트 조립</b><div class="d">ReportOut 스키마 직렬화</div></div><span class="st">대기</span></div>
+      </div>
+    </div>
+
+    <!-- DEBATE PANEL -->
+    <div class="col">
+      <div class="card glow reveal d3">
+        <div class="card-hd"><div class="h3"><span class="ic" style="color:var(--violet)">⚖️</span> 적대적 디베이트 검증</div><span class="badge violet">3 Critics</span></div>
+        <div class="critic pass">
+          <div class="ch"><b>Critic A · 역량 점수 타당성</b><span class="badge">통과 0.93</span></div>
+          <div class="refute">"점수 간 편차 18점 이상 확보, 각 점수가 근거 EID로 뒷받침됨. 반박 실패 → 유효."</div>
+        </div>
+        <div class="critic fail">
+          <div class="ch"><b>Critic B · 증거-발언 일치</b><span class="badge amber">개선 0.66</span></div>
+          <div class="refute">"E04(커뮤니케이션) 근거가 실제 면접 발언과 약하게 연결됨. <b>재실행 권고:</b> 로그 인용 강화."</div>
+        </div>
+        <div class="critic pass">
+          <div class="ch"><b>Critic C · 모순·환각 탐지</b><span class="badge">통과 0.89</span></div>
+          <div class="refute">"답변 간 모순 없음, 리포트 주장 모두 컨텍스트 내 근거 존재. 환각 미탐지."</div>
+        </div>
+        <div class="divider"></div>
+        <div class="row between"><span class="sub">라우터 판정</span><span class="badge violet">역량 분석만 재실행 →</span></div>
+      </div>
+
+      <div class="card grad reveal d4">
+        <div class="card-hd"><div class="h3"><span class="ic">📈</span> 라운드별 품질 추이</div></div>
+        <div class="row" style="align-items:flex-end;gap:14px;height:90px;padding:0 6px">
+          <div class="col center" style="flex:1;gap:6px"><div class="bar" style="width:38px;height:64px;border-radius:8px;display:flex;align-items:flex-end"><span style="height:74%;width:100%"></span></div><span class="sub">초기</span></div>
+          <div class="col center" style="flex:1;gap:6px"><div class="bar" style="width:38px;height:64px;border-radius:8px;display:flex;align-items:flex-end"><span style="height:91%;width:100%"></span></div><span class="sub" style="color:var(--green-700);font-weight:700">재검증</span></div>
+          <div class="col center" style="flex:1;gap:6px;opacity:.4"><div class="bar" style="width:38px;height:64px;border-radius:8px;display:flex;align-items:flex-end"><span style="height:30%;width:100%"></span></div><span class="sub">목표</span></div>
+        </div>
+        <div class="row between" style="margin-top:6px"><span class="sub">검증 통과 임계값</span><b>≥ 0.75</b></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TERMINAL LOG -->
+  <div class="card reveal d5" style="margin-top:18px;padding:18px">
+    <div class="card-hd"><div class="h3"><span class="ic">🖥️</span> 에이전트 실행 로그</div><span class="badge"><span class="dot pulse"></span> 스트리밍</span></div>
+    <div class="term">
+      <div class="ln" style="animation-delay:.0s"><span class="t">00:00.4</span><span class="tag">[옵티마이저]</span> 평가 관점 추출 → "실무 RAG 역량 + 트러블슈팅 깊이" 포커스</div>
+      <div class="ln" style="animation-delay:.1s"><span class="t">00:03.1</span><span class="tag">[쿼리플래너]</span> 4개 질의 생성 (resume/jd/portfolio/interview)</div>
+      <div class="ln" style="animation-delay:.2s"><span class="t">00:06.8</span><span class="tag">[리트리버]</span> pgvector HNSW 검색 → 이력서 3.2k · JD 1.4k · 인터뷰 5.1k자</div>
+      <div class="ln" style="animation-delay:.3s"><span class="t">00:09.0</span><span class="tag">[병렬분석]</span> <span class="muted">역량·요약·품질 3개 에이전트 동시 실행…</span></div>
+      <div class="ln" style="animation-delay:.4s"><span class="t">00:21.5</span><span class="tag">[병렬분석]</span> <span class="ok">✓ 3개 완료</span> · 역량 5축 점수 산출 (88·92·79·74·85)</div>
+      <div class="ln" style="animation-delay:.5s"><span class="t">00:24.2</span><span class="tag" style="color:#C4B5FD">[증거교차검증]</span> EID 6건 ↔ 면접로그 매핑 · <span class="ok">환각 0건</span> · E04 연결강도 약함 ⚠</div>
+      <div class="ln" style="animation-delay:.6s"><span class="t">00:27.9</span><span class="tag" style="color:#C4B5FD">[디베이트]</span> Critic A/B/C 적대적 검증 시작 (반박 모드)</div>
+      <div class="ln" style="animation-delay:.7s"><span class="t">00:31.0</span><span class="tag" style="color:#C4B5FD">[디베이트]</span> Critic A <span class="ok">통과 0.93</span> · Critic C <span class="ok">통과 0.89</span></div>
+      <div class="ln" style="animation-delay:.8s"><span class="t">00:33.4</span><span class="tag" style="color:#C4B5FD">[디베이트]</span> <span class="warn">⚠ Critic B 0.66 → 역량분석 재실행 권고 (증거 인용 강화)</span></div>
+      <div class="ln" style="animation-delay:.9s"><span class="t">00:34.1</span><span class="tag" style="color:#C4B5FD">[라우터]</span> <span class="muted">retry_targets=[competency] · round 1/2 → 노드4 선택적 재실행…</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
