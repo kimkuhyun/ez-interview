@@ -179,6 +179,10 @@ logs/
 temp/
 tmp/
 
+# Runtime uploads (keep folder structure via .gitkeep, ignore actual uploads)
+uploads/jds/*
+!uploads/jds/.gitkeep
+
 # Data files (if you have large datasets)
 data/
 datasets/
