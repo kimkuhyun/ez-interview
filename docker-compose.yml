@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: ez-interview-pg
+    environment:
+      POSTGRES_USER: ${DB_USER:-eziuser}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ezipass}
+      POSTGRES_DB: ${DB_NAME:-ezinterview}
+    ports:
+      - "${DB_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # 첫 기동 시에만 자동 실행 — 파일명 알파벳순으로 적용
+      - ./app/db/migrations:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-eziuser} -d ${DB_NAME:-ezinterview}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  pgdata:

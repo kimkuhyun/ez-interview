@@ -71,29 +71,14 @@ COMMENT ON INDEX rag.interview_logs_session_role_idx IS
 -- ==========================================
 -- 인덱스 생성 확인
 -- ==========================================
--- 생성된 인덱스 목록 확인
-SELECT 
-    schemaname AS 스키마,
-    tablename AS 테이블,
-    indexname AS 인덱스명,
-    indexdef AS 인덱스정의
+-- 생성된 인덱스 목록 확인 (PG 18 부터 컬럼명이 relname 으로 변경됨)
+SELECT
+    schemaname AS schema_name,
+    indexname  AS index_name,
+    indexdef   AS index_def
 FROM pg_indexes
-WHERE tablename = 'interview_logs'
-  AND schemaname = 'rag'
+WHERE schemaname = 'rag' AND indexname LIKE 'interview_logs%'
 ORDER BY indexname;
-
--- ==========================================
--- 인덱스 크기 확인
--- ==========================================
--- 각 인덱스가 차지하는 디스크 용량 확인
-SELECT 
-    schemaname || '.' || tablename AS 테이블,
-    indexname AS 인덱스명,
-    pg_size_pretty(pg_relation_size(indexrelid)) AS 인덱스크기
-FROM pg_stat_user_indexes
-WHERE schemaname = 'rag' 
-  AND tablename = 'interview_logs'
-ORDER BY pg_relation_size(indexrelid) DESC;
 
 -- ==========================================
 -- 예상 효과 요약:
