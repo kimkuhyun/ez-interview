@@ -63,24 +63,39 @@ flowchart TD
 
 ---
 
-## 🚀 빠른 시작
+## 🚀 빠른 시작 (4단계, 5분)
 
 ```bash
-# 1) 의존성
+# 1) 환경변수
+cp .env.example .env          # OPENAI_API_KEY 만 채우면 끝 (DB 값은 기본 그대로 OK)
+
+# 2) Postgres + pgvector (자동 스키마/인덱스 적용)
+docker compose up -d          # 5433 포트 · app/db/migrations/* 가 첫 기동시 자동 실행
+
+# 3) 파이썬 의존성
 pip install -r requirements.txt
 
-# 2) DB · 시크릿 (.env)
-#   OPENAI_API_KEY · ANTHROPIC_API_KEY · VITO_CLIENT_ID/SECRET
-#   POSTGRES_*  (pgvector 확장 활성화)
-
-# 3) 인덱스 생성
-psql -U postgres -d ezinterview -f app/db/migrations/create_interview_indexes.sql
-
 # 4) 실행
-python -m app.main   # http://127.0.0.1:5000
+python -m app.main            # http://127.0.0.1:5000
 ```
 
-도커로 띄울 땐 루트 `Dockerfile` 사용.
+### 샘플 데이터로 즉시 확인
+
+`samples/` 에 공개 라이선스 이력서·JD 가 있어 별도 데이터 준비 없이 흐름을 검증할 수 있습니다.
+
+```bash
+# 후보자 등록 (이력서 업로드)
+curl -X POST http://127.0.0.1:5000/api/candidates/upload \
+  -F "file=@samples/Richard Hendriks_이력서.pdf" \
+  -F "position=Backend Engineer"
+
+# 채용 공고 등록
+curl -X POST http://127.0.0.1:5000/api/positions \
+  -F "file=@samples/Sample_BackendEngineer_JD.pdf" \
+  -F "name=Acme Tech Backend (Sample)"
+```
+
+샘플 출처·라이선스는 [`samples/README.md`](samples/README.md) 참조.
 
 ---
 
