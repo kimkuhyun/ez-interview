@@ -1,17 +1,58 @@
-<!-- 랜딩 페이지 -->
-<div class="landing-option1">
-    <div class="landing-bg-image"></div>
-    <div class="landing-content fade-in">
-        <h1 class="main-title">EZ-Interview</h1>
-        <p class="main-subtitle">Multi-Agent를 활용한 면접 보조 솔루션</p>
-        <button class="start-btn">시작하기</button>
+<!-- 랜딩 페이지 (EZ-Interview · 차분한 전문가 톤) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css">
+<style>
+  .ezi-landing{
+    --accent:#46538C; --accent-2:#5A67A0; --ink:#1C2430; --muted:#6E7785; --line:#E5E8EC;
+    font-family:'Pretendard',system-ui,sans-serif; position:relative; min-height:74vh;
+    border:1px solid var(--line); border-radius:16px; background:#fff; overflow:hidden;
+    display:flex; align-items:center; padding:64px; box-shadow:0 1px 3px rgba(20,30,50,.05);
+  }
+  .ezi-landing .panel{position:absolute; right:0; top:0; bottom:0; width:42%; background:#F7F8FA; border-left:1px solid var(--line);}
+  .ezi-landing .panel .flow{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:80%;}
+  .ezi-landing .nodeline{display:flex; align-items:center; gap:10px; padding:11px 14px; background:#fff; border:1px solid var(--line); border-radius:10px; margin-bottom:10px; font-size:13.5px; color:var(--ink); font-weight:600;}
+  .ezi-landing .nodeline .n{width:22px;height:22px;border-radius:6px;background:#EEF0F6;color:var(--accent);display:grid;place-items:center;font-size:11px;font-weight:800;flex:none;}
+  .ezi-landing .nodeline.k{border-color:#DCE1EE;background:#F4F6FB;}
+  .ezi-landing .inner{position:relative; z-index:2; max-width:54%;}
+  .ezi-landing .eyebrow{display:inline-block; font-size:12px; font-weight:700; letter-spacing:.1em; color:var(--accent); background:#EEF0F6; border:1px solid #DCE1EE; padding:6px 13px; border-radius:999px;}
+  .ezi-landing h1{font-size:46px; font-weight:800; letter-spacing:-.03em; line-height:1.18; margin:20px 0 0; color:var(--ink);}
+  .ezi-landing h1 b{color:var(--accent);}
+  .ezi-landing .sub{font-size:17px; color:var(--muted); margin-top:16px; line-height:1.6;}
+  .ezi-landing .chips{display:flex; gap:8px; flex-wrap:wrap; margin-top:22px;}
+  .ezi-landing .chip{font-size:13px; font-weight:600; color:#434C5A; background:#F7F8FA; border:1px solid var(--line); padding:7px 13px; border-radius:8px;}
+  .ezi-landing .start-btn{margin-top:30px; cursor:pointer; font-family:inherit; font-weight:700; font-size:15px; color:#fff; background:var(--accent); border:0; padding:13px 26px; border-radius:10px;}
+  .ezi-landing .start-btn:hover{background:#353F6E;}
+  .ezi-landing .stats{display:flex; gap:30px; margin-top:34px;}
+  .ezi-landing .stats .s b{font-size:24px; font-weight:800; color:var(--ink); letter-spacing:-.02em;}
+  .ezi-landing .stats .s span{display:block; font-size:12.5px; color:var(--muted); margin-top:2px;}
+</style>
+<div class="ezi-landing">
+  <div class="panel"><div class="flow">
+    <div class="nodeline"><span class="n">1</span> RAG 검색 · 질문 생성</div>
+    <div class="nodeline"><span class="n">2</span> 실시간 STT 후속질문</div>
+    <div class="nodeline k"><span class="n">3</span> 멀티에이전트 평가</div>
+    <div class="nodeline k"><span class="n">4</span> 적대적 디베이트 검증</div>
+    <div class="nodeline"><span class="n">5</span> 근거 기반 평가 리포트</div>
+  </div></div>
+  <div class="inner">
+    <span class="eyebrow">MULTI-AGENT INTERVIEW ASSISTANT</span>
+    <h1>면접을 <b>근거 있는 평가</b>로<br>바꾸는 AI 면접 보조 시스템</h1>
+    <p class="sub">실시간 음성 면접부터 멀티에이전트 평가 리포트까지 —<br>모든 점수를 면접 발언 근거(Evidence)로 추적합니다.</p>
+    <div class="chips">
+      <span class="chip">실시간 STT 후속질문</span>
+      <span class="chip">LangGraph 멀티에이전트</span>
+      <span class="chip">적대적 디베이트 검증</span>
+      <span class="chip">pgvector RAG</span>
     </div>
+    <button class="start-btn">시작하기</button>
+    <div class="stats">
+      <div class="s"><b>9</b><span>LangGraph 노드</span></div>
+      <div class="s"><b>3</b><span>적대적 Critic</span></div>
+      <div class="s"><b>5축</b><span>핵심역량 평가</span></div>
+    </div>
+  </div>
 </div>
-
 <script>
-document.querySelector('.start-btn').addEventListener('click', function() {
-    if (window.loadTab) {
-        window.loadTab('candidates');
-    }
+document.querySelector('.ezi-landing .start-btn').addEventListener('click', function () {
+    if (window.loadTab) { window.loadTab('candidates'); }
 });
 </script>

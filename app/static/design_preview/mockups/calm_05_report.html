@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>평가 리포트 · 이서연</title>
+<link rel="stylesheet" href="../assets/ezi-calm.css">
+<style>
+  .report{max-width:1000px;margin:0 auto;}
+  .head{display:flex;justify-content:space-between;align-items:flex-start;padding:22px 24px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);box-shadow:var(--sh-sm);}
+  .head .name{font-size:23px;font-weight:800;letter-spacing:-.02em;} .head .name span{font-size:14px;font-weight:500;color:var(--muted);}
+  .head .meta{font-size:13px;color:var(--muted);margin-top:8px;} .head .meta .badge{margin-right:5px;}
+  .verdict{text-align:center;min-width:150px;border-left:1px solid var(--line);padding-left:22px;}
+  .verdict .v{font-size:24px;font-weight:800;color:var(--pos);} .verdict .score{font-size:30px;font-weight:800;letter-spacing:-.03em;margin-top:4px;} .verdict .score small{font-size:14px;color:var(--muted);font-weight:600;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start;}
+  .q{text-align:center;} .q .ql{font-size:13px;color:var(--muted);font-weight:600;} .q .qv{font-size:26px;font-weight:800;letter-spacing:-.03em;margin-top:6px;} .q .qd{font-size:12px;color:var(--faint);margin-top:4px;}
+  .comp{padding:13px 0;border-top:1px solid var(--line-soft);} .comp:first-child{border-top:0;}
+  .comp .ch{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:7px;} .comp .ch b{font-size:14px;} .comp .ch .sc{font-size:16px;font-weight:800;color:var(--accent);}
+  .comp .cm{font-size:12px;color:var(--muted);line-height:1.5;margin-top:7px;}
+  .eid{font-size:11px;font-weight:600;color:var(--accent-700);background:var(--accent-50);border:1px solid var(--accent-100);padding:1px 6px;border-radius:5px;}
+  text{font-family:'Pretendard',sans-serif;}
+</style>
+</head>
+<body>
+<div class="shell report">
+  <div class="row between" style="margin-bottom:16px">
+    <div class="brand"><div class="logo">EZ</div><div class="name">EZ <b>Interview</b> · 평가 리포트</div></div>
+    <div class="row"><a class="btn sm" href="#">PDF 내보내기</a><a class="btn sm" href="#">공유</a></div>
+  </div>
+
+  <div class="head">
+    <div>
+      <div class="name">이서연 <span>· 27세 · 컴퓨터공학</span></div>
+      <div class="meta"><span class="badge">AI 엔지니어</span><span class="badge">2026.06.01 면접</span><span class="badge">session #A1F9</span></div>
+      <div class="sub" style="margin-top:12px;max-width:560px;line-height:1.55">RAG 전 구간을 근거 기반으로 설계·운영하고 장애를 정량적으로 해결하는, 신입 수준을 상회하는 실전형 후보.</div>
+    </div>
+    <div class="verdict"><div class="sub" style="font-size:12px">최종 판정</div><div class="v">추천</div><div class="score">89<small>/100</small></div></div>
+  </div>
+
+  <div class="grid3" style="margin:16px 0">
+    <div class="card q"><div class="ql">모순도 <span style="color:var(--faint)">(낮을수록↑)</span></div><div class="qv" style="color:var(--pos)">12</div><div class="qd">답변 전반 일관됨</div></div>
+    <div class="card q"><div class="ql">대화 깊이</div><div class="qv">91</div><div class="qd">꼬리질문마다 트레이드오프까지</div></div>
+    <div class="card q"><div class="ql">신뢰도</div><div class="qv">90</div><div class="qd">정량 지표·실패경험 구체적</div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card">
+      <div class="card-hd"><div class="h3">핵심역량 5축</div><span class="badge accent">평균 90</span></div>
+      <svg viewBox="-30 0 360 300" width="100%" height="290">
+        <polygon points="150,40 254.6,116 214.7,239 85.3,239 45.4,116" fill="none" stroke="#E5E8EC" stroke-width="1"/>
+        <polygon points="150,95 202.3,133 184.8,194.5 115.2,194.5 97.7,133" fill="none" stroke="#EEF0F3" stroke-width="1"/>
+        <line x1="150" y1="150" x2="150" y2="40" stroke="#EEF0F3"/><line x1="150" y1="150" x2="254.6" y2="116" stroke="#EEF0F3"/>
+        <line x1="150" y1="150" x2="214.7" y2="239" stroke="#EEF0F3"/><line x1="150" y1="150" x2="85.3" y2="239" stroke="#EEF0F3"/><line x1="150" y1="150" x2="45.4" y2="116" stroke="#EEF0F3"/>
+        <polygon points="150,48.8 248.3,118.1 205.6,226.5 93.1,228.3 55.9,119.4" fill="rgba(70,83,140,.14)" stroke="#46538C" stroke-width="2"/>
+        <circle cx="150" cy="48.8" r="3.5" fill="#46538C"/><circle cx="248.3" cy="118.1" r="3.5" fill="#46538C"/><circle cx="205.6" cy="226.5" r="3.5" fill="#46538C"/><circle cx="93.1" cy="228.3" r="3.5" fill="#46538C"/><circle cx="55.9" cy="119.4" r="3.5" fill="#46538C"/>
+        <text x="150" y="28" text-anchor="middle" font-size="12" font-weight="700" fill="#1C2430">문제해결 92</text>
+        <text x="285" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#1C2430">AI·LLM 94</text>
+        <text x="248" y="262" text-anchor="middle" font-size="12" font-weight="700" fill="#1C2430">데이터 86</text>
+        <text x="52" y="262" text-anchor="middle" font-size="12" font-weight="700" fill="#1C2430">협업 88</text>
+        <text x="15" y="112" text-anchor="middle" font-size="12" font-weight="700" fill="#1C2430">학습 90</text>
+      </svg>
+    </div>
+    <div class="card">
+      <div class="card-hd"><div class="h3">역량별 평가</div></div>
+      <div class="comp"><div class="ch"><b>AI·LLM 전문성</b><span class="sc">94</span></div><div class="bar"><span style="width:94%"></span></div><div class="cm">RAG 전 구간을 근거와 함께 설명. 인용 강제의 허점을 스스로 인지해 NLI로 보완. <span class="eid">E02</span> <span class="eid">E03</span></div></div>
+      <div class="comp"><div class="ch"><b>문제해결력</b><span class="sc">92</span></div><div class="bar"><span style="width:92%"></span></div><div class="cm">응답 지연 장애를 검색 단계로 좁히고 정량 측정으로 해결. <span class="eid">E05</span> <span class="eid">E01</span></div></div>
+      <div class="comp"><div class="ch"><b>학습·성장 의지</b><span class="sc">90</span></div><div class="bar"><span style="width:90%"></span></div><div class="cm">최소구현→개념보강→데모실험으로 내재화하는 메타인지. <span class="eid">E08</span> <span class="eid">E09</span></div></div>
+      <div class="comp"><div class="ch"><b>협업·커뮤니케이션</b><span class="sc">88</span></div><div class="bar"><span style="width:88%"></span></div><div class="cm">멘토와의 충돌을 A/B 실험으로 설득, 지식 환원. <span class="eid">E07</span></div></div>
+      <div class="comp"><div class="ch"><b>데이터 엔지니어링</b><span class="sc">86</span></div><div class="bar"><span style="width:86%"></span></div><div class="cm">이종 소스 파싱·HNSW 튜닝 우수. 대규모 운영은 추가 검증 필요. <span class="eid">E04</span> <span class="eid">E06</span></div></div>
+    </div>
+  </div>
+
+  <div class="grid2" style="margin-top:16px">
+    <div class="card"><div class="card-hd"><div class="h3">강점</div></div><p class="sub" style="line-height:1.65;color:var(--ink-2)">RAG 파이프라인 전 구간을 직접 설계하고, 모든 의사결정을 Recall·지연 등 수치로 뒷받침한다. 인용 강제의 허점을 스스로 발견해 NLI로 보완하고, 응답 지연 장애의 병목을 검색 단계로 좁혀 해결한 점에서 실전 감각과 깊이가 드러난다.</p></div>
+    <div class="card"><div class="card-hd"><div class="h3">최종 추천</div><span class="badge pos">추천 · 89점</span></div><p class="sub" style="line-height:1.65;color:var(--ink-2)">RAG/LLM 백엔드 전 구간 경험에 더해 각 선택을 정량 지표·트레이드오프로 설명할 수 있는 드문 후보. 대규모 운영 경험은 부족하나 학습 속도와 자기객관화를 고려하면 빠르게 보완 가능. 추천한다.</p></div>
+  </div>
+  <div class="row center" style="justify-content:center;gap:8px;margin:20px 0 4px;color:var(--faint);font-size:12px"><span>EZ Interview</span> · <span>멀티에이전트 평가 엔진 · 적대적 디베이트 검증 통과</span></div>
+</div>
+</body>
+</html>

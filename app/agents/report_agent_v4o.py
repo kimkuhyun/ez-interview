@@ -61,7 +61,7 @@ SOLAR_MODEL = os.getenv("SOLAR_MODEL", "solar-pro2")
 SOLAR_BASE_URL = "https://api.upstage.ai/v1"
 
 def _llm_gpt() -> ChatOpenAI:
-    """o3-mini 모델"""
+    """기본 OpenAI 추론 모델 (OPENAI_MODEL, 기본 gpt-5.1)"""
     return ChatOpenAI(
         model=OPENAI_MODEL,
         timeout=90,
